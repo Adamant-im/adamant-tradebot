@@ -1,0 +1,75 @@
+{
+
+	/** The bot's secret phrase for accepting commands. 
+		Bot's ADM address will correspond this passPhrase.
+    **/
+	"passPhrase": "distance expect praise frequent..",
+
+	/** List of nodes to fetch transactions.
+    	If one become unavailable, bot will choose live one.
+    **/
+
+	"node_ADM": [
+		"http://localhost:36666",
+		"https://endless.adamant.im",
+		"https://clown.adamant.im",
+		"https://bid.adamant.im",
+		"https://unusual.adamant.im",
+		"https://debate.adamant.im",
+		"http://185.231.245.26:36666",
+		"https://lake.adamant.im"
+	],
+
+	/** Socket connection is recommended for better user experience **/
+	"socket": true,
+
+	/** Choose socket connection, "ws" or "wss" depending on your server **/
+	"ws_type": "ws",
+
+    /** List of ADAMANT InfoServices for catching exchange rates **/
+	"infoservice": [
+		"https://info.adamant.im"
+	],	
+	
+	/** ADAMANT accounts to accept commands from. Commands from other accounts will not be executed. **/
+	"admin_accounts": [
+		"U123.."
+	],
+
+	/** Notify non-admins that they are not admins. If false, bot will be silent. **/
+	"notify_non_admins": true,
+
+	/** Exchange to work with. Available values: "idcm". Case insensitive. **/
+	"exchange": "IDCM",
+
+	/** Pair to trade **/
+	"pair": "ADM/BTC",
+
+	/** Exchange's account API key for connection **/
+	"apikey": "YOUR-KEY..",
+
+	/** Exchange's account API secret for connection **/
+	"apisecret": "YOUR-SECRET..",
+
+	/** Exchange's account trade password. If needed. **/
+	"apipassword": "YOUR-TRADE-PASS",
+
+    /** How to reply user in-chat, if first unknown command received. **/
+    "welcome_string": "Hi! 😊 I'm a trade and market making bot. ℹ️ Learn more about me on ADAMANT’s blog or type **/help** to see what I can.",
+
+	/** Bot's name for notifications **/
+    "bot_name": "Lovely Trade Bot",
+
+	/** ADAMANT address for notifications and monitoring (if needed, recommended) **/
+    "adamant_notify": "",
+
+    /** Slack key for notifications and monitoring (if needed) **/
+    "slack": "https://hooks.slack.com/services/...",
+
+    /** Port for getting debug info. 
+		Do not set for live bots, use only for debugging. 
+		Allows to get DBs records like http://ip:port/db?tb=incomingTxsDb 
+	**/
+	"api": false
+
+}
