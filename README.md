@@ -15,7 +15,7 @@ Supported exchanges (more in progress):
 
 * [IDCM](https://idcm.io/invitation/receive?code=LM5510&lang=en)
 
-Available commands: ask a bot with `/help` command. Read more: [M]().
+Available commands: ask a bot with `/help` command. Read more: [Crypto trading & Market making bot in ADAMANT](https://medium.com/adamant-im/crypto-trading-market-making-bot-in-adamant-82fa48b78f51).
 
 # Installation
 

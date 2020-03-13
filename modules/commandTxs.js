@@ -633,7 +633,7 @@ Ask: ${exchangeRates.ask.toFixed(8)}, bid: ${exchangeRates.bid.toFixed(8)}, spre
 	let orderStats = await getStats(true, true, false, "mm", pair);
 
 	if (orderStats) {
-		if (orderStats.coin1AmountTotalAllCount === 0) {
+		if (orderStats === 'Empty' || orderStats.coin1AmountTotalAllCount === 0) {
 			output += "\n\n" + `There were no Market making orders for ${pair} all time.`
 		} else {
 			output += "\n\n" + `Market making stats for ${pair} pair:` + "\n";
@@ -649,7 +649,7 @@ Ask: ${exchangeRates.ask.toFixed(8)}, bid: ${exchangeRates.bid.toFixed(8)}, spre
 			output += '.';
 		}
 	} else {
-		output += `Unable to get Market making stats for ${pair}.`;
+		output += "\n\n" + `Unable to get Market making stats for ${pair}.`;
 	}
 
 	return {

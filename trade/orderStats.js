@@ -2,8 +2,9 @@ const db = require('../modules/DB');
 const $u = require('../helpers/utils');
 
 module.exports = async (isExecuted, isProcessed, isCancelled, purpose, pair) => {
-    const {ordersDb} = db; 
-    
+
+    const {ordersDb} = db;
+
     const day = $u.unix() - 24 * 3600 * 1000;
     const month = $u.unix() - 30 * 24 * 3600 * 1000;
 
@@ -103,6 +104,9 @@ module.exports = async (isExecuted, isProcessed, isCancelled, purpose, pair) => 
 
         }}
     ]));
+
+    if (!stats[0])
+        stats[0] = 'Empty';
 
     return stats[0];
 
