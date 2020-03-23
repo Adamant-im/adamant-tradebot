@@ -1,5 +1,6 @@
 const db = require('../modules/DB');
 const $u = require('../helpers/utils');
+const config = require('../modules/configReader');
 
 module.exports = async (isExecuted, isProcessed, isCancelled, purpose, pair) => {
 
@@ -14,7 +15,7 @@ module.exports = async (isExecuted, isProcessed, isCancelled, purpose, pair) => 
             coin1AmountTotalAll: {$sum: {
                 $cond: [
                     // Condition to test 
-                    {$and: [ {$eq: ["$isExecuted", isExecuted]}, {$eq: ["$isProcessed", isProcessed]}, {$eq: ["$isCancelled", isCancelled]}, {$eq: ["$purpose", purpose]}, {$eq: ["$pair", pair]} ]},
+                    {$and: [ {$eq: ["$isExecuted", isExecuted]}, {$eq: ["$isProcessed", isProcessed]}, {$eq: ["$isCancelled", isCancelled]}, {$eq: ["$purpose", purpose]}, {$eq: ["$pair", pair]}, {$eq: ["$exchange", config.exchange]} ]},
                     // True
                     "$coin1Amount",
                     // False
@@ -24,7 +25,7 @@ module.exports = async (isExecuted, isProcessed, isCancelled, purpose, pair) => 
             coin1AmountTotalDay: {$sum: {
                 $cond: [
                     // Condition to test 
-                    {$and: [ {$gt: ["$date", day]}, {$eq: ["$isExecuted", isExecuted]}, {$eq: ["$isProcessed", isProcessed]}, {$eq: ["$isCancelled", isCancelled]}, {$eq: ["$purpose", purpose]}, {$eq: ["$pair", pair]} ]},
+                    {$and: [ {$gt: ["$date", day]}, {$eq: ["$isExecuted", isExecuted]}, {$eq: ["$isProcessed", isProcessed]}, {$eq: ["$isCancelled", isCancelled]}, {$eq: ["$purpose", purpose]}, {$eq: ["$pair", pair]}, {$eq: ["$exchange", config.exchange]} ]},
                     // True
                     "$coin1Amount",
                     // False
@@ -34,7 +35,7 @@ module.exports = async (isExecuted, isProcessed, isCancelled, purpose, pair) => 
             coin1AmountTotalMonth: {$sum: {
                 $cond: [
                     // Condition to test 
-                    {$and: [ {$gt: ["$date", month]}, {$eq: ["$isExecuted", isExecuted]}, {$eq: ["$isProcessed", isProcessed]}, {$eq: ["$isCancelled", isCancelled]}, {$eq: ["$purpose", purpose]}, {$eq: ["$pair", pair]} ]},
+                    {$and: [ {$gt: ["$date", month]}, {$eq: ["$isExecuted", isExecuted]}, {$eq: ["$isProcessed", isProcessed]}, {$eq: ["$isCancelled", isCancelled]}, {$eq: ["$purpose", purpose]}, {$eq: ["$pair", pair]}, {$eq: ["$exchange", config.exchange]} ]},
                     // True
                     "$coin1Amount",
                     // False
@@ -44,7 +45,7 @@ module.exports = async (isExecuted, isProcessed, isCancelled, purpose, pair) => 
             coin2AmountTotalAll: {$sum: {
                 $cond: [
                     // Condition to test 
-                    {$and: [ {$eq: ["$isExecuted", isExecuted]}, {$eq: ["$isProcessed", isProcessed]}, {$eq: ["$isCancelled", isCancelled]}, {$eq: ["$purpose", purpose]}, {$eq: ["$pair", pair]} ]},
+                    {$and: [ {$eq: ["$isExecuted", isExecuted]}, {$eq: ["$isProcessed", isProcessed]}, {$eq: ["$isCancelled", isCancelled]}, {$eq: ["$purpose", purpose]}, {$eq: ["$pair", pair]}, {$eq: ["$exchange", config.exchange]} ]},
                     // True
                     "$coin2Amount",
                     // False
@@ -54,7 +55,7 @@ module.exports = async (isExecuted, isProcessed, isCancelled, purpose, pair) => 
             coin2AmountTotalDay: {$sum: {
                 $cond: [
                     // Condition to test 
-                    {$and: [ {$gt: ["$date", day]}, {$eq: ["$isExecuted", isExecuted]}, {$eq: ["$isProcessed", isProcessed]}, {$eq: ["$isCancelled", isCancelled]}, {$eq: ["$purpose", purpose]}, {$eq: ["$pair", pair]} ]},
+                    {$and: [ {$gt: ["$date", day]}, {$eq: ["$isExecuted", isExecuted]}, {$eq: ["$isProcessed", isProcessed]}, {$eq: ["$isCancelled", isCancelled]}, {$eq: ["$purpose", purpose]}, {$eq: ["$pair", pair]}, {$eq: ["$exchange", config.exchange]} ]},
                     // True
                     "$coin2Amount",
                     // False
@@ -64,7 +65,7 @@ module.exports = async (isExecuted, isProcessed, isCancelled, purpose, pair) => 
             coin2AmountTotalMonth: {$sum: {
                 $cond: [
                     // Condition to test 
-                    {$and: [ {$gt: ["$date", month]}, {$eq: ["$isExecuted", isExecuted]}, {$eq: ["$isProcessed", isProcessed]}, {$eq: ["$isCancelled", isCancelled]}, {$eq: ["$purpose", purpose]}, {$eq: ["$pair", pair]} ]},
+                    {$and: [ {$gt: ["$date", month]}, {$eq: ["$isExecuted", isExecuted]}, {$eq: ["$isProcessed", isProcessed]}, {$eq: ["$isCancelled", isCancelled]}, {$eq: ["$purpose", purpose]}, {$eq: ["$pair", pair]}, {$eq: ["$exchange", config.exchange]} ]},
                     // True
                     "$coin2Amount",
                     // False
@@ -74,7 +75,7 @@ module.exports = async (isExecuted, isProcessed, isCancelled, purpose, pair) => 
             coin1AmountTotalAllCount: {$sum: {
                 $cond: [
                     // Condition to test 
-                    {$and: [ {$eq: ["$isExecuted", isExecuted]}, {$eq: ["$isProcessed", isProcessed]}, {$eq: ["$isCancelled", isCancelled]}, {$eq: ["$purpose", purpose]}, {$eq: ["$pair", pair]} ]},
+                    {$and: [ {$eq: ["$isExecuted", isExecuted]}, {$eq: ["$isProcessed", isProcessed]}, {$eq: ["$isCancelled", isCancelled]}, {$eq: ["$purpose", purpose]}, {$eq: ["$pair", pair]}, {$eq: ["$exchange", config.exchange]} ]},
                     // True
                     1,
                     // False
@@ -84,7 +85,7 @@ module.exports = async (isExecuted, isProcessed, isCancelled, purpose, pair) => 
             coin1AmountTotalDayCount: {$sum: {
                 $cond: [
                     // Condition to test 
-                    {$and: [ {$gt: ["$date", day]}, {$eq: ["$isExecuted", isExecuted]}, {$eq: ["$isProcessed", isProcessed]}, {$eq: ["$isCancelled", isCancelled]}, {$eq: ["$purpose", purpose]}, {$eq: ["$pair", pair]} ]},
+                    {$and: [ {$gt: ["$date", day]}, {$eq: ["$isExecuted", isExecuted]}, {$eq: ["$isProcessed", isProcessed]}, {$eq: ["$isCancelled", isCancelled]}, {$eq: ["$purpose", purpose]}, {$eq: ["$pair", pair]}, {$eq: ["$exchange", config.exchange]} ]},
                     // True
                     1,
                     // False
@@ -94,7 +95,7 @@ module.exports = async (isExecuted, isProcessed, isCancelled, purpose, pair) => 
             coin1AmountTotalMonthCount: {$sum: {
                 $cond: [
                     // Condition to test 
-                    {$and: [ {$gt: ["$date", month]}, {$eq: ["$isExecuted", isExecuted]}, {$eq: ["$isProcessed", isProcessed]}, {$eq: ["$isCancelled", isCancelled]}, {$eq: ["$purpose", purpose]}, {$eq: ["$pair", pair]} ]},
+                    {$and: [ {$gt: ["$date", month]}, {$eq: ["$isExecuted", isExecuted]}, {$eq: ["$isProcessed", isProcessed]}, {$eq: ["$isCancelled", isCancelled]}, {$eq: ["$purpose", purpose]}, {$eq: ["$pair", pair]}, {$eq: ["$exchange", config.exchange]} ]},
                     // True
                     1,
                     // False

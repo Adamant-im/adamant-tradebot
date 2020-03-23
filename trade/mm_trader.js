@@ -45,7 +45,7 @@ module.exports = {
 
         orderParamsString = `type=${type}, pair=${config.pair}, price=${price}, coin1Amount=${coin1Amount}, coin2Amount=${coin2Amount}`;
         if (!type || !price || !coin1Amount || !coin2Amount) {
-            notify(`Unable to run mm-order with params: ${orderParamsString}.`, 'warn');
+            notify(`${config.notifyName} unable to run mm-order with params: ${orderParamsString}.`, 'warn');
             return;
         }
 
@@ -71,6 +71,7 @@ module.exports = {
                 purpose: 'mm', // Market making
                 type: crossType(type),
                 targetType: type,
+                exchange: config.exchange,
                 pair: config.pair,
                 coin1: config.coin1,
                 coin2: config.coin2,
@@ -82,6 +83,7 @@ module.exports = {
                 isExecuted: false,
                 isCancelled: false
             });
+            await order.save();
             order2 = await traderapi.placeOrder(type, config.pair, price, coin1Amount, 1);
             if (order2) {
                 output = `${type} ${coin1Amount.toFixed(0)} ${config.coin1} for ${coin2Amount.toFixed(8)} ${config.coin2}`;
@@ -94,9 +96,11 @@ module.exports = {
                 await order.save();
             } else {
                 await order.save();
-                notify(`Unable to execute cross-order for mm-order with params: id=${order1}, ${orderParamsString}. Check balances. Running order collector now.`, 'warn');
+                notify(`${config.notifyName} unable to execute cross-order for mm-order with params: id=${order1}, ${orderParamsString}. Check balances. Running order collector now.`, 'warn');
                 orderCollector(['mm'], config.pair);
             }         
+        } else { // if order1
+            console.warn(`${config.notifyName} unable to execute mm-order with params: ${orderParamsString}. No order id returned.`);
         }
 
 	},
@@ -123,11 +127,11 @@ async function isEnoughCoins(coin1, coin2, amount1, amount2) {
             balance1 = balances.filter(crypto => crypto.code === coin1)[0].free;
             balance2 = balances.filter(crypto => crypto.code === coin2)[0].free;
             if (!balance1 || balance1 < amount1) {
-                output = `Not enough ${coin1} for placing market making order. Check balances.`;
+                output = `${config.notifyName}: Not enough ${coin1} for placing market making order. Check balances.`;
                 isBalanceEnough = false;
             }
             if (!balance2 || balance2 < amount2) {
-                output = `Not enough ${coin2} for placing market making order. Check balances.`;
+                output = `${config.notifyName}: Not enough ${coin2} for placing market making order. Check balances.`;
                 isBalanceEnough = false;
             }
 
@@ -153,8 +157,9 @@ async function isEnoughCoins(coin1, coin2, amount1, amount2) {
 
 async function setPrice(type, pair) {
 
-    const precision = 0.00000001; // decimals
-    const smallSpread = 0.00000050; // if spread is small and should do market making less careful
+    const precision = Math.pow(10, -config.coin2Decimals).toFixed(config.coin2Decimals); // decimals
+    const smallSpread = precision * 15; // if spread is small and should do market making less careful
+    // console.log(precision, smallSpread);
 
     let output = '';
     let isCareful = true;
@@ -169,8 +174,8 @@ async function setPrice(type, pair) {
     let ask_high, bid_low;
     const exchangeRates = await traderapi.getRates(pair);
     if (exchangeRates) {
-        bid_low = exchangeRates.bid;
-        ask_high = exchangeRates.ask;
+        bid_low = +exchangeRates.bid;
+        ask_high = +exchangeRates.ask;
     } else {
         log.warn(`Unable to get current rates for ${pair} to set a price.`);
         return {
@@ -180,48 +185,59 @@ async function setPrice(type, pair) {
     }
 
     const spread = ask_high - bid_low;
-    if (spread <= precision) {
+    if (spread <= precision * 2) {
         if (allowNoSpread) {
             return type === 'buy'? bid_low : ask_high;
         } else {
-            output = `No spread currently, and mm_allowNoSpread is disabled. Unable to set a price for ${pair}.`;
+            output = `${config.notifyName}: No spread currently, and mm_allowNoSpread is disabled. Unable to set a price for ${pair}.`;
             return {
                 price: false,
+                message: output
             }
         }
     }
     
     let deltaPercent;
     const interval = ask_high - bid_low;
+    // console.log(interval, smallSpread);
     if (isCareful) {
         if (interval > smallSpread) {
-            // 1-10% of spread
-            deltaPercent = Math.random() * (0.1 - 0.01) + 0.01;
+            // 1-25% of spread
+            deltaPercent = Math.random() * (0.25 - 0.01) + 0.01;
         } else {
-            // 5-25% of spread
-            deltaPercent = Math.random() * (0.25 - 0.05) + 0.05;
+            // 5-35% of spread
+            deltaPercent = Math.random() * (0.35 - 0.05) + 0.05;
         }
     } else {
-        // 1-40% of spread
-        deltaPercent = Math.random() * (0.4 - 0.01) + 0.01;
+        // 1-45% of spread
+        deltaPercent = Math.random() * (0.45 - 0.01) + 0.01;
     }
 
     // console.log('2:', bid_low.toFixed(8), ask_high.toFixed(8), interval.toFixed(8), deltaPercent.toFixed(2));
     let price, from, to;
     if (type === 'buy') {
-        from = bid_low;
-        to = bid_low + interval*deltaPercent;
-        price = Math.random() * (to - from) + from;
+        // from = +bid_low;
+        // to = bid_low + interval*deltaPercent;
+        // price = Math.random() * (to - from) + +from;
+        price = bid_low + interval*deltaPercent;
     } else {
-        from = ask_high - interval*deltaPercent;
-        to = ask_high;
-        price = Math.random() * (to - from) + from;
+        // from = ask_high - interval*deltaPercent;
+        // to = +ask_high;
+        // price = Math.random() * (to - from) + +from;
+        price = ask_high - interval*deltaPercent;
     }
 
-    if (price >= ask_high - precision)
-        price = ask_high - precision;
-    if (price <= bid_low + precision)
-        price = bid_low + precision;
+    const minPrice = +bid_low + +precision;
+    const maxPrice = ask_high - precision;
+    // price = 0.009248977658650832;
+    // console.log('low, high', bid_low, ask_high);
+    // console.log('min, max', minPrice, maxPrice);
+    // console.log('price1', price);
+    if (price >= maxPrice)
+        price = price - precision;
+    if (price <= minPrice)
+        price = +price + +precision;
+    // console.log('price2', price);
 
     return {
         price: price

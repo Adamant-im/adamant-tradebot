@@ -33,8 +33,8 @@ module.exports = (PubK, PrivK) => {
 							ask: +data.sell,
 							bid: +data.buy,
 							volume: +data.vol,
-							high: data.high,
-							low: data.low
+							high: +data.high,
+							low: +data.low
 						});
 					} catch (e) {
 						resolve(false);

@@ -1,6 +1,6 @@
 {
   "name": "adamant-tradebot",
-  "version": "0.7.0",
+  "version": "0.8.0",
   "description": "ADAMANT Trading and Market Making bot",
   "main": "index.js",
   "scripts": {
@@ -27,23 +27,24 @@
   "license": "GPL-3.0",
   "dependencies": {
     "socket.io-client": "^2.2.0",
-    "adamant-api": "^0.5.1",
+    "adamant-api": "^0.5.2",
     "express": "^4.17.1",
     "jsonminify": "^0.4.1",
     "mongodb": "^3.2.6",
     "request": "^2.88.0",
     "sync-request": "^6.0.0",
-    "underscore": "^1.9.1"
+    "underscore": "^1.9.1",
+    "crypto-js": "^4.0.0"
   },
   "publishConfig": {
     "access": "public"
   },
   "repository": {
-      "type": "git",
-      "url": "git+https://github.com/Adamant-im/adamant-tradebot.git"
+    "type": "git",
+    "url": "git+https://github.com/Adamant-im/adamant-tradebot.git"
   },
   "bugs": {
-      "url": "https://github.com/Adamant-im/adamant-tradebot/issues"
+    "url": "https://github.com/Adamant-im/adamant-tradebot/issues"
   },
   "homepage": "https://github.com/Adamant-im/adamant-tradebot#readme"
 }

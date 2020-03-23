@@ -273,6 +273,45 @@ async function clear(params) {
 
 }
 
+function setPair(param, letCoin1only = false) {
+
+	let pair = (param || '').toUpperCase().trim();
+	let coin1Decimals = 8;
+	let coin2Decimals = 8;
+	let isPairFromParam = true;
+	let coin1, coin2;
+
+	if (!pair || pair.indexOf('/') === -1 || pair === config.pair) { // Set default pair
+		if (pair != config.pair)
+			isPairFromParam = false;
+		if ((pair.indexOf('/') === -1) && letCoin1only) { // Not a pair, may be a coin only
+			coin1 = pair;
+			if (coin1 === config.coin1)
+				coin1Decimals = config.coin1Decimals;		
+			pair = null;
+			coin2 = null;
+		} else { // A pair
+			pair = config.pair;
+			coin1Decimals = config.coin1Decimals;
+			coin2Decimals = config.coin2Decimals;
+		}
+	}
+
+	if (pair) {
+		coin1 = pair.substr(0, pair.indexOf('/')); 
+		coin2 = pair.substr(pair.indexOf('/') + 1, pair.length);
+	}
+
+	return {
+		pair,
+		coin1,
+		coin2,
+		coin1Decimals,
+		coin2Decimals,
+		isPairFromParam
+	}
+}
+
 async function fill(params) {
 
 	// default: low=bid, count=5, pair=ADM/BTC
@@ -313,20 +352,18 @@ async function fill(params) {
 		}
 	}
 
-	let firstParam = 'pair';
-	param = params[0];
-	if (!param || param.indexOf('/') === -1) {
-		firstParam = 'type';
-		param = config.pair;
-	}
-	let coin = (param || '').toUpperCase().trim();
-	let coin2 = '';
 	let output = '';
-	let pair;
-	if (coin.indexOf('/') > -1) {
-		pair = coin;
-		coin = coin.substr(0, coin.indexOf('/')); 
-		coin2 = pair.substr(pair.indexOf('/') + 1, coin.length);
+	let type;
+	const pairObj = setPair(params[0]);
+	const pair = pairObj.pair;
+	const coin1 = pairObj.coin1;
+	const coin2 = pairObj.coin2;
+	const coin1Decimals =  pairObj.coin1Decimals;
+	const coin2Decimals =  pairObj.coin2Decimals;
+	if (pairObj.isPairFromParam) {
+		type = params[1].trim();
+	} else {
+		type = params[0].trim();
 	}
 
 	if (!pair || !pair.length) {
@@ -336,13 +373,6 @@ async function fill(params) {
 			msgSendBack: `${output}`,
 			notifyType: 'log'
 		}	
-	}
-
-	let type;
-	if (firstParam === 'type') {
-		type = params[0];
-	} else {
-		type = params[1];
 	}
 
 	if (!count || count === Infinity || count < 1)
@@ -385,8 +415,8 @@ async function fill(params) {
 				balance = balances.filter(crypto => crypto.code === coin2)[0].free;
 				output = `Not enough ${coin2} to fill orders. Check balances.`;
 			} else {
-				balance = balances.filter(crypto => crypto.code === coin)[0].free; 
-				output = `Not enough ${coin} to fill orders. Check balances.`;
+				balance = balances.filter(crypto => crypto.code === coin1)[0].free; 
+				output = `Not enough ${coin1} to fill orders. Check balances.`;
 			}
 			isBalanceEnough = balance >= amount;
 		} catch (e) {
@@ -459,7 +489,7 @@ async function fill(params) {
 		}
 	}
 
-	output = `${items} orders to ${type} ${$u.thousandSeparator(+total1.toFixed(8), false)} ${coin} for ${$u.thousandSeparator(+total2.toFixed(8), false)} ${coin2}.`;
+	output = `${items} orders to ${type} ${$u.thousandSeparator(+total1.toFixed(coin1Decimals), false)} ${coin1} for ${$u.thousandSeparator(+total2.toFixed(coin2Decimals), false)} ${coin2}.`;
 
 	return {
 		msgNotify: `${config.notifyName} placed ${output}`,
@@ -482,6 +512,20 @@ function buy_sell(params) {
 
 }
 */
+
+function params() {
+
+	// console.log(tradeParams);
+	let output = `I am set to work with ${config.pair} pair on ${config.exchangeName}. Current trading settings:`;
+	output += "\n\n" + JSON.stringify(tradeParams, null, 3);;
+
+return {
+	msgNotify: ``,
+	msgSendBack: `${output}`,
+	notifyType: 'log'
+}
+
+}
 
 function help() {
 
@@ -515,6 +559,8 @@ Commands:
 
 **/clear**: Cancel [*mm*, td, all] active orders. F. e., */clear ETH/BTC all* or just */clear* for mm-orders of default pair.
 
+**/params**: Show current trading settings
+
 **/version**: Show bot’s software version
 
 Happy trading!
@@ -530,19 +576,16 @@ return {
 
 async function rates(params) {
 
-	param = params[0];
-	if (!param) {
-		param = config.pair;
-	}
-	let coin = (param || '').toUpperCase().trim();
 	let output = '';
-	let pair;
-	if (coin.indexOf('/') > -1) {
-		pair = coin;
-		coin = coin.substr(0, coin.indexOf('/')); 
-	}
 
-	if (!coin || !coin.length) {
+	const pairObj = setPair(params[0], true);
+	const pair = pairObj.pair;
+	const coin1 = pairObj.coin1;
+	const coin2 = pairObj.coin2;
+	const coin1Decimals =  pairObj.coin1Decimals;
+	const coin2Decimals =  pairObj.coin2Decimals;
+
+	if (!coin1 || !coin1.length) {
 		output = 'Please specify coin ticker or specific market you are interested in. F. e., */rates ADM* or */rates ETH/BTC*.';
 		return {
 			msgNotify: ``,
@@ -553,16 +596,16 @@ async function rates(params) {
 	const currencies = Store.currencies;
 	const res = Object
 		.keys(Store.currencies)
-		.filter(t => t.startsWith(coin + '/'))
+		.filter(t => t.startsWith(coin1 + '/'))
 		.map(t => {
-			let p = `${coin}/**${t.replace(coin + '/', '')}**`;
+			let p = `${coin1}/**${t.replace(coin1 + '/', '')}**`;
 			return `${p}: ${currencies[t]}`;
 		})
 		.join(', ');
 
 	if (!res.length) {
 		if (!pair) {
-			output = `I can’t get rates for *${coin}*. Made a typo? Try */rates ADM*.`;
+			output = `I can’t get rates for *${coin1}*. Made a typo? Try */rates ADM*.`;
 			return {
 				msgNotify: ``,
 				msgSendBack: `${output}`,
@@ -570,7 +613,7 @@ async function rates(params) {
 			}
 		}
 	} else {
-		output = `Global market rates for ${coin}:
+		output = `Global market rates for ${coin1}:
 ${res}.`;
 	}
 
@@ -580,7 +623,7 @@ ${res}.`;
 			output += "\n\n";
 		if (exchangeRates) {
 			output += `${config.exchangeName} rates for ${pair} pair:
-Ask: ${exchangeRates.ask.toFixed(8)}, bid: ${exchangeRates.bid.toFixed(8)}`;
+Ask: ${exchangeRates.ask.toFixed(coin2Decimals)}, bid: ${exchangeRates.bid.toFixed(coin2Decimals)}`;
 		} else {
 			output += `Unable to get ${config.exchangeName} rates for ${pair}.`;
 		}
@@ -596,19 +639,14 @@ Ask: ${exchangeRates.ask.toFixed(8)}, bid: ${exchangeRates.bid.toFixed(8)}`;
 
 async function stats(params) {
 
-	param = params[0];
-	if (!param || param.indexOf('/') === -1) {
-		param = config.pair;
-	}
-	let coin = (param || '').toUpperCase().trim();
-	let coin2 = '';
 	let output = '';
-	let pair;
-	if (coin.indexOf('/') > -1) {
-		pair = coin;
-		coin = pair.substr(0, pair.indexOf('/'));
-		coin2 = pair.substr(pair.indexOf('/') + 1, coin.length);
-	}
+
+	const pairObj = setPair(params[0]);
+	const pair = pairObj.pair;
+	const coin1 = pairObj.coin1;
+	const coin2 = pairObj.coin2;
+	const coin1Decimals =  pairObj.coin1Decimals;
+	const coin2Decimals =  pairObj.coin2Decimals;
 
 	if (!pair || !pair.length) {
 		output = 'Please specify market you are interested in. F. e., */stats ETH/BTC*.';
@@ -623,8 +661,8 @@ async function stats(params) {
 		const exchangeRates = await traderapi.getRates(pair);
 		if (exchangeRates) {
 			output += `${config.exchangeName} 24h stats for ${pair} pair:
-Vol: ${$u.thousandSeparator(+exchangeRates.volume, true)} ${coin}. High: ${exchangeRates.high.toFixed(8)}, low: ${exchangeRates.low.toFixed(8)}, delta: _${(exchangeRates.high-exchangeRates.low).toFixed(8)}_ ${coin2}.
-Ask: ${exchangeRates.ask.toFixed(8)}, bid: ${exchangeRates.bid.toFixed(8)}, spread: _${(exchangeRates.ask-exchangeRates.bid).toFixed(8)}_ ${coin2}.`;
+Vol: ${$u.thousandSeparator(+exchangeRates.volume, true)} ${coin1}. High: ${exchangeRates.high.toFixed(coin2Decimals)}, low: ${exchangeRates.low.toFixed(coin2Decimals)}, delta: _${(exchangeRates.high-exchangeRates.low).toFixed(coin2Decimals)}_ ${coin2}.
+Ask: ${exchangeRates.ask.toFixed(coin2Decimals)}, bid: ${exchangeRates.bid.toFixed(coin2Decimals)}, spread: _${(exchangeRates.ask-exchangeRates.bid).toFixed(coin2Decimals)}_ ${coin2}.`;
 		} else {
 			output += `Unable to get ${config.exchangeName} stats for ${pair}.`;
 		}
@@ -638,13 +676,13 @@ Ask: ${exchangeRates.ask.toFixed(8)}, bid: ${exchangeRates.bid.toFixed(8)}, spre
 		} else {
 			output += "\n\n" + `Market making stats for ${pair} pair:` + "\n";
 			if (orderStats.coin1AmountTotalDayCount != 0) {
-				output += `24h: ${orderStats.coin1AmountTotalDayCount} orders with ${$u.thousandSeparator(+orderStats.coin1AmountTotalDay.toFixed(0), true)} ${coin} and ${$u.thousandSeparator(+orderStats.coin2AmountTotalDay.toFixed(8), true)} ${coin2}`
+				output += `24h: ${orderStats.coin1AmountTotalDayCount} orders with ${$u.thousandSeparator(+orderStats.coin1AmountTotalDay.toFixed(coin1Decimals), true)} ${coin1} and ${$u.thousandSeparator(+orderStats.coin2AmountTotalDay.toFixed(coin2Decimals), true)} ${coin2}`
 			}
 			if (orderStats.coin1AmountTotalMonthCount > orderStats.coin1AmountTotalDayCount) {
-				output += `, 30d: ${orderStats.coin1AmountTotalMonthCount} orders with ${$u.thousandSeparator(+orderStats.coin1AmountTotalMonth.toFixed(0), true)} ${coin} and ${$u.thousandSeparator(+orderStats.coin2AmountTotalMonth.toFixed(8), true)} ${coin2}`
+				output += `, 30d: ${orderStats.coin1AmountTotalMonthCount} orders with ${$u.thousandSeparator(+orderStats.coin1AmountTotalMonth.toFixed(coin1Decimals), true)} ${coin1} and ${$u.thousandSeparator(+orderStats.coin2AmountTotalMonth.toFixed(coin2Decimals), true)} ${coin2}`
 			}
 			if (orderStats.coin1AmountTotalAllCount > orderStats.coin1AmountTotalMonthCount) {
-				output += `, all time: ${orderStats.coin1AmountTotalAllCount} orders with ${$u.thousandSeparator(+orderStats.coin1AmountTotalAll.toFixed(0), true)} ${coin} and ${$u.thousandSeparator(+orderStats.coin2AmountTotalAll.toFixed(8), true)} ${coin2}`
+				output += `, all time: ${orderStats.coin1AmountTotalAllCount} orders with ${$u.thousandSeparator(+orderStats.coin1AmountTotalAll.toFixed(coin1Decimals), true)} ${coin1} and ${$u.thousandSeparator(+orderStats.coin2AmountTotalAll.toFixed(coin2Decimals), true)} ${coin2}`
 			}
 			output += '.';
 		}
@@ -662,17 +700,14 @@ Ask: ${exchangeRates.ask.toFixed(8)}, bid: ${exchangeRates.bid.toFixed(8)}, spre
 
 async function orders(params) {
 
-	param = params[0];
-	if (!param || param.indexOf('/') === -1) {
-		param = config.pair;
-	}
-	let coin = (param || '').toUpperCase().trim();
 	let output = '';
-	let pair;
-	if (coin.indexOf('/') > -1) {
-		pair = coin;
-		coin = coin.substr(0, coin.indexOf('/')); 
-	}
+
+	const pairObj = setPair(params[0]);
+	const pair = pairObj.pair;
+	const coin1 = pairObj.coin1;
+	const coin2 = pairObj.coin2;
+	const coin1Decimals =  pairObj.coin1Decimals;
+	const coin2Decimals =  pairObj.coin2Decimals;
 
 	if (!pair || !pair.length) {
 		output = 'Please specify market you are interested in. F. e., */orders ADM/BTC*.';
@@ -836,5 +871,6 @@ const commands = {
 	amount,
 	interval,
     clear,
-    fill
+	fill,
+	params
 }

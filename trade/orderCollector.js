@@ -5,11 +5,12 @@ const traderapi = require('./trader_' + config.exchange)(config.apikey, config.a
 
 module.exports = async (purposes, pair) => {
 
-	const {ordersDb} = db; 
+	const {ordersDb} = db;
     let ordersToClear = await ordersDb.find({
         isProcessed: false,
         purpose: {$in: purposes},
-        pair: pair
+        pair: pair || config.pair,
+        exchange: config.exchange
 	});
 
 	ordersToClear.forEach(async order => {
@@ -34,5 +35,5 @@ module.exports = async (purposes, pair) => {
 };
 
 setInterval(() => {
-	module.exports(['mm', 'tb']);
+	module.exports(['mm', 'tb'], config.pair);
 }, 15 * 1000);

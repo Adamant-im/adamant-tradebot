@@ -27,6 +27,14 @@ const fields = {
 		type: String,
 		isRequired: true
 	},
+	coin1Decimals: {
+		type: Number,
+		default: 8
+	},
+	coin2Decimals: {
+		type: Number,
+		default: 8
+	},
 	apikey: {
 		type: String,
 		isRequired: true
@@ -37,7 +45,7 @@ const fields = {
 	},
 	apipassword: {
 		type: String,
-		isRequired: true
+		default: ""
 	},
 	admin_accounts: {
 		type: Array,
@@ -97,7 +105,7 @@ try {
 	Object.keys(fields).forEach(f => {
 		if (!config[f] && fields[f].isRequired) {
 			exit(`Bot's ${address} config is wrong. Field _${f}_ is not valid. Cannot start Bot.`);
-		} else if (!config[f] && fields[f].default) {
+		} else if (!config[f] && config[f] != 0 && fields[f].default) {
 			config[f] = fields[f].default;
 		}
 		if (config[f] && fields[f].type !== config[f].__proto__.constructor) {

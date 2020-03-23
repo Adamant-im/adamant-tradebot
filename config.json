@@ -45,6 +45,12 @@
 	/** Pair to trade **/
 	"pair": "ADM/BTC",
 
+	/** Meaningful decimals for output of coin1 amounts **/
+	"coin1Decimals": 0,
+
+	/** Meaningful decimals for output of coin2 amounts **/
+	"coin2Decimals": 8,
+
 	/** Exchange's account API key for connection **/
 	"apikey": "YOUR-KEY..",
 
