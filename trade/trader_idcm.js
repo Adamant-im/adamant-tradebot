@@ -57,7 +57,7 @@ module.exports = (PubK, PrivK) => {
 				});
 			});
 		},
-		placeOrder(orderType, pair, price, coin1Amount, limit = 1, coin2Amount) {
+		placeOrder(orderType, pair, price, coin1Amount, limit = 1, coin2Amount, pairObj) {
 
 			let pair_ = formatPairName(pair);
 			const coins = $u.getCoinsFromPair(pair);
@@ -66,21 +66,18 @@ module.exports = (PubK, PrivK) => {
 			let opt;
 			let output = '';
 
-			const zeroDecimals = ['ADM'];
-			price = price.toFixed(8);
-			if (coin1Amount)
-				if (zeroDecimals.includes(coins.coin)) {
-					coin1Amount = coin1Amount.toFixed(0);
-				} else {
-					coin1Amount = coin1Amount.toFixed(8)
+			if (pairObj) { // Set precision (decimals)
+				if (coin1Amount) {
+					coin1Amount = +coin1Amount.toFixed(pairObj.coin1Decimals);
+					if (price)
+						price = +price.toFixed(pairObj.coin2Decimals);
 				}
-			if (coin2Amount)
-				if (zeroDecimals.includes(coins.coin2)) {
-					coin2Amount = coin2Amount.toFixed(0)
-					price = price.toFixed(0);
-				} else {
-					coin2Amount = coin2Amount.toFixed(8)
-				}		
+				if (coin2Amount) {
+					coin2Amount = +coin2Amount.toFixed(pairObj.coin2Decimals)
+					if (price)
+						price = +price.toFixed(pairObj.coin1Decimals);
+				}
+			}
 			
 			if (limit) { // Limit order
 				opt = {
@@ -100,6 +97,7 @@ module.exports = (PubK, PrivK) => {
 						Type: 0 // 1 for limit price. 0 for Market price.
 					};
 					output = `${orderType} ${coin1Amount} ${coins.coin} at Market Price on ${coins.pair} market.`;
+					console.log(opt);
 				} else {
 					opt = {
 						Symbol: pair_,
@@ -111,22 +109,32 @@ module.exports = (PubK, PrivK) => {
 				}
 			}
 
-			// console.log(opt);
 
 			return new Promise((resolve, reject) => {
 				req('trade', opt, function (data) {
+					let message;
+					let order = {};
 					try {						
 						if (data) {
 							// console.log(data);
-							log.info(`Order placed to ${output} Order Id: ${data.orderid}.`);
-							resolve(data.orderid);
+							message = `Order placed to ${output} Order Id: ${data.orderid}.`; 
+							log.info(message);
+							order.orderid = data.orderid;
+							order.message = message;
+							resolve(order);
 						} else {
-							resolve(false);
-							log.warn(`Unable to place order to ${output} Check parameters and balances.`);
+							message = `Unable to place order to ${output} Check parameters and balances.`;
+							log.warn(message);
+							order.orderid = false;
+							order.message = message;
+							resolve(order);
 						}
 					} catch (e) {
-						resolve(false);
-						log.warn('Error while making placeOrder() request: ' + e);
+						message = 'Error while making placeOrder() request: ' + e;
+						log.warn(message);
+						order.orderid = false;
+						order.message = message;
+						resolve(order);
 					};
 				});
 			});

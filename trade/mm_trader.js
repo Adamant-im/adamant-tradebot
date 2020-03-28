@@ -61,7 +61,7 @@ module.exports = {
             return;
         }
 
-        order1 = await traderapi.placeOrder(crossType(type), config.pair, price, coin1Amount, 1);
+        order1 = (await traderapi.placeOrder(crossType(type), config.pair, price, coin1Amount, 1)).orderid;
         if (order1) {
             const {ordersDb} = db;
             const order = new ordersDb({
@@ -84,9 +84,9 @@ module.exports = {
                 isCancelled: false
             });
             await order.save();
-            order2 = await traderapi.placeOrder(type, config.pair, price, coin1Amount, 1);
+            order2 = (await traderapi.placeOrder(type, config.pair, price, coin1Amount, 1)).orderid;
             if (order2) {
-                output = `${type} ${coin1Amount.toFixed(0)} ${config.coin1} for ${coin2Amount.toFixed(8)} ${config.coin2}`;
+                output = `${type} ${coin1Amount.toFixed(config.coin1Decimals)} ${config.coin1} for ${coin2Amount.toFixed(config.coin2Decimals)} ${config.coin2}`;
                 log.info(`Successfully executed mm-order to ${output}.`);
                 order.update({
                     isProcessed: true,

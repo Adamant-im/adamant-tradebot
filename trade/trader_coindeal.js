@@ -1,36 +1,32 @@
-const BITZ = require('./bit-z_api');
-const apiServer = 'https://apiv2.bitz.com';
+const COINDEAL = require('./coindeal_api');
+const apiServer = 'https://apigateway.coindeal.com';
 const log = require('../helpers/log');
 const $u = require('../helpers/utils');
 
 // API endpoints:
-// https://apiv2.bitz.com
-// https://apiv2.bit-z.pro
-// https://api.bitzapi.com
-// https://api.bitzoverseas.com
-// https://api.bitzspeed.com
+// https://apigateway.coindeal.com
 
 module.exports = (apiKey, secretKey, pwd) => {
 
-	BITZ.setConfig(apiServer, apiKey, secretKey, pwd);
+	COINDEAL.setConfig(apiServer, apiKey, secretKey, pwd);
 	
 	return {
 		getBalances(nonzero = true) {
 			return new Promise((resolve, reject) => {
-				BITZ.getUserAssets().then(function (data) {
+				COINDEAL.getUserAssets().then(function (data) {
 					try {
 						// console.log(data);
-						let assets = JSON.parse(data).data.info;
+						let assets = JSON.parse(data);
 						if (!assets)
 							assets = [];
 						let result = [];
 						assets.forEach(crypto => {
 							result.push({
-								code: crypto.name.toUpperCase(),
-								free: +crypto.over,
-								freezed: +crypto.lock,
-								btc: +crypto.btc,
-								usd: +crypto.usd
+								code: crypto.symbol,
+								free: +crypto.available,
+								freezed: +crypto.reserved,
+								btc: +crypto.estimatedBalanceBtc,
+								usd: +crypto.estimatedBalanceUsd
 							});
 						})
 						if (nonzero) {
@@ -48,12 +44,12 @@ module.exports = (apiKey, secretKey, pwd) => {
 		getOpenOrders(pair) {
 			pair_ = formatPairName(pair);
 			return new Promise((resolve, reject) => {
-				BITZ.getUserNowEntrustSheet(pair_.coin1, pair_.coin2).then(function (data) {
+				COINDEAL.getUserNowEntrustSheet(pair_.coin1, pair_.coin2).then(function (data) {
 						try {
 						// console.log(data);
 						// console.log(2);
 
-						let openOrders = JSON.parse(data).data.data;
+						let openOrders = JSON.parse(data);
 						if (!openOrders)
 							openOrders = [];
 
@@ -61,18 +57,18 @@ module.exports = (apiKey, secretKey, pwd) => {
 						openOrders.forEach(order => {
 							result.push({
 								orderid: order.id,
-								symbol: order.coinFrom + '_' + order.coinTo,
+								symbol: order.symbol,
 								price: order.price,
-								side: order.flag,
-								type: 1, // limit
-								timestamp: order.created,
-								amount: order.number,
-								executedamount: order.numberDeal,
+								side: order.side, // sell or buy
+								type: order.type, // limit or market, etc.
+								timestamp: order.createdAt,
+								amount: order.cumQuantity,
+								executedamount: order.cumQuantity - order.quantity,
 								status: order.status,
-								uid: order.uid,
-								coin2Amount: order.total,
-								coinFrom: order.coinFrom,
-								coinTo: order.coinTo
+								uid: order.clientOrderId,
+								// coin2Amount: order.total,
+								coinFrom: order.baseCurrency,
+								coinTo: order.quoteCurrency
 							});
 						})
 						// console.log(result[0]);
@@ -89,10 +85,10 @@ module.exports = (apiKey, secretKey, pwd) => {
 		},
 		cancelOrder(orderId) {
 			return new Promise((resolve, reject) => {
-				BITZ.cancelEntrustSheet(orderId).then(function (data) {
+				COINDEAL.cancelEntrustSheet(orderId).then(function (data) {
 					try {
 						// console.log(data);
-						if (JSON.parse(data).data) {
+						if (JSON.parse(data).id) {
 							log.info(`Cancelling order ${orderId}..`);
 							resolve(true);
 						} else {
@@ -109,32 +105,25 @@ module.exports = (apiKey, secretKey, pwd) => {
 		getRates(pair) {
 			pair_ = formatPairName(pair);
 			return new Promise((resolve, reject) => {
-				BITZ.ticker(pair_.pair).then(function (data) {
-					// console.log(data);
-					data = JSON.parse(data).data;
+				COINDEAL.stats().then(function (data2) {
+					data2 = JSON.parse(data2)[pair_.coin1 + '_' + pair_.coin2];
+					// console.log(data2);
 					try {
-						if (data) {
+						if (data2) {
 							resolve({
-								ask: +data.askPrice,
-								bid: +data.bidPrice,
-								volume: +data.volume,
-								volume_Coin2: +data.quoteVolume,
-								high: +data.high,
-								low: +data.low,
-								askQty: +data.askQty,
-								bidQty: +data.bidQty,
-								dealCount: +data.dealCount,
-								coin1Decimals: +data.numberPrecision,
-								coin2Decimals: +data.pricePrecision,
-								firstId: data.firstId,
-								lastId: data.lastId
+								volume: +data2.baseVolume,
+								volume_Coin2: +data2.quoteVolume,
+								high: +data2.high24hr,
+								low: +data2.low24hr,
+								ask: +data2.lowestAsk,
+								bid: +data2.highestBid
 							});
 						} else {
 							resolve(false);
 						}
 					} catch (e) {
 						resolve(false);
-						log.warn('Error while making getRates() request: ' + e);
+						log.warn('Error while making getRates() stats() request: ' + e);
 					};
 				});
 			});
@@ -147,7 +136,7 @@ module.exports = (apiKey, secretKey, pwd) => {
 			let message;
 			let order = {};
 
-			let type = (orderType === 'sell') ? 2 : 1;
+			let type = (orderType === 'sell') ? 'sell' : 'buy';
 
 			if (pairObj) { // Set precision (decimals)
 				if (coin1Amount) {
@@ -166,16 +155,16 @@ module.exports = (apiKey, secretKey, pwd) => {
 				output = `${orderType} ${coin1Amount} ${pair_.coin1.toUpperCase()} at ${price} ${pair_.coin2.toUpperCase()}.`;
 
 				return new Promise((resolve, reject) => {
-					BITZ.addEntrustSheet(pair_.pair, +coin1Amount, +price, type).then(function (data) {
+					COINDEAL.addEntrustSheet(pair_.pair, +coin1Amount, +price, type).then(function (data) {
 						try {						
 							// console.log(data);
-							let result = JSON.parse(data).data;
+							let result = JSON.parse(data);
 							if (result) {
 								message = `Order placed to ${output} Order Id: ${result.id}.`; 
 								log.info(message);
 								order.orderid = result.id;
 								order.message = message;
-								resolve(order);	
+                                resolve(order);	
 							} else {
 								message = `Unable to place order to ${output} Check parameters and balances.`;
 								log.warn(message);
@@ -219,70 +208,33 @@ module.exports = (apiKey, secretKey, pwd) => {
 					}
 				}
 
-				return new Promise((resolve, reject) => {
-					BITZ.addMarketOrder(pair_.pair, +size, type).then(function (data) {
-						try {						
-							// console.log(data);
-							let result = JSON.parse(data).data;
-							if (result) {
-								message = `Order placed to ${output} Order Id: ${result.id}.`; 
-								log.info(message);
-								order.orderid = result.id;
-								order.message = message;
-								resolve(order);	
-							} else {
-								message = `Unable to place order to ${output} Check parameters and balances.`;
-								log.warn(message);
-								order.orderid = false;
-								order.message = message;
-								resolve(order);	
-							}
-						} catch (e) {
-							message = 'Error while making placeOrder() request: ' + e;
-							log.warn(message);
-							order.orderid = false;
-							order.message = message;
-							resolve(order);
-						};
-					});
-				});
+                message = `Unable to place order to ${output} CoinDeal doesn't support Market orders yet.`; 
+                log.warn(message);
+                order.orderid = false;
+                order.message = message;
+                return order;	
+
 			}
-		}, // placeOrder()
-		getOrderBook(pair) {
-			// depth(symbol)
-
-		},
-		getDepositAddress(coin) {
-			return new Promise((resolve, reject) => {
-				BITZ.getDepositAddress(coin).then(function (data) {
-					try {
-						// console.log(data);
-						const address = JSON.parse(data).data.wallet;
-						if (address) {
-							resolve(address);
-						} else {
-							resolve(false);
-						}
-					} catch (e) {
-						resolve(false);
-						log.warn('Error while making getDepositAddress() request: ' + e);
-					};				
-				});
-			});
-
 		}
 	}
 }
 
 function formatPairName(pair) {
-	if (pair.indexOf('-') > -1)
-		pair = pair.replace('-', '_').toLowerCase();
-	else 
-		pair = pair.replace('/', '_').toLowerCase();
-	const[coin1, coin2] = pair.split('_');	
+    let pair_, coin1, coin2;
+	if (pair.indexOf('-') > -1) {
+        pair_ = pair.replace('-', '').toUpperCase();
+        [coin1, coin2] = pair.split('-');
+    } else if (pair.indexOf('_') > -1) {
+        pair_ = pair.replace('_', '').toUpperCase();
+        [coin1, coin2] = pair.split('_');
+    } else {
+        pair_ = pair.replace('/', '').toUpperCase();
+        [coin1, coin2] = pair.split('/');
+    }
+	
 	return {
-		pair,
-		coin1: coin1.toLowerCase(),
-		coin2: coin2.toLowerCase()
+		pair: pair_,
+		coin1: coin1.toUpperCase(),
+		coin2: coin2.toUpperCase()
 	};
 }

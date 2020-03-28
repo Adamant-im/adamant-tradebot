@@ -39,7 +39,7 @@
 	/** Notify non-admins that they are not admins. If false, bot will be silent. **/
 	"notify_non_admins": true,
 
-	/** Exchange to work with. Available values: "idcm". Case insensitive. **/
+	/** Exchange to work with. Available values: "IDCM", "Bit-Z", "CoinDeal". Case insensitive. **/
 	"exchange": "IDCM",
 
 	/** Pair to trade **/

@@ -481,7 +481,7 @@ async function fill(params) {
 	items = 0;
 	let id;
 	for (i=0; i < orderList.length; i++) {
-		id = await traderapi.placeOrder(type, pair, orderList[i].price, orderList[i].amount, 1);
+		id = (await traderapi.placeOrder(type, pair, orderList[i].price, orderList[i].amount, 1, null, pairObj)).orderid;
 		if (id) {
 			items += 1;
 			total1 += +orderList[i].amount;
@@ -499,19 +499,155 @@ async function fill(params) {
 
 }
 
-/*
-function buy_sell(params) {
+async function buy(params) {
 
-	/buy 10 ADM at 0.00000123 on ADM/BTC
-	/buy 10 ADM on ADM/BTC
-	/buy ADM for 0.1 BTC on ADM/BTC
-
-	/sell 10 ADM at 0.00000123 on ADM/BTC
-	/sell 10 ADM on ADM/BTC
-	/sell ADM for 0.1 BTC on ADM/BTC
+	let result = getBuySellParams(params, 'buy');
+	return await buy_sell(result, 'buy');
 
 }
-*/
+
+async function sell(params) {
+
+	let result = getBuySellParams(params, 'sell');
+	return await buy_sell(result, 'sell');
+
+}
+
+function getBuySellParams(params, type) {
+
+	// default: pair={config} BaseCurrency/QuoteCurrency, price=market
+	// amount XOR quote
+	// buy ADM/BTC amount=200 price=0.00000224 — buy 200 ADM at 0.00000224
+	// sell ADM/BTC amount=200 price=0.00000224 — sell 200 ADM at 0.00000224
+	// buy ADM/BTC quote=0.01 price=0.00000224 — buy ADM for 0.01 BTC at 0.00000224
+	// sell ADM/BTC quote=0.01 price=0.00000224 — sell ADM to get 0.01 BTC at 0.00000224
+
+	// when Market order, buy should follow quote, sell — amount
+	// buy ADM/BTC quote=0.01 — buy ADM for 0.01 BTC at market price
+	// buy ADM/BTC quote=0.01 price=market — the same
+	// buy ADM/BTC quote=0.01 — buy ADM for 0.01 BTC at market price
+	// sell ADM/BTC amount=8 — sell 8 ADM at market price
+
+	let amount, quote, price = 'market';
+	params.forEach(param => {
+		try {
+			if (param.startsWith('quote')) {
+				quote = +param.split('=')[1].trim();
+			}
+			if (param.startsWith('amount')) {
+				amount = +param.split('=')[1].trim();
+			}
+			if (param.startsWith('price')) {
+				price = param.split('=')[1].trim();
+				if (price.toLowerCase() === 'market')
+					price = 'market'
+				else
+					price = +price;
+			}
+		} catch (e) {
+			return {
+				msgNotify: ``,
+				msgSendBack: 'Wrong arguments. Command works like this: */sell ADM/BTC amount=200 price=market*.',
+				notifyType: 'log'
+			}	
+		}
+	});
+
+	if (params.length < 1) {
+		return {
+			msgNotify: ``,
+			msgSendBack: 'Wrong arguments. Command works like this: */sell ADM/BTC amount=200 price=market*.',
+			notifyType: 'log'
+		}
+	}
+
+	if ((quote && amount) || (!quote && !amount)) {
+		return {
+			msgNotify: ``,
+			msgSendBack: 'You should specify amount _or_ quote, and not both of them.',
+			notifyType: 'log'
+		}
+	}
+
+	let amountOrQuote = quote || amount;
+
+	let output = '';
+	if (((!price || price === Infinity || price <= 0) && (price != 'market')) || (!amountOrQuote || amountOrQuote === Infinity || amountOrQuote <= 0)) {
+		output = `Incorrect params: ${amountOrQuote}, ${price}. Command works like this: */sell ADM/BTC amount=200 price=market*.`;
+		return {
+			msgNotify: ``,
+			msgSendBack: `${output}`,
+			notifyType: 'log'
+		}	
+	}
+
+	// when Market order, buy should follow quote, sell — amount
+	if (price === 'market') {
+		if ((type === 'buy' && !quote) || ((type === 'sell' && !amount))) {
+			output = `When placing Market order, buy should follow with _quote_, sell with _amount_. Command works like this: */sell ADM/BTC amount=200 price=market*.`;
+			return {
+				msgNotify: ``,
+				msgSendBack: `${output}`,
+				notifyType: 'log'
+			}	
+		}
+	}
+
+	const pairObj = setPair(params[0]);
+	const pair = pairObj.pair;
+	const coin1 = pairObj.coin1;
+	const coin2 = pairObj.coin2;
+	const coin1Decimals =  pairObj.coin1Decimals;
+	const coin2Decimals =  pairObj.coin2Decimals;
+
+	if (!pair || !pair.length) {
+		output = 'Please specify market to make an order.';
+		return {
+			msgNotify: ``,
+			msgSendBack: `${output}`,
+			notifyType: 'log'
+		}	
+	}
+
+	return {
+		amount,
+		price, 
+		quote,
+		pair,
+		coin1,
+		coin2,
+		coin1Decimals,
+		coin2Decimals,
+		pairObj
+	}	
+
+}
+
+async function buy_sell(params, type) {
+
+	if (params.msgSendBack)
+		return params;
+
+	if (!params.amount) {
+		params.amount = params.quote / params.price;
+	} else {
+		params.quote = params.amount * params.price;
+	}
+
+	let result;
+	if (params.price === 'market') {
+		result = await traderapi.placeOrder(type, params.pair, null, params.amount, 0, params.quote, params.pairObj);
+	} else {
+		result = await traderapi.placeOrder(type, params.pair, params.price, params.amount, 1, params.quote, params.pairObj);
+	}
+
+	return {
+		msgNotify: `${config.notifyName}: ${result.message}`,
+		msgSendBack: result.message,
+		notifyType: 'log'
+	}
+
+}
 
 function params() {
 
@@ -556,6 +692,8 @@ Commands:
 **/buyPercent**: Set the percentage of buy orders for market making. Try */buyPercent 85*.
 
 **/fill**: Fill sell or buy order book. Works like this: */fill ADM/BTC buy amount=0.00200000 low=0.00000050 high=0.00000182 count=7*.
+
+**/buy** and **/sell**: Place a limit or market order. If _price_ is not specified, market order placed. Examples: */buy ADM/BTC amount=200 price=0.00000224* — buy 200 ADM at 0.00000224 BTC. */sell ADM/BTC quote=0.01 price=0.00000224* — sell ADM to get 0.01 BTC at 0.00000224 BTC. */sell ADM/BTC amount=200* — sell 200 ADM at market price.
 
 **/clear**: Cancel [*mm*, td, all] active orders. F. e., */clear ETH/BTC all* or just */clear* for mm-orders of default pair.
 
@@ -677,9 +815,13 @@ Ask: ${exchangeRates.ask.toFixed(coin2Decimals)}, bid: ${exchangeRates.bid.toFix
 			output += "\n\n" + `Market making stats for ${pair} pair:` + "\n";
 			if (orderStats.coin1AmountTotalDayCount != 0) {
 				output += `24h: ${orderStats.coin1AmountTotalDayCount} orders with ${$u.thousandSeparator(+orderStats.coin1AmountTotalDay.toFixed(coin1Decimals), true)} ${coin1} and ${$u.thousandSeparator(+orderStats.coin2AmountTotalDay.toFixed(coin2Decimals), true)} ${coin2}`
+			} else {
+				output += `24h: no orders`;
 			}
 			if (orderStats.coin1AmountTotalMonthCount > orderStats.coin1AmountTotalDayCount) {
 				output += `, 30d: ${orderStats.coin1AmountTotalMonthCount} orders with ${$u.thousandSeparator(+orderStats.coin1AmountTotalMonth.toFixed(coin1Decimals), true)} ${coin1} and ${$u.thousandSeparator(+orderStats.coin2AmountTotalMonth.toFixed(coin2Decimals), true)} ${coin2}`
+			} else if (orderStats.coin1AmountTotalMonthCount === 0) {
+				output += `30d: no orders`;
 			}
 			if (orderStats.coin1AmountTotalAllCount > orderStats.coin1AmountTotalMonthCount) {
 				output += `, all time: ${orderStats.coin1AmountTotalAllCount} orders with ${$u.thousandSeparator(+orderStats.coin1AmountTotalAll.toFixed(coin1Decimals), true)} ${coin1} and ${$u.thousandSeparator(+orderStats.coin2AmountTotalAll.toFixed(coin2Decimals), true)} ${coin2}`
@@ -842,6 +984,7 @@ async function balances() {
 ${output}`,
 		notifyType: 'log'
 	}
+
 }
 
 function version() {
@@ -872,5 +1015,7 @@ const commands = {
 	interval,
     clear,
 	fill,
-	params
+	params,
+	buy,
+	sell
 }
