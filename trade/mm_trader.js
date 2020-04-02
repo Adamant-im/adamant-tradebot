@@ -34,9 +34,10 @@ module.exports = {
         let order1, order2;
         let output = '';
         let orderParamsString = '';
+        const pairObj = $u.getPairObj(config.pair);
 
         if (!price) {
-            if (Date.now()-lastNotifyPriceTimestamp > hour) {
+            if ((Date.now()-lastNotifyPriceTimestamp > hour) && priceReq.message) {
                 notify(priceReq.message, 'warn');
                 lastNotifyPriceTimestamp = Date.now();
             }
@@ -54,14 +55,14 @@ module.exports = {
         // Check balances
         const balances = await isEnoughCoins(config.coin1, config.coin2, coin1Amount, coin2Amount);
         if (!balances.result) {
-            if (Date.now()-lastNotifyBalancesTimestamp > hour) {
+            if ((Date.now()-lastNotifyBalancesTimestamp > hour) && balances.message) {
                 notify(balances.message, 'warn');
                 lastNotifyBalancesTimestamp = Date.now();
             }
             return;
         }
 
-        order1 = (await traderapi.placeOrder(crossType(type), config.pair, price, coin1Amount, 1)).orderid;
+        order1 = (await traderapi.placeOrder(crossType(type), config.pair, price, coin1Amount, 1, null, pairObj)).orderid;
         if (order1) {
             const {ordersDb} = db;
             const order = new ordersDb({
@@ -83,8 +84,8 @@ module.exports = {
                 isExecuted: false,
                 isCancelled: false
             });
-            await order.save();
-            order2 = (await traderapi.placeOrder(type, config.pair, price, coin1Amount, 1)).orderid;
+            // await order.save();
+            order2 = (await traderapi.placeOrder(type, config.pair, price, coin1Amount, 1, null, pairObj)).orderid;
             if (order2) {
                 output = `${type} ${coin1Amount.toFixed(config.coin1Decimals)} ${config.coin1} for ${coin2Amount.toFixed(config.coin2Decimals)} ${config.coin2}`;
                 log.info(`Successfully executed mm-order to ${output}.`);
@@ -118,14 +119,17 @@ function setType() {
 }
 
 async function isEnoughCoins(coin1, coin2, amount1, amount2) {
-	const balances = await traderapi.getBalances();
+	const balances = await traderapi.getBalances(false);
     let balance1, balance2;
     let isBalanceEnough = true;
     let output = '';
-	if (balances) {
+
+    if (balances) {
 		try {
             balance1 = balances.filter(crypto => crypto.code === coin1)[0].free;
             balance2 = balances.filter(crypto => crypto.code === coin2)[0].free;
+
+
             if (!balance1 || balance1 < amount1) {
                 output = `${config.notifyName}: Not enough ${coin1} for placing market making order. Check balances.`;
                 isBalanceEnough = false;

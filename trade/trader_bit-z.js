@@ -149,17 +149,15 @@ module.exports = (apiKey, secretKey, pwd) => {
 
 			let type = (orderType === 'sell') ? 2 : 1;
 
-			if (pairObj) { // Set precision (decimals)
+			if (pairObj) { // Set precision (decimals)				
 				if (coin1Amount) {
 					coin1Amount = +coin1Amount.toFixed(pairObj.coin1Decimals);
-					if (price)
-						price = +price.toFixed(pairObj.coin2Decimals);
 				}
 				if (coin2Amount) {
 					coin2Amount = +coin2Amount.toFixed(pairObj.coin2Decimals)
-					if (price)
-						price = +price.toFixed(pairObj.coin1Decimals);
 				}
+				if (price)
+					price = +price.toFixed(pairObj.coin2Decimals);
 			}
 
 			if (limit) { // Limit order

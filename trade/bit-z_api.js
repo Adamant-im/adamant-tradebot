@@ -1,23 +1,16 @@
 var CryptoJS = require('crypto-js');
-// var Promise = require('bluebird');
 const request = require('request');
 const DEFAULT_HEADERS = {
-    // "Content-Type": "application/json",
     "Content-Type": "application/x-www-form-urlencoded",
     "User-Agent": "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.71 Safari/537.36"
 }
-//
-var WEB_BASE = ''; //
-// 
+
+var WEB_BASE = '';
 var config = {
     'apiKey': '',
     'secret_key': '',
     'tradePwd': ''
 };
-//
-function log(msg) {
-    console.log(msg);
-}
 
 function market_api(path, data) {
     var url = `${WEB_BASE}${path}`; 

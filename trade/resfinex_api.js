@@ -1,9 +1,7 @@
+const crypto = require("crypto")
 const request = require('request');
-const DEFAULT_HEADERS = {
-    "Accept": "application/json"
-}
 
-var WEB_BASE = ''; // API server like https://apigateway.coindeal.com
+let WEB_BASE = "https://api.resfinex.com"; // API server like https://api.resfinex.com/
 var config = {
     'apiKey': '',
     'secret_key': '',
@@ -11,49 +9,73 @@ var config = {
 };
 
 function sign_api(path, data, type = 'get') {
+
+    const nonce = Date.now()
     var url = `${WEB_BASE}${path}`; 
     var pars = [];
     for (let key in data) {
         let v = data[key];
         pars.push(key + "=" + v);
     }
-    var p = pars.join("&");
-    if (p && type != 'post')
-        url = url + "?" + p;
-    let headersWithSign = Object.assign({"Authorization": setSign()}, DEFAULT_HEADERS);
+    var queryString = pars.join("&");
+    if (queryString && type != 'post') {
+        url = url + "?" + queryString;
+    }
+    
+    const bodyString = JSON.stringify(data);
+    const signPayload = type === "get" ? queryString : bodyString;
+    const sign = setSign(config.secret_key, `${signPayload}_${nonce}_${path}`);
+    // console.log('sign string: ', `${signPayload}_${nonce}_${path}`);
 
     return new Promise((resolve, reject) => {
         try {
+
             var httpOptions = {
                 url: url,
                 method: type,
-                timeout: 3000,
-                headers: headersWithSign
-            }
-            if (type === 'post') {
-                headersWithSign = Object.assign(headersWithSign, {"Content-Type": "multipart/form-data"});
-                httpOptions = Object.assign(httpOptions, {"formData": data});
+                timeout: 5000,
+                headers: {
+                    'Content-Type': "application/json",
+                    'Token': config.apiKey,
+                    'Nonce': nonce + '',
+                    'Signature': sign,
+                    "Type": "api"
+                },
+                body: type === "get" ? undefined : bodyString
             }
 
             // console.log(httpOptions);
             request(httpOptions, function(err, res, data) {
+                // console.log(data);
                 if (err) {
                     reject(err);
                 } else {
                     resolve(data);
                 }
-            }).on('error', function(err){
-                console.log('http get err:'+url);
+            }).on('error', function(err) {
+                console.log('Request err: ' + url);
                 reject(null);
             });
-        }catch(err){
-            console.log('http get err:'+url);
+        } catch(err) {
+            console.log('Promise error: ' + url);
             reject(null);    
         }
     });
 }
 
-function public_api(url, data, type = 'get') {
+function public_api(path, data, type = 'get') {
+
+    var url = `${WEB_BASE}${path}`; 
+    var pars = [];
+    for (let key in data) {
+        let v = data[key];
+        pars.push(key + "=" + v);
+    }
+    var queryString = pars.join("&");
+    if (queryString && type != 'post') {
+        url = url + "?" + queryString;
+    }
+
     return new Promise((resolve, reject) => {
         try {
             var httpOptions = {
@@ -61,6 +83,8 @@ function public_api(url, data, type = 'get') {
                 method: type,
                 timeout: 10000,
             }
+            // console.log(httpOptions);
+
             request(httpOptions, function(err, res, data) {
                 if (err) {
                     reject(err);
@@ -78,18 +102,20 @@ function public_api(url, data, type = 'get') {
     });
 }
 
-function setSign() {
-    signString = 'Basic ';
-    signString += Buffer.from(config.apiKey + ':' + config.secret_key).toString('base64');
-    return signString;
+function setSign(secret, str) {
+	const sign = crypto
+    .createHmac('sha256', secret)
+    .update(`${str}`)
+    .digest("hex");
+	return sign;	
 }
 
 var EXCHANGE_API = {
-    setConfig : function(apiServer,apiKey,secretKey,tradePwd){
+    setConfig : function(apiServer,apiKey,secretKey,tradePwd) {
         WEB_BASE = apiServer;
         config = {
-            'apiKey': apiKey ,
-            'secret_key': secretKey ,
+            'apiKey': apiKey,
+            'secret_key': secretKey,
             'tradePwd': tradePwd || '',
         };
     },
@@ -100,7 +126,7 @@ var EXCHANGE_API = {
      * ------------------------------------------------------------------
      */
     getUserAssets: function() {
-        return sign_api("/api/v1/trading/balance");
+        return sign_api("/account/balances", {}, 'post');
     },
     /**
      * ------------------------------------------------------------------
@@ -109,43 +135,29 @@ var EXCHANGE_API = {
      */
     getUserNowEntrustSheet: function(coinFrom, coinTo) {
         let data = {};
-        data.symbol = coinFrom + coinTo;
-        return sign_api("/api/v1/order", data);
+        data.pair = coinFrom + "_" + coinTo;
+        return sign_api("/order/open_orders", data, 'post');
     },
     /**
      * ------------------------------------------------------------------
-     * (Place a Limit order)
-     * @param symbol        string "ADMBTC"
+     * (Place an order)
+     * @param symbol        string "ADM_USDT"
      * @param amount        float
      * @param price         float
-     * @param side          string  buy, sell
+     * @param side          string  BUY, SELL
+     * @param type          string  MARKET, LIMIT
      * ------------------------------------------------------------------
      */
-    addEntrustSheet: function(symbol, amount, price, side) {
+    addEntrustSheet: function(symbol, amount, price, side, type) {
         var data = {};
-        data.symbol = symbol;
-        data.price  = price;
-        data.quantity = amount;
+        data.pair = symbol;
+        if (price)
+            data.price  = price;
+        data.amount = amount;
         data.side   = side;
-        data.type   = 'limit';
-        return sign_api("/api/v1/order", data, 'post');
+        data.type   = type;
+        return sign_api("/order/place_order", data, 'post');
     },
-    /**
-     * ------------------------------------------------------------------
-     * (Place a Market order)
-     * @param symbol        string "ADMBTC"
-     * @param total        float, Incoming amount at the time of purchase, incoming quantity at the time of sale
-     * @param type          int  "1":"buy"   "2":"sale"
-     * ------------------------------------------------------------------
-     */
-    // addMarketOrder: function(symbol, total, type) {
-    //     var data = getSignBaseParams();
-    //     data.symbol = symbol;
-    //     data.total  = total;
-    //     data.type   = type;
-    //     data.tradePwd = config.tradePwd;//#
-    //     return sign_api("/Trade/MarketTrade", data);
-    // },
     /**
      * ------------------------------------------------------------------
      * (Cancel the order)
@@ -153,34 +165,33 @@ var EXCHANGE_API = {
      * ------------------------------------------------------------------
      */
     cancelEntrustSheet: function(entrustSheetId) {
-        return sign_api(`/api/v1/order/${entrustSheetId}`, null, 'delete');
+        let data = {};
+        data.orderId = entrustSheetId;
+        return sign_api(`/order/cancel_order`, data, 'post');
     },
 
     /**
      * ------------------------------------------------------------------
      * (Get the price data)
-     * @param symbol    ADMBTC
+     * @param symbol    ADM_BTC
      * ------------------------------------------------------------------
      */
     ticker: function(symbol) {
-        let data = {};
-        data.limit = '1';
-        return sign_api(`/api/v1/public/orderbook/${symbol}`, data);
+        return public_api(`/engine/ticker`);
     },
-
     /**
      * ------------------------------------------------------------------
      * (Get stats)
      * @param symbol    eth_btc
      * ------------------------------------------------------------------
      */
-    stats: function(symbol) {
-        return public_api(`https://coinmarketcap.coindeal.com/api/v1/ticker`);
+    orderBook: function(symbol, size = 1) {
+        let data = {};
+        data.pair = symbol;
+        data.size = size;
+        return public_api(`/engine/depth`, data);
     }
 
-    
-
 }
-
 
 module.exports = EXCHANGE_API;
