@@ -273,44 +273,44 @@ async function clear(params) {
 
 }
 
-function setPair(param, letCoin1only = false) {
+// function $u.getPairObj(param, letCoin1only = false) {
 
-	let pair = (param || '').toUpperCase().trim();
-	let coin1Decimals = 8;
-	let coin2Decimals = 8;
-	let isPairFromParam = true;
-	let coin1, coin2;
+// 	let pair = (param || '').toUpperCase().trim();
+// 	let coin1Decimals = 8;
+// 	let coin2Decimals = 8;
+// 	let isPairFromParam = true;
+// 	let coin1, coin2;
 
-	if (!pair || pair.indexOf('/') === -1 || pair === config.pair) { // Set default pair
-		if (pair != config.pair)
-			isPairFromParam = false;
-		if ((pair.indexOf('/') === -1) && letCoin1only) { // Not a pair, may be a coin only
-			coin1 = pair;
-			if (coin1 === config.coin1)
-				coin1Decimals = config.coin1Decimals;		
-			pair = null;
-			coin2 = null;
-		} else { // A pair
-			pair = config.pair;
-			coin1Decimals = config.coin1Decimals;
-			coin2Decimals = config.coin2Decimals;
-		}
-	}
+// 	if (!pair || pair.indexOf('/') === -1 || pair === config.pair) { // Set default pair
+// 		if (pair != config.pair)
+// 			isPairFromParam = false;
+// 		if ((pair.indexOf('/') === -1) && letCoin1only) { // Not a pair, may be a coin only
+// 			coin1 = pair;
+// 			if (coin1 === config.coin1)
+// 				coin1Decimals = config.coin1Decimals;		
+// 			pair = null;
+// 			coin2 = null;
+// 		} else { // A pair
+// 			pair = config.pair;
+// 			coin1Decimals = config.coin1Decimals;
+// 			coin2Decimals = config.coin2Decimals;
+// 		}
+// 	}
 
-	if (pair) {
-		coin1 = pair.substr(0, pair.indexOf('/')); 
-		coin2 = pair.substr(pair.indexOf('/') + 1, pair.length);
-	}
+// 	if (pair) {
+// 		coin1 = pair.substr(0, pair.indexOf('/')); 
+// 		coin2 = pair.substr(pair.indexOf('/') + 1, pair.length);
+// 	}
 
-	return {
-		pair,
-		coin1,
-		coin2,
-		coin1Decimals,
-		coin2Decimals,
-		isPairFromParam
-	}
-}
+// 	return {
+// 		pair,
+// 		coin1,
+// 		coin2,
+// 		coin1Decimals,
+// 		coin2Decimals,
+// 		isPairFromParam
+// 	}
+// }
 
 async function fill(params) {
 
@@ -354,7 +354,7 @@ async function fill(params) {
 
 	let output = '';
 	let type;
-	const pairObj = setPair(params[0]);
+	const pairObj = $u.getPairObj(params[0]);
 	const pair = pairObj.pair;
 	const coin1 = pairObj.coin1;
 	const coin2 = pairObj.coin2;
@@ -406,7 +406,7 @@ async function fill(params) {
 		}
 	}
 
-	const balances = await traderapi.getBalances();
+	const balances = await traderapi.getBalances(false);
 	let balance;
 	let isBalanceEnough = true;
 	if (balances) {
@@ -582,7 +582,8 @@ function getBuySellParams(params, type) {
 	}
 
 	// when Market order, buy should follow quote, sell — amount
-	if (price === 'market') {
+	const allowBuyAmountExchanges = ['resfinex'];
+	if (price === 'market' && !allowBuyAmountExchanges.includes(config.exchange)) {
 		if ((type === 'buy' && !quote) || ((type === 'sell' && !amount))) {
 			output = `When placing Market order, buy should follow with _quote_, sell with _amount_. Command works like this: */sell ADM/BTC amount=200 price=market*.`;
 			return {
@@ -593,7 +594,19 @@ function getBuySellParams(params, type) {
 		}
 	}
 
-	const pairObj = setPair(params[0]);
+	const amountNecessaryExchanges = ['resfinex'];
+	if (price === 'market' && amountNecessaryExchanges.includes(config.exchange)) {
+		if (!amount) {
+			output = `When placing Market order on ${config.exchangeName}, _amount_ is necessary. Command works like this: */sell ADM/BTC amount=200 price=market*.`;
+			return {
+				msgNotify: ``,
+				msgSendBack: `${output}`,
+				notifyType: 'log'
+			}	
+		}
+	}
+
+	const pairObj = $u.getPairObj(params[0]);
 	const pair = pairObj.pair;
 	const coin1 = pairObj.coin1;
 	const coin2 = pairObj.coin2;
@@ -716,7 +729,7 @@ async function rates(params) {
 
 	let output = '';
 
-	const pairObj = setPair(params[0], true);
+	const pairObj = $u.getPairObj(params[0], true);
 	const pair = pairObj.pair;
 	const coin1 = pairObj.coin1;
 	const coin2 = pairObj.coin2;
@@ -761,7 +774,7 @@ ${res}.`;
 			output += "\n\n";
 		if (exchangeRates) {
 			output += `${config.exchangeName} rates for ${pair} pair:
-Ask: ${exchangeRates.ask.toFixed(coin2Decimals)}, bid: ${exchangeRates.bid.toFixed(coin2Decimals)}`;
+Ask: ${exchangeRates.ask.toFixed(coin2Decimals)}, bid: ${exchangeRates.bid.toFixed(coin2Decimals)}.`;
 		} else {
 			output += `Unable to get ${config.exchangeName} rates for ${pair}.`;
 		}
@@ -779,7 +792,7 @@ async function stats(params) {
 
 	let output = '';
 
-	const pairObj = setPair(params[0]);
+	const pairObj = $u.getPairObj(params[0]);
 	const pair = pairObj.pair;
 	const coin1 = pairObj.coin1;
 	const coin2 = pairObj.coin2;
@@ -798,8 +811,12 @@ async function stats(params) {
 	if (pair) {
 		const exchangeRates = await traderapi.getRates(pair);
 		if (exchangeRates) {
+			let volume_Coin2 = '';
+			if (exchangeRates.volume_Coin2) {
+				volume_Coin2 = ` & ${$u.thousandSeparator(+exchangeRates.volume_Coin2.toFixed(coin2Decimals), true)} ${coin2}`;
+			}
 			output += `${config.exchangeName} 24h stats for ${pair} pair:
-Vol: ${$u.thousandSeparator(+exchangeRates.volume, true)} ${coin1}. High: ${exchangeRates.high.toFixed(coin2Decimals)}, low: ${exchangeRates.low.toFixed(coin2Decimals)}, delta: _${(exchangeRates.high-exchangeRates.low).toFixed(coin2Decimals)}_ ${coin2}.
+Vol: ${$u.thousandSeparator(+exchangeRates.volume.toFixed(coin1Decimals), true)} ${coin1}${volume_Coin2}. High: ${exchangeRates.high.toFixed(coin2Decimals)}, low: ${exchangeRates.low.toFixed(coin2Decimals)}, delta: _${(exchangeRates.high-exchangeRates.low).toFixed(coin2Decimals)}_ ${coin2}.
 Ask: ${exchangeRates.ask.toFixed(coin2Decimals)}, bid: ${exchangeRates.bid.toFixed(coin2Decimals)}, spread: _${(exchangeRates.ask-exchangeRates.bid).toFixed(coin2Decimals)}_ ${coin2}.`;
 		} else {
 			output += `Unable to get ${config.exchangeName} stats for ${pair}.`;
@@ -844,7 +861,7 @@ async function orders(params) {
 
 	let output = '';
 
-	const pairObj = setPair(params[0]);
+	const pairObj = $u.getPairObj(params[0]);
 	const pair = pairObj.pair;
 	const coin1 = pairObj.coin1;
 	const coin2 = pairObj.coin2;

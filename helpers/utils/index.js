@@ -101,17 +101,42 @@ module.exports = {
 	isERC20(coin){
 		return config.erc20.includes(coin.toUpperCase());
 	},
-	getCoinsFromPair(pair) {
-		pair = pair.trim().toUpperCase();
-		let coin, coin2;
-		if (pair.indexOf('/') > -1) {
-			coin = pair.substr(0, pair.indexOf('/'));
-			coin2 = pair.substr(pair.indexOf('/') + 1, coin.length);
+	getPairObj(aPair, letCoin1only = false) {
+
+		let pair = (aPair || '').toUpperCase().trim();
+		let coin1Decimals = 8;
+		let coin2Decimals = 8;
+		let isPairFromParam = true;
+		let coin1, coin2;
+	
+		if (!pair || pair.indexOf('/') === -1 || pair === config.pair) { // Set default pair
+			if (pair != config.pair)
+				isPairFromParam = false;
+			if ((pair.indexOf('/') === -1) && letCoin1only) { // Not a pair, may be a coin only
+				coin1 = pair;
+				if (coin1 === config.coin1)
+					coin1Decimals = config.coin1Decimals;		
+				pair = null;
+				coin2 = null;
+			} else { // A pair
+				pair = config.pair;
+				coin1Decimals = config.coin1Decimals;
+				coin2Decimals = config.coin2Decimals;
+			}
 		}
+	
+		if (pair) {
+			coin1 = pair.substr(0, pair.indexOf('/')); 
+			coin2 = pair.substr(pair.indexOf('/') + 1, pair.length);
+		}
+	
 		return {
-			coin: coin,
-			coin2: coin2,
-			pair: pair
+			pair,
+			coin1,
+			coin2,
+			coin1Decimals,
+			coin2Decimals,
+			isPairFromParam
 		}
 	},
 	randomDeviation(number, deviation) {

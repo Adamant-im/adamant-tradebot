@@ -17,6 +17,7 @@ Supported exchanges (more in progress):
 * [IDCM](https://idcm.io/invitation/receive?code=LM5510&lang=en)
 * [Bit-Z](https://u.bit-z.com/register?invite_code=2423317)
 * [CoinDeal](https://coindeal.com/ref/9WZN)
+* [Resfinex](https://trade.resfinex.com?ref=7ccb34d867&pair=ADM_USDT)
 
 Available commands: ask a bot with `/help` command. Read more: [Crypto trading & Market making bot in ADAMANT](https://medium.com/adamant-im/crypto-trading-market-making-bot-in-adamant-82fa48b78f51).
 

@@ -60,23 +60,21 @@ module.exports = (PubK, PrivK) => {
 		placeOrder(orderType, pair, price, coin1Amount, limit = 1, coin2Amount, pairObj) {
 
 			let pair_ = formatPairName(pair);
-			const coins = $u.getCoinsFromPair(pair);
+			const coins = $u.getPairObj(pair);
 			let type = (orderType === 'sell') ? 1 : 0;
 
 			let opt;
 			let output = '';
 
-			if (pairObj) { // Set precision (decimals)
+			if (pairObj) { // Set precision (decimals)				
 				if (coin1Amount) {
 					coin1Amount = +coin1Amount.toFixed(pairObj.coin1Decimals);
-					if (price)
-						price = +price.toFixed(pairObj.coin2Decimals);
 				}
 				if (coin2Amount) {
 					coin2Amount = +coin2Amount.toFixed(pairObj.coin2Decimals)
-					if (price)
-						price = +price.toFixed(pairObj.coin1Decimals);
 				}
+				if (price)
+					price = +price.toFixed(pairObj.coin2Decimals);
 			}
 			
 			if (limit) { // Limit order
@@ -87,7 +85,7 @@ module.exports = (PubK, PrivK) => {
 					Side: type, // 1 for sell. 0 for buy.
 					Type: 1 // 1 for limit price. 0 for Market price.
 				}
-				output = `${orderType} ${coin1Amount} ${coins.coin} at ${price} ${coins.coin2}.`;
+				output = `${orderType} ${coin1Amount} ${coins.coin1} at ${price} ${coins.coin2}.`;
 			} else { // Market order
 				if (coin1Amount) {
 					opt = {
@@ -96,8 +94,8 @@ module.exports = (PubK, PrivK) => {
 						Side: type, // 1 for sell. 0 for buy.
 						Type: 0 // 1 for limit price. 0 for Market price.
 					};
-					output = `${orderType} ${coin1Amount} ${coins.coin} at Market Price on ${coins.pair} market.`;
-					console.log(opt);
+					output = `${orderType} ${coin1Amount} ${coins.coin1} at Market Price on ${coins.pair} market.`;
+					// console.log(opt);
 				} else {
 					opt = {
 						Symbol: pair_,
@@ -105,10 +103,9 @@ module.exports = (PubK, PrivK) => {
 						Side: type, // 1 for sell. 0 for buy.
 						Type: 0 // 1 for limit price. 0 for Market price.
 					};	
-					output = `${orderType} ${coins.coin} for ${coin2Amount} ${coins.coin2} at Market Price on ${coins.pair} market.`;
+					output = `${orderType} ${coins.coin1} for ${coin2Amount} ${coins.coin2} at Market Price on ${coins.pair} market.`;
 				}
 			}
-
 
 			return new Promise((resolve, reject) => {
 				req('trade', opt, function (data) {

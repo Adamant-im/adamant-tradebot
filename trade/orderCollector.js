@@ -5,6 +5,8 @@ const traderapi = require('./trader_' + config.exchange)(config.apikey, config.a
 
 module.exports = async (purposes, pair) => {
 
+    // log.info(`Order collector..`);
+
 	const {ordersDb} = db;
     let ordersToClear = await ordersDb.find({
         isProcessed: false,
