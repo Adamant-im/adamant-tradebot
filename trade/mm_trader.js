@@ -233,14 +233,14 @@ async function setPrice(type, pair) {
 
     const minPrice = +bid_low + +precision;
     const maxPrice = ask_high - precision;
-    // price = 0.009248977658650832;
+    // price = 0.009618977658650832;
     // console.log('low, high', bid_low, ask_high);
     // console.log('min, max', minPrice, maxPrice);
     // console.log('price1', price);
     if (price >= maxPrice)
-        price = price - precision;
+        price = ask_high - precision;
     if (price <= minPrice)
-        price = +price + +precision;
+        price = +bid_low + +precision;
     // console.log('price2', price);
 
     return {
