@@ -457,16 +457,30 @@ async function fill(params) {
 		price += $u.randomDeviation(step, deviation);
 		coin1Amount = $u.randomDeviation(orderAmount, deviation);
 		total += coin1Amount;
+
+		// Checks if total or price exceeded
+		if (total > amount) {
+			if (count === 1)
+				coin1Amount = amount
+			else
+				break;
+		}
+		if (price > high) {
+			if (count === 1)
+				price = high
+			else
+				break;
+		}
+
+		// Count base and quote currency amounts
 		if (type === 'buy') {
-			// console.log(price, coin1Amount, total);
 			coin2Amount = coin1Amount;
 			coin1Amount = coin1Amount / price;
 		} else {
 			coin1Amount = coin1Amount;
 			coin2Amount = coin1Amount * price;
 		}
-		if (price > high || total > amount)
-			break;
+		// console.log(price, coin1Amount, total);
 		orderList.push({
 			price: price,
 			amount: coin1Amount,
@@ -489,11 +503,14 @@ async function fill(params) {
 		}
 	}
 
-	output = `${items} orders to ${type} ${$u.thousandSeparator(+total1.toFixed(coin1Decimals), false)} ${coin1} for ${$u.thousandSeparator(+total2.toFixed(coin2Decimals), false)} ${coin2}.`;
+	if (items > 0)
+		output = `${items} orders to ${type} ${$u.thousandSeparator(+total1.toFixed(coin1Decimals), false)} ${coin1} for ${$u.thousandSeparator(+total2.toFixed(coin2Decimals), false)} ${coin2}.`;
+	else
+		output = `No orders were placed. Check log file for details.`;
 
 	return {
-		msgNotify: `${config.notifyName} placed ${output}`,
-		msgSendBack: `Placed ${output}`,
+		msgNotify: items > 0 ? `${config.notifyName} placed ${output}` : '',
+		msgSendBack: items > 0 ? `Placed ${output}` : output,
 		notifyType: 'log'
 	}
 
