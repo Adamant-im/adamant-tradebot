@@ -598,8 +598,8 @@ function getBuySellParams(params, type) {
 		}	
 	}
 
-	// when Market order, buy should follow quote, sell — amount
-	const allowBuyAmountExchanges = ['resfinex'];
+	// when Market order, buy should pass quote parameter, when sell — amount
+	const allowBuyAmountExchanges = ['resfinex', 'atomars'];
 	if (price === 'market' && !allowBuyAmountExchanges.includes(config.exchange)) {
 		if ((type === 'buy' && !quote) || ((type === 'sell' && !amount))) {
 			output = `When placing Market order, buy should follow with _quote_, sell with _amount_. Command works like this: */sell ADM/BTC amount=200 price=market*.`;
@@ -611,7 +611,7 @@ function getBuySellParams(params, type) {
 		}
 	}
 
-	const amountNecessaryExchanges = ['resfinex'];
+	const amountNecessaryExchanges = ['resfinex', 'atomars'];
 	if (price === 'market' && amountNecessaryExchanges.includes(config.exchange)) {
 		if (!amount) {
 			output = `When placing Market order on ${config.exchangeName}, _amount_ is necessary. Command works like this: */sell ADM/BTC amount=200 price=market*.`;

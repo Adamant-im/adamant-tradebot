@@ -18,6 +18,7 @@ Supported exchanges (more in progress):
 * [Bit-Z](https://u.bit-z.com/register?invite_code=2423317)
 * [CoinDeal](https://coindeal.com/ref/9WZN)
 * [Resfinex](https://trade.resfinex.com?ref=7ccb34d867&pair=ADM_USDT)
+* [Atomars](https://atomars.com/refcode/kaba)
 
 Available commands: ask a bot with `/help` command. Read more: [Crypto trading & Market making bot in ADAMANT](https://medium.com/adamant-im/crypto-trading-market-making-bot-in-adamant-82fa48b78f51).
 
@@ -50,8 +51,8 @@ Parameters:
 * `pair` <string> Pair to with on the exchange. Obligatory.
 * `coin1Decimals` <number>  Meaningful decimals for output of coin1 amounts. Default is 8.
 * `coin2Decimals` <number>  Meaningful decimals for output of coin2 amounts. Default is 8.
-* `apikey` <string> Exchange's account API key for connection. Obligatory.
-* `apisecret` <string> Exchange's account API secret for connection. Obligatory.
+* `apikey` <string> Exchange's account API key (username/login for some exchanges) for connection. Obligatory.
+* `apisecret` <string> Exchange's account API secret (password for some exchanges) for connection. Obligatory.
 * `apipassword` <string> Exchange's account trade password. If needed for exchange.
 * `passPhrase` <string> The bot's secret phrase for accepting commands. Obligatory. Bot's ADM address will correspond this passPhrase.
 * `admin_accounts` <string, array> ADAMANT accounts to accept commands from. Commands from other accounts will not be executed. At lease one account.
