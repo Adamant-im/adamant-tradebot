@@ -51,6 +51,16 @@
 	/** Meaningful decimals for output of coin2 amounts. Depends on coin and exchange **/
 	"coin2Decimals": 6, // 0.123456 USDT
 
+	/** Interval in minutes to clear all opened orders.
+		Some exchanges has API issues with closing or matching orders.
+		Because of this, your account can accumulate open orders and lead to freezed balances.
+		In such a case you can run "/clear all" command manually, or set this parameter for automatic clearing.
+		Note: this command cancels all of account orders, including ones which you set manually with "/fill" command.
+		If the exchange supports getting orders by pair param, only orders for the trade pair will be cleared.
+		0 means disabled.
+	**/
+	"clearAllOrdersInterval": 0,
+
 	/** Exchange's account API key for connection. Or login for Atomars **/
 	"apikey": "YOUR-KEY..",
 

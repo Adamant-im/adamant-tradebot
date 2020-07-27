@@ -35,6 +35,10 @@ const fields = {
 		type: Number,
 		default: 8
 	},
+	clearAllOrdersInterval: {
+		type: Number,
+		default: 0
+	},
 	apikey: {
 		type: String,
 		isRequired: true

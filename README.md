@@ -57,6 +57,7 @@ Parameters:
 * `pair` <string> Pair to with on the exchange. Obligatory.
 * `coin1Decimals` <number>  Meaningful decimals for output of coin1 amounts. Default is 8.
 * `coin2Decimals` <number>  Meaningful decimals for output of coin2 amounts. Default is 8.
+* `clearAllOrdersInterval` <number> Interval in minutes to clear all opened orders. Default is 0 (disabled).
 * `apikey` <string> Exchange's account API key (username/login for some exchanges) for connection. Obligatory.
 * `apisecret` <string> Exchange's account API secret (password for some exchanges) for connection. Obligatory.
 * `apipassword` <string> Exchange's account trade password. If needed for exchange.

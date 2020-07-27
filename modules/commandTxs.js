@@ -263,29 +263,20 @@ function interval(param) {
 
 async function clear(params) {
 
-	param = params[0];
-	if (!param || param.indexOf('/') === -1) {
-		param = config.pair;
-	}
-	let coin = (param || '').toUpperCase().trim();
-	let output = '';
-	let pair;
-	if (coin.indexOf('/') > -1) {
-		pair = coin;
-		coin = coin.substr(0, coin.indexOf('/')); 
+	let pair = params[0].toUpperCase();
+	if (!pair || pair.indexOf('/') === -1) {
+		pair = config.pair;
 	}
 
 	if (!pair || !pair.length) {
-		output = 'Please specify market to clear orders in. F. e., */clear DOGE/BTC*.';
 		return {
 			msgNotify: ``,
-			msgSendBack: `${output}`,
+			msgSendBack: 'Please specify market to clear orders in. F. e., */clear DOGE/BTC mm*.',
 			notifyType: 'log'
 		}	
 	}
 
 	let purposes;
-	let count = 0;
 	let purposeString;
 	params.forEach(param => {
 		if (['all'].includes(param)) {
@@ -305,8 +296,13 @@ async function clear(params) {
 		purposeString = `market making`;
 	}
 
+	let output = '';
+	let count = 0;
 	// console.log(purposes, count, output);
+
+	// First, close orders which are in bot's database
 	count = await orderCollector(purposes, pair);
+
 	if (purposeString) {
 		if (count > 0) {
 			output = `Clearing ${count} **${purposeString}** orders for ${pair} pair on ${config.exchangeName}..`;
@@ -320,7 +316,8 @@ async function clear(params) {
 		}	
 	}
 	
-	if (pair) {
+	// Next, if need to clear all orders, close orders which are not closed yet
+	if (!purposeString) { // Need to clear all orders
 		const openOrders = await traderapi.getOpenOrders(pair);
 		if (openOrders) {
 			if ((count + openOrders.length) > 0) {
@@ -343,45 +340,6 @@ async function clear(params) {
 	}
 
 }
-
-// function $u.getPairObj(param, letCoin1only = false) {
-
-// 	let pair = (param || '').toUpperCase().trim();
-// 	let coin1Decimals = 8;
-// 	let coin2Decimals = 8;
-// 	let isPairFromParam = true;
-// 	let coin1, coin2;
-
-// 	if (!pair || pair.indexOf('/') === -1 || pair === config.pair) { // Set default pair
-// 		if (pair != config.pair)
-// 			isPairFromParam = false;
-// 		if ((pair.indexOf('/') === -1) && letCoin1only) { // Not a pair, may be a coin only
-// 			coin1 = pair;
-// 			if (coin1 === config.coin1)
-// 				coin1Decimals = config.coin1Decimals;		
-// 			pair = null;
-// 			coin2 = null;
-// 		} else { // A pair
-// 			pair = config.pair;
-// 			coin1Decimals = config.coin1Decimals;
-// 			coin2Decimals = config.coin2Decimals;
-// 		}
-// 	}
-
-// 	if (pair) {
-// 		coin1 = pair.substr(0, pair.indexOf('/')); 
-// 		coin2 = pair.substr(pair.indexOf('/') + 1, pair.length);
-// 	}
-
-// 	return {
-// 		pair,
-// 		coin1,
-// 		coin2,
-// 		coin1Decimals,
-// 		coin2Decimals,
-// 		isPairFromParam
-// 	}
-// }
 
 async function fill(params) {
 
@@ -785,6 +743,10 @@ Commands:
 **/start**: Start trading (td) or market making (mm). F. e., /*start mm*.
 
 **/stop**: Stop trading (td) or market making (mm). F. e., /*stop mm*.
+
+**/enable**: Enable option. F. e., /*enable ob 10* to enable order book building with 10 maximum number of orders.
+
+**/disable**: Disable option. F. e., /*disable ob* to disable order book building.
 
 **/amount**: Set the amount range for market making orders. Example: */amount 0.1-20*.
 
