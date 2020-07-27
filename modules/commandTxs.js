@@ -57,9 +57,17 @@ function start(params) {
 	if (type === "mm") {
 		if (!tradeParams.mm_isActive) {
 			tradeParams.mm_isActive = true;
+			if (tradeParams.mm_isOrderBookActive) {
+				msgNotify = `${config.notifyName} set to start market making & order book building for ${config.pair}.`;
+				msgSendBack = `Starting market making & order book building for ${config.pair} pair.`;
+			} else {
+				msgNotify = `${config.notifyName} set to start market making for ${config.pair}. Order book building is disabled.`;
+				msgSendBack = `Starting market making for ${config.pair} pair. Note, order book building is disabled. To enable, type */enable ob*.`;
+			}
+	
 			return {
-				msgNotify: `${config.notifyName} set to start market making for ${config.pair}.`,
-				msgSendBack: `Starting market making for ${config.pair} pair..`,
+				msgNotify,
+				msgSendBack,
 				notifyType: 'log'
 			}
 		} else {
@@ -86,8 +94,8 @@ function stop(params) {
 		if (tradeParams.mm_isActive) {
 			tradeParams.mm_isActive = false;
 			return {
-				msgNotify: `${config.notifyName} stopped market making for ${config.pair} pair.`,
-				msgSendBack: `Market making for ${config.pair} pair is disabled now.`,
+				msgNotify: `${config.notifyName} stopped market making & order book building for ${config.pair} pair.`,
+				msgSendBack: `Market making & order book building for ${config.pair} pair is disabled now.`,
 				notifyType: 'log'
 			}
 		} else {
@@ -97,6 +105,65 @@ function stop(params) {
 				msgSendBack: `Market making for ${config.pair} pair is disabled already.`,
 				notifyType: 'log'
 			} 
+		}
+	}
+}
+
+function enable(params) {
+	const type = (params[0] || '').trim();
+	if (!type || !type.length || !["ob"].includes(type)) {
+        return {
+            msgNotify: '',
+            msgSendBack: `Indicate option, _ob_ for order book building. Example: */enable ob 15*.`,
+            notifyType: 'log'
+		} 
+	}
+	const value = +params[1];
+	if (type === "ob") {
+		tradeParams.mm_isOrderBookActive = true;
+		if (value && value != Infinity)
+			tradeParams.mm_orderBookOrdersCount = value;
+		else if (!value.length && !tradeParams.mm_orderBookOrdersCount)
+			value = 15; // default for mm_orderBookOrdersCount
+		let msgNotify, msgSendBack;
+		if (tradeParams.mm_isActive) {
+			msgNotify = `${config.notifyName} enabled order book building for ${config.pair} pair with ${tradeParams.mm_orderBookOrdersCount} maximum number of orders.`;
+			msgSendBack = `Order book building is enabled for ${config.pair} pair with ${tradeParams.mm_orderBookOrdersCount} maximum number of orders.`;
+		} else {
+			msgNotify = `${config.notifyName} enabled order book building for ${config.pair} pair with ${tradeParams.mm_orderBookOrdersCount} maximum number of orders. Market making and order book building are not started yet.`;
+			msgSendBack = `Order book building is enabled for ${config.pair} pair with ${tradeParams.mm_orderBookOrdersCount} maximum number of orders. To start market making and order book building, type */start mm*.`;
+		}
+		return {
+			msgNotify,
+			msgSendBack,
+			notifyType: 'log'
+		}
+	}
+}
+
+function disable(params) {
+	const type = (params[0] || '').trim();
+	if (!type || !type.length || !["ob"].includes(type)) {
+        return {
+            msgNotify: '',
+            msgSendBack: `Indicate option, _ob_ for order book building. Example: */disable ob*.`,
+            notifyType: 'log'
+		} 
+	}
+	if (type === "ob") {
+		tradeParams.mm_isOrderBookActive = false;
+		let msgNotify, msgSendBack;
+		if (tradeParams.mm_isActive) {
+			msgNotify = `${config.notifyName} disable order book building for ${config.pair} pair. Market making is still active.`;
+			msgSendBack = `Order book building is disabled for ${config.pair}. Market making is still active. To stop market making, type */stop mm*. To close current ob-orders, type */clear ob*.`;
+		} else {
+			msgNotify = `${config.notifyName} disabled order book building for ${config.pair}.`;
+			msgSendBack = `Order book building is disabled for ${config.pair}.`;
+		}
+		return {
+			msgNotify,
+			msgSendBack,
+			notifyType: 'log'
 		}
 	}
 }
@@ -1055,5 +1122,7 @@ const commands = {
 	fill,
 	params,
 	buy,
-	sell
+	sell,
+	enable,
+	disable
 }
