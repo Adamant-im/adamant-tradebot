@@ -112,14 +112,15 @@ module.exports = (apiKey, secretKey, pwd) => {
 					data = JSON.parse(data).data;
 					// console.log(data);
 					try {
-						this.getOrderBook(pair).then(function (data2) {
-							// console.log(data2);
+						Atomars.orderBook(pair_.pair).then(function (data2) {
 							try {
+								// console.log(data2);
 								if (data2) {
+									data2 = parseOrderBook(data2);
 									resolve({
 										last: +data.last,
-										ask: +data2.buy[0].price,
-										bid: +data2.sell[0].price,
+										ask: +data2.asks[0].price,
+										bid: +data2.bids[0].price,
 										volume: +data.volume_24H, // coin1
 										high: +data.high,
 										low: +data.low,
@@ -129,9 +130,10 @@ module.exports = (apiKey, secretKey, pwd) => {
 								}
 							} catch (e) {
 								resolve(false);
-								log.warn('Error while making getRates() getOrderBook() request: ' + e);
+								log.warn('Error while making getRates() orderBook() request: ' + e);
 							};
 						});
+
 					} catch (e) {
 						resolve(false);
 						log.warn('Error while making getRates() ticker() request: ' + e);
@@ -257,39 +259,7 @@ module.exports = (apiKey, secretKey, pwd) => {
 				Atomars.orderBook(pair_.pair).then(function (data) {
 					try {
 						// console.log(data);
-						let book = JSON.parse(data).data;
-						if (!book)
-							book = [];
-						// console.log(book);
-                        let result = {
-                            bids: new Array(),
-                            asks: new Array()
-                        };
-						book.buy.forEach(crypto => {
-							result.bids.push({
-								amount: crypto.volume,
-								price: crypto.rate,
-                                count: crypto.count,
-                                type: 'bid-buy-left'
-							});
-                        })
-                        result.bids.sort(function(a, b) {
-                            return parseFloat(b.price) - parseFloat(a.price);
-                        });
-						book.sell.forEach(crypto => {
-							result.asks.push({
-								amount: crypto.volume,
-								price: crypto.rate,
-                                count: crypto.count,
-                                type: 'ask-sell-right'
-							});
-						})
-                        result.asks.sort(function(a, b) {
-                            return parseFloat(a.price) - parseFloat(b.price);
-                        });
-						// console.log(result.buy);
-						// console.log(result.sell);
-						resolve(result);
+						resolve(parseOrderBook(data));
 					} catch (e) {
 						resolve(false);
 						log.warn('Error while making orderBook() request: ' + e);
@@ -317,6 +287,40 @@ module.exports = (apiKey, secretKey, pwd) => {
 
 		}
 	}
+}
+
+function parseOrderBook(data) {
+	let book = JSON.parse(data).data;
+	if (!book)
+		book = [];
+	// console.log(book);
+	let result = {
+		bids: new Array(),
+		asks: new Array()
+	};
+	book.buy.forEach(crypto => {
+		result.bids.push({
+			amount: crypto.volume,
+			price: crypto.rate,
+			count: crypto.count,
+			type: 'bid-buy-left'
+		});
+	})
+	result.bids.sort(function(a, b) {
+		return parseFloat(b.price) - parseFloat(a.price);
+	});
+	book.sell.forEach(crypto => {
+		result.asks.push({
+			amount: crypto.volume,
+			price: crypto.rate,
+			count: crypto.count,
+			type: 'ask-sell-right'
+		});
+	})
+	result.asks.sort(function(a, b) {
+		return parseFloat(a.price) - parseFloat(b.price);
+	});
+	return result;
 }
 
 function formatPairName(pair) {

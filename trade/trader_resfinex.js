@@ -284,8 +284,6 @@ module.exports = (apiKey, secretKey, pwd) => {
                         result.bids.sort(function(a, b) {
                             return parseFloat(b.price) - parseFloat(a.price);
                         });
-						// console.log(result.buy);
-						// console.log(result.sell);
 						resolve(result);
 					} catch (e) {
 						resolve(false);
