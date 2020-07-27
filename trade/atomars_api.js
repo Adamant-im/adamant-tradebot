@@ -211,7 +211,7 @@ var EXCHANGE_API = {
      * @param pair  BTCUSDT
      * ------------------------------------------------------------------
      */
-    depth: function(pair) {
+    orderBook: function(pair) {
         var data = {};
         data.pair = pair;
         return api("/public/book", data, false, 'get', false);

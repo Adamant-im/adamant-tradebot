@@ -109,36 +109,36 @@ module.exports = (apiKey, secretKey, pwd) => {
 			pair_ = formatPairName(pair);
 			return new Promise((resolve, reject) => {
 				Atomars.ticker(pair_.pair).then(function (data) {
-					// console.log(data);
 					data = JSON.parse(data).data;
+					// console.log(data);
 					try {
-						if (data) {
-							resolve({
-								ask: +data.last, // no ask
-								bid: +data.last, // no bid
-								volume: +data.volume_24H, // coin1
-								// volume_Coin2: +data.quoteVolume,
-								high: +data.high,
-								low: +data.low,
-								// askQty: +data.askQty,
-								// bidQty: +data.bidQty,
-								// dealCount: +data.dealCount,
-								// coin1Decimals: +data.numberPrecision,
-								// coin2Decimals: +data.pricePrecision,
-								// firstId: data.firstId,
-								// lastId: data.lastId
-							});
-						} else {
-							resolve(false);
-						}
+						this.getOrderBook(pair).then(function (data2) {
+							// console.log(data2);
+							try {
+								if (data2) {
+									resolve({
+										last: +data.last,
+										ask: +data2.buy[0].price,
+										bid: +data2.sell[0].price,
+										volume: +data.volume_24H, // coin1
+										high: +data.high,
+										low: +data.low,
+									});
+								} else {
+									resolve(false);
+								}
+							} catch (e) {
+								resolve(false);
+								log.warn('Error while making getRates() getOrderBook() request: ' + e);
+							};
+						});
 					} catch (e) {
 						resolve(false);
-						log.warn('Error while making getRates() request: ' + e);
+						log.warn('Error while making getRates() ticker() request: ' + e);
 					};
 				});
 			});
 		},
-
 		placeOrder(orderType, pair, price, coin1Amount, limit = 1, coin2Amount, pairObj) {
 
 			let pair_ = formatPairName(pair);
@@ -254,7 +254,7 @@ module.exports = (apiKey, secretKey, pwd) => {
 
             let pair_ = formatPairName(pair);
 			return new Promise((resolve, reject) => {
-				Atomars.depth(pair_.pair).then(function (data) {
+				Atomars.orderBook(pair_.pair).then(function (data) {
 					try {
 						// console.log(data);
 						let book = JSON.parse(data).data;
@@ -262,29 +262,29 @@ module.exports = (apiKey, secretKey, pwd) => {
 							book = [];
 						// console.log(book);
                         let result = {
-                            buy: new Array(),
-                            sell: new Array()
+                            bids: new Array(),
+                            asks: new Array()
                         };
 						book.buy.forEach(crypto => {
-							result.buy.push({
+							result.bids.push({
 								amount: crypto.volume,
 								price: crypto.rate,
                                 count: crypto.count,
-                                type: 'buy'
+                                type: 'bid-buy-left'
 							});
                         })
-                        book.buy.sort(function(a, b) {
+                        result.bids.sort(function(a, b) {
                             return parseFloat(b.price) - parseFloat(a.price);
                         });
 						book.sell.forEach(crypto => {
-							result.sell.push({
+							result.asks.push({
 								amount: crypto.volume,
 								price: crypto.rate,
                                 count: crypto.count,
-                                type: 'sell'
+                                type: 'ask-sell-right'
 							});
 						})
-                        book.sell.sort(function(a, b) {
+                        result.asks.sort(function(a, b) {
                             return parseFloat(a.price) - parseFloat(b.price);
                         });
 						// console.log(result.buy);
@@ -292,7 +292,7 @@ module.exports = (apiKey, secretKey, pwd) => {
 						resolve(result);
 					} catch (e) {
 						resolve(false);
-						log.warn('Error while making depth() request: ' + e);
+						log.warn('Error while making orderBook() request: ' + e);
 					};
 				});
 			});

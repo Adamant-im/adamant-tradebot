@@ -247,7 +247,7 @@ module.exports = (apiKey, secretKey, pwd) => {
 			}
 		}, // placeOrder()
 		getOrderBook(pair) {
-			// depth(symbol)
+			// orderBook(symbol)
 
 		},
 		getDepositAddress(coin) {

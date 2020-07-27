@@ -222,11 +222,15 @@ async function clear(params) {
 	let purposeString;
 	params.forEach(param => {
 		if (['all'].includes(param)) {
-			purposes = ['mm', 'tb'];
+			purposes = ['mm', 'tb', 'ob'];
 		}
 		if (['tb'].includes(param)) {
 			purposes = ['tb'];
 			purposeString = `trade bot`;
+		}
+		if (['ob'].includes(param)) {
+			purposes = ['ob'];
+			purposeString = `order book`;
 		}
 	});
 	if (!purposes) {

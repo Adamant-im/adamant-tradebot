@@ -109,7 +109,7 @@ module.exports = (apiKey, secretKey, pwd) => {
 					data = data.filter(symbol => symbol.pair === pair_.pair)[0];
 					// console.log(data);
 					try {
-						RESFINEX.orderBook(pair_.pair).then(function (data2) {
+						RESFINEX.orderBook(pair_.pair, 1).then(function (data2) {
 							data2 = JSON.parse(data2).data;
 							// console.log(data2);
 							try {
@@ -247,7 +247,56 @@ module.exports = (apiKey, secretKey, pwd) => {
 					});
 				});
 			}
-		} // placeOrder()
+		}, // placeOrder()
+		getOrderBook(pair) {
+
+            let pair_ = formatPairName(pair);
+			return new Promise((resolve, reject) => {
+				RESFINEX.orderBook(pair_.pair).then(function (data) {
+					try {
+						// console.log(data);
+						let book = JSON.parse(data).data;
+						if (!book)
+							book = [];
+                        let result = {
+                            bids: new Array(),
+                            asks: new Array()
+                        };
+						book.asks.forEach(crypto => {
+							result.asks.push({
+								amount: crypto.amount,
+								price: crypto.price,
+                                count: 1,
+                                type: 'ask-sell-right'
+							});
+                        })
+                        result.asks.sort(function(a, b) {
+                            return parseFloat(a.price) - parseFloat(b.price);
+                        });
+						book.bids.forEach(crypto => {
+							result.bids.push({
+								amount: crypto.amount,
+								price: crypto.price,
+                                count: 1,
+                                type: 'bid-buy-left'
+							});
+						})
+                        result.bids.sort(function(a, b) {
+                            return parseFloat(b.price) - parseFloat(a.price);
+                        });
+						// console.log(result.buy);
+						// console.log(result.sell);
+						resolve(result);
+					} catch (e) {
+						resolve(false);
+						log.warn('Error while making orderBook() request: ' + e);
+					};
+				});
+			});
+		},
+		getDepositAddress(coin) {
+			// Not available for Resfinex
+		}
 
 	}
 }

@@ -1,5 +1,8 @@
-ADAMANT Trading & Market making bot is a software that allows to run trades on crypto exchanges or make fake volume. Trading is a mode when bot run orders according to some strategy. It can be profitable or not.
-In Market making mode, the bot places orders and execute them by himself, making a trade volume.
+ADAMANT Trading & Market making bot is a software that allows to run trades on crypto exchanges, make fake volume (wash trading) and build live-like dynamic order book.
+
+* In Market making mode, the bot places orders and execute them by himself, making a trade volume; and builds live-like dynamic order book.
+* Trading is a mode when bot run orders according to some strategy. It can be profitable or not. Unavailable now—use [Zenbot](https://github.com/DeviaVir/zenbot).
+
 Trade bots work in ADAMANT Messenger chats directly.
 
 Features:
@@ -10,6 +13,7 @@ Features:
 * Fill order books
 * Place buy and sell limit or market orders
 * Market making
+* Dynamic order book
 * Stores and displays statistics
 
 Supported exchanges (more in progress):
@@ -20,7 +24,9 @@ Supported exchanges (more in progress):
 * [Resfinex](https://trade.resfinex.com?ref=7ccb34d867&pair=ADM_USDT)
 * [Atomars](https://atomars.com/refcode/kaba)
 
-Available commands: ask a bot with `/help` command. Read more: [Crypto trading & Market making bot in ADAMANT](https://medium.com/adamant-im/crypto-trading-market-making-bot-in-adamant-82fa48b78f51).
+# Usage
+
+Available commands: ask a bot with `/help` command. Read more how to use the bot: [Crypto trading & Market making bot in ADAMANT](https://medium.com/adamant-im/crypto-trading-market-making-bot-in-adamant-82fa48b78f51).
 
 # Installation
 

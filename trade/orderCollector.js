@@ -3,6 +3,13 @@ const config = require('../modules/configReader');
 const log = require('../helpers/log');
 const traderapi = require('./trader_' + config.exchange)(config.apikey, config.apisecret, config.apipassword, log);
 
+/** 
+ * Purposes:
+ * mm: market making order
+ * ob: dynamic order book order
+ * tb: trade bot order
+*/
+
 module.exports = async (purposes, pair) => {
 
     // log.info(`Order collector..`);
