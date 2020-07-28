@@ -180,8 +180,8 @@ function buypercent(param) {
 
 	tradeParams.mm_buyPercent = val / 100;
 	return {
-		msgNotify: `${config.notifyName} is set to make market with ${val}% of buy orders for ${config.pair} pair.`,
-		msgSendBack: `Set to make market with ${val}% of buy orders for ${config.pair} pair.`,
+		msgNotify: `${config.notifyName} is set to make market with ${val}% of buy orders for ${config.pair} pair. Order book building is set to ${100-val}% of buy orders.`,
+		msgSendBack: `Set to make market with ${val}% of buy orders for ${config.pair} pair. Order book building is set to ${100-val}% of buy orders.`,
 		notifyType: 'log'
 	}
 }
@@ -752,7 +752,7 @@ Commands:
 
 **/interval**: Set the frequency in [sec, *min*, hour] of transactions for market making. Example: */interval 1-5 min*.
 
-**/buyPercent**: Set the percentage of buy orders for market making. Try */buyPercent 85*.
+**/buyPercent**: Set the percentage of buy orders for market making, and 100-percentage of buy orders for order book building. Try */buyPercent 75*.
 
 **/fill**: Fill sell or buy order book. Works like this: */fill ADM/BTC buy amount=0.00200000 low=0.00000050 high=0.00000182 count=7*.
 

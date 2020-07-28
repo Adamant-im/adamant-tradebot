@@ -1,5 +1,5 @@
 module.exports = {
-   "mm_buyPercent": 0.8,
+   "mm_buyPercent": 0.67,
    "mm_minInterval": 60000,
    "mm_maxInterval": 360000,
    "mm_isActive": false,
