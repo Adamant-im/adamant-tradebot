@@ -79,6 +79,10 @@ const fields = {
 		type: String,
 		default: null
 	},
+	silent_mode: {
+		type: Boolean,
+		default: false
+	},
 	welcome_string: {
 		type: String,
 		default: 'Hello 😊. This is a stub. I have nothing to say. Please check my config.'

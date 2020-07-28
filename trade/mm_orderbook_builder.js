@@ -5,7 +5,6 @@ const notify = require('../helpers/notify');
 const tradeParams = require('./tradeParams_' + config.exchange);
 const traderapi = require('./trader_' + config.exchange)(config.apikey, config.apisecret, config.apipassword, log);
 const db = require('../modules/DB');
-const orderCollector = require('./orderCollector');
 
 let lastNotifyBalancesTimestamp = 0;
 let lastNotifyPriceTimestamp = 0;
@@ -103,7 +102,7 @@ module.exports = {
         const balances = await isEnoughCoins(config.coin1, config.coin2, coin1Amount, coin2Amount, type);
         if (!balances.result) {
             if ((Date.now()-lastNotifyBalancesTimestamp > hour) && balances.message) {
-                notify(balances.message, 'warn');
+                notify(balances.message, 'warn', config.silent_mode);
                 lastNotifyBalancesTimestamp = Date.now();
             }
             return;

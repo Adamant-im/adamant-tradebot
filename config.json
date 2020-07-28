@@ -82,7 +82,10 @@
     /** Slack key for notifications and monitoring (if needed) **/
     "slack": "https://hooks.slack.com/services/...",
 
-    /** Port for getting debug info. 
+	/** If you don't want to receive "not enough balance" and "unable to execute cross-order" notifications, set this "true" **/
+    "silent_mode": false,
+
+	/** Port for getting debug info. 
 		Do not set for live bots, use only for debugging. 
 		Allows to get DBs records like http://ip:port/db?tb=incomingTxsDb 
 	**/
