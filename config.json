@@ -1,6 +1,6 @@
 {
 
-	/** The bot's secret phrase for accepting commands. 
+	/** The bot's secret passphrase. Create separate ADM account for the bot.
 		Bot's ADM address will correspond this passPhrase.
     **/
 	"passPhrase": "distance expect praise frequent..",
@@ -39,22 +39,32 @@
 	/** Notify non-admins that they are not admins. If false, bot will be silent. **/
 	"notify_non_admins": true,
 
-	/** Exchange to work with. Available values: "IDCM", "Bit-Z", "CoinDeal", "Resfinex". Case insensitive. **/
-	"exchange": "IDCM",
+	/** Exchange to work with. Available values: "IDCM", "Bit-Z", "CoinDeal", "Resfinex", "Atomars". Case insensitive. **/
+	"exchange": "Resfinex",
 
 	/** Pair to trade **/
-	"pair": "ADM/BTC",
+	"pair": "ADM/USDT",
 
-	/** Meaningful decimals for output of coin1 amounts **/
-	"coin1Decimals": 0,
+	/** Meaningful decimals for output of coin1 amounts. Depends on coin and exchange **/
+	"coin1Decimals": 2, // 0.12 ADM
 
-	/** Meaningful decimals for output of coin2 amounts **/
-	"coin2Decimals": 8,
+	/** Meaningful decimals for output of coin2 amounts. Depends on coin and exchange **/
+	"coin2Decimals": 6, // 0.123456 USDT
 
-	/** Exchange's account API key for connection **/
+	/** Interval in minutes to clear all opened orders.
+		Some exchanges has API issues with closing or matching orders.
+		Because of this, your account can accumulate open orders and lead to freezed balances.
+		In such a case you can run "/clear all" command manually, or set this parameter for automatic clearing.
+		Note: this command cancels all of account orders, including ones which you set manually with "/fill" command.
+		If the exchange supports getting orders by pair param, only orders for the trade pair will be cleared.
+		0 means disabled.
+	**/
+	"clearAllOrdersInterval": 0,
+
+	/** Exchange's account API key for connection. Or login for Atomars **/
 	"apikey": "YOUR-KEY..",
 
-	/** Exchange's account API secret for connection **/
+	/** Exchange's account API secret for connection. Or password for Atomars **/
 	"apisecret": "YOUR-SECRET..",
 
 	/** Exchange's account trade password. If needed. **/
@@ -72,7 +82,10 @@
     /** Slack key for notifications and monitoring (if needed) **/
     "slack": "https://hooks.slack.com/services/...",
 
-    /** Port for getting debug info. 
+	/** If you don't want to receive "not enough balance" and "unable to execute cross-order" notifications, set this "true" **/
+    "silent_mode": false,
+
+	/** Port for getting debug info. 
 		Do not set for live bots, use only for debugging. 
 		Allows to get DBs records like http://ip:port/db?tb=incomingTxsDb 
 	**/

@@ -1,5 +1,8 @@
-ADAMANT Trading & Market making bot is a software that allows to run trades on crypto exchanges or make fake volume. Trading is a mode when bot run orders according to some strategy. It can be profitable or not.
-In Market making mode, the bot places orders and execute them by himself, making a trade volume.
+ADAMANT Trading & Market making bot is a software that allows to run trades on crypto exchanges, make fake volume (wash trading) and build live-like dynamic order book.
+
+* In Market making mode, the bot places orders and execute them by himself, making a trade volume; and builds live-like dynamic order book.
+* Trading is a mode when bot run orders according to some strategy. It can be profitable or not. Unavailable now—use [Zenbot](https://github.com/DeviaVir/zenbot).
+
 Trade bots work in ADAMANT Messenger chats directly.
 
 Features:
@@ -10,6 +13,7 @@ Features:
 * Fill order books
 * Place buy and sell limit or market orders
 * Market making
+* Dynamic order book
 * Stores and displays statistics
 
 Supported exchanges (more in progress):
@@ -18,8 +22,11 @@ Supported exchanges (more in progress):
 * [Bit-Z](https://u.bit-z.com/register?invite_code=2423317)
 * [CoinDeal](https://coindeal.com/ref/9WZN)
 * [Resfinex](https://trade.resfinex.com?ref=7ccb34d867&pair=ADM_USDT)
+* [Atomars](https://atomars.com/refcode/kaba)
 
-Available commands: ask a bot with `/help` command. Read more: [Crypto trading & Market making bot in ADAMANT](https://medium.com/adamant-im/crypto-trading-market-making-bot-in-adamant-82fa48b78f51).
+# Usage
+
+Available commands: ask a bot with `/help` command. Read more how to use the bot: [Crypto trading & Market making bot in ADAMANT](https://medium.com/adamant-im/crypto-trading-market-making-bot-in-adamant-82fa48b78f51).
 
 # Installation
 
@@ -50,8 +57,9 @@ Parameters:
 * `pair` <string> Pair to with on the exchange. Obligatory.
 * `coin1Decimals` <number>  Meaningful decimals for output of coin1 amounts. Default is 8.
 * `coin2Decimals` <number>  Meaningful decimals for output of coin2 amounts. Default is 8.
-* `apikey` <string> Exchange's account API key for connection. Obligatory.
-* `apisecret` <string> Exchange's account API secret for connection. Obligatory.
+* `clearAllOrdersInterval` <number> Interval in minutes to clear all opened orders. Default is 0 (disabled).
+* `apikey` <string> Exchange's account API key (username/login for some exchanges) for connection. Obligatory.
+* `apisecret` <string> Exchange's account API secret (password for some exchanges) for connection. Obligatory.
 * `apipassword` <string> Exchange's account trade password. If needed for exchange.
 * `passPhrase` <string> The bot's secret phrase for accepting commands. Obligatory. Bot's ADM address will correspond this passPhrase.
 * `admin_accounts` <string, array> ADAMANT accounts to accept commands from. Commands from other accounts will not be executed. At lease one account.

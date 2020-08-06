@@ -31,6 +31,7 @@ function init() {
 				}
 				checker();
 				require('./trade/mm_trader').run();
+				require('./trade/mm_orderbook_builder').run();
 				notify(`*${config.notifyName} started* for address _${Store.user.ADM.address}_ (ver. ${Store.version}).`, 'info');
 			});
 		}

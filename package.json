@@ -1,6 +1,6 @@
 {
   "name": "adamant-tradebot",
-  "version": "1.0.0",
+  "version": "1.4.0",
   "description": "ADAMANT Trading and Market Making bot",
   "main": "index.js",
   "scripts": {
@@ -18,13 +18,16 @@
     "trade",
     "market making",
     "fake volumes",
+    "wash trading",
+    "order book",
     "exchange",
     "idcm",
     "crypto",
     "cryptocurrency",
     "bit-z",
     "coindeal",
-    "resfinex"
+    "resfinex",
+    "atomars"
   ],
   "author": "Aleksei Lebedev <devs@adamant.im> (https://adamant.im)",
   "license": "GPL-3.0",

@@ -56,7 +56,7 @@ module.exports = {
         const balances = await isEnoughCoins(config.coin1, config.coin2, coin1Amount, coin2Amount);
         if (!balances.result) {
             if ((Date.now()-lastNotifyBalancesTimestamp > hour) && balances.message) {
-                notify(balances.message, 'warn');
+                notify(balances.message, 'warn', config.silent_mode);
                 lastNotifyBalancesTimestamp = Date.now();
             }
             return;
@@ -97,7 +97,7 @@ module.exports = {
                 await order.save();
             } else {
                 await order.save();
-                notify(`${config.notifyName} unable to execute cross-order for mm-order with params: id=${order1}, ${orderParamsString}. Check balances. Running order collector now.`, 'warn');
+                notify(`${config.notifyName} unable to execute cross-order for mm-order with params: id=${order1}, ${orderParamsString}. Check balances. Running order collector now.`, 'warn', config.silent_mode);
                 orderCollector(['mm'], config.pair);
             }         
         } else { // if order1
@@ -233,14 +233,14 @@ async function setPrice(type, pair) {
 
     const minPrice = +bid_low + +precision;
     const maxPrice = ask_high - precision;
-    // price = 0.009248977658650832;
+    // price = 0.009618977658650832;
     // console.log('low, high', bid_low, ask_high);
     // console.log('min, max', minPrice, maxPrice);
     // console.log('price1', price);
     if (price >= maxPrice)
-        price = price - precision;
+        price = ask_high - precision;
     if (price <= minPrice)
-        price = +price + +precision;
+        price = +bid_low + +precision;
     // console.log('price2', price);
 
     return {

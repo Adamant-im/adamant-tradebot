@@ -6,6 +6,6 @@ module.exports = {
    "mm_minAmount": 14,
    "mm_maxAmount": 1600,
    "mm_isOrderBookActive": true,
-   "mm_orderBookHeight": 19,
-   "mm_orderBookOrdersCount": 15
+   "mm_orderBookHeight": 25,
+   "mm_orderBookOrdersCount": 20
 }

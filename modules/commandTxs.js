@@ -57,9 +57,17 @@ function start(params) {
 	if (type === "mm") {
 		if (!tradeParams.mm_isActive) {
 			tradeParams.mm_isActive = true;
+			if (tradeParams.mm_isOrderBookActive) {
+				msgNotify = `${config.notifyName} set to start market making & order book building for ${config.pair}.`;
+				msgSendBack = `Starting market making & order book building for ${config.pair} pair.`;
+			} else {
+				msgNotify = `${config.notifyName} set to start market making for ${config.pair}. Order book building is disabled.`;
+				msgSendBack = `Starting market making for ${config.pair} pair. Note, order book building is disabled. To enable, type */enable ob*.`;
+			}
+	
 			return {
-				msgNotify: `${config.notifyName} set to start market making for ${config.pair}.`,
-				msgSendBack: `Starting market making for ${config.pair} pair..`,
+				msgNotify,
+				msgSendBack,
 				notifyType: 'log'
 			}
 		} else {
@@ -86,8 +94,8 @@ function stop(params) {
 		if (tradeParams.mm_isActive) {
 			tradeParams.mm_isActive = false;
 			return {
-				msgNotify: `${config.notifyName} stopped market making for ${config.pair} pair.`,
-				msgSendBack: `Market making for ${config.pair} pair is disabled now.`,
+				msgNotify: `${config.notifyName} stopped market making & order book building for ${config.pair} pair.`,
+				msgSendBack: `Market making & order book building for ${config.pair} pair is disabled now.`,
 				notifyType: 'log'
 			}
 		} else {
@@ -97,6 +105,65 @@ function stop(params) {
 				msgSendBack: `Market making for ${config.pair} pair is disabled already.`,
 				notifyType: 'log'
 			} 
+		}
+	}
+}
+
+function enable(params) {
+	const type = (params[0] || '').trim();
+	if (!type || !type.length || !["ob"].includes(type)) {
+        return {
+            msgNotify: '',
+            msgSendBack: `Indicate option, _ob_ for order book building. Example: */enable ob 15*.`,
+            notifyType: 'log'
+		} 
+	}
+	const value = +params[1];
+	if (type === "ob") {
+		tradeParams.mm_isOrderBookActive = true;
+		if (value && value != Infinity)
+			tradeParams.mm_orderBookOrdersCount = value;
+		else if (!value.length && !tradeParams.mm_orderBookOrdersCount)
+			value = 15; // default for mm_orderBookOrdersCount
+		let msgNotify, msgSendBack;
+		if (tradeParams.mm_isActive) {
+			msgNotify = `${config.notifyName} enabled order book building for ${config.pair} pair with ${tradeParams.mm_orderBookOrdersCount} maximum number of orders.`;
+			msgSendBack = `Order book building is enabled for ${config.pair} pair with ${tradeParams.mm_orderBookOrdersCount} maximum number of orders.`;
+		} else {
+			msgNotify = `${config.notifyName} enabled order book building for ${config.pair} pair with ${tradeParams.mm_orderBookOrdersCount} maximum number of orders. Market making and order book building are not started yet.`;
+			msgSendBack = `Order book building is enabled for ${config.pair} pair with ${tradeParams.mm_orderBookOrdersCount} maximum number of orders. To start market making and order book building, type */start mm*.`;
+		}
+		return {
+			msgNotify,
+			msgSendBack,
+			notifyType: 'log'
+		}
+	}
+}
+
+function disable(params) {
+	const type = (params[0] || '').trim();
+	if (!type || !type.length || !["ob"].includes(type)) {
+        return {
+            msgNotify: '',
+            msgSendBack: `Indicate option, _ob_ for order book building. Example: */disable ob*.`,
+            notifyType: 'log'
+		} 
+	}
+	if (type === "ob") {
+		tradeParams.mm_isOrderBookActive = false;
+		let msgNotify, msgSendBack;
+		if (tradeParams.mm_isActive) {
+			msgNotify = `${config.notifyName} disable order book building for ${config.pair} pair. Market making is still active.`;
+			msgSendBack = `Order book building is disabled for ${config.pair}. Market making is still active. To stop market making, type */stop mm*. To close current ob-orders, type */clear ob*.`;
+		} else {
+			msgNotify = `${config.notifyName} disabled order book building for ${config.pair}.`;
+			msgSendBack = `Order book building is disabled for ${config.pair}.`;
+		}
+		return {
+			msgNotify,
+			msgSendBack,
+			notifyType: 'log'
 		}
 	}
 }
@@ -113,8 +180,8 @@ function buypercent(param) {
 
 	tradeParams.mm_buyPercent = val / 100;
 	return {
-		msgNotify: `${config.notifyName} is set to make market with ${val}% of buy orders for ${config.pair} pair.`,
-		msgSendBack: `Set to make market with ${val}% of buy orders for ${config.pair} pair.`,
+		msgNotify: `${config.notifyName} is set to make market with ${val}% of buy orders for ${config.pair} pair. Order book building is set to ${100-val}% of buy orders.`,
+		msgSendBack: `Set to make market with ${val}% of buy orders for ${config.pair} pair. Order book building is set to ${100-val}% of buy orders.`,
 		notifyType: 'log'
 	}
 }
@@ -196,37 +263,32 @@ function interval(param) {
 
 async function clear(params) {
 
-	param = params[0];
-	if (!param || param.indexOf('/') === -1) {
-		param = config.pair;
-	}
-	let coin = (param || '').toUpperCase().trim();
-	let output = '';
-	let pair;
-	if (coin.indexOf('/') > -1) {
-		pair = coin;
-		coin = coin.substr(0, coin.indexOf('/')); 
+	let pair = params[0].toUpperCase();
+	if (!pair || pair.indexOf('/') === -1) {
+		pair = config.pair;
 	}
 
 	if (!pair || !pair.length) {
-		output = 'Please specify market to clear orders in. F. e., */clear DOGE/BTC*.';
 		return {
 			msgNotify: ``,
-			msgSendBack: `${output}`,
+			msgSendBack: 'Please specify market to clear orders in. F. e., */clear DOGE/BTC mm*.',
 			notifyType: 'log'
 		}	
 	}
 
 	let purposes;
-	let count = 0;
 	let purposeString;
 	params.forEach(param => {
 		if (['all'].includes(param)) {
-			purposes = ['mm', 'tb'];
+			purposes = ['mm', 'tb', 'ob'];
 		}
 		if (['tb'].includes(param)) {
 			purposes = ['tb'];
 			purposeString = `trade bot`;
+		}
+		if (['ob'].includes(param)) {
+			purposes = ['ob'];
+			purposeString = `order book`;
 		}
 	});
 	if (!purposes) {
@@ -234,8 +296,13 @@ async function clear(params) {
 		purposeString = `market making`;
 	}
 
+	let output = '';
+	let count = 0;
 	// console.log(purposes, count, output);
+
+	// First, close orders which are in bot's database
 	count = await orderCollector(purposes, pair);
+
 	if (purposeString) {
 		if (count > 0) {
 			output = `Clearing ${count} **${purposeString}** orders for ${pair} pair on ${config.exchangeName}..`;
@@ -249,7 +316,8 @@ async function clear(params) {
 		}	
 	}
 	
-	if (pair) {
+	// Next, if need to clear all orders, close orders which are not closed yet
+	if (!purposeString) { // Need to clear all orders
 		const openOrders = await traderapi.getOpenOrders(pair);
 		if (openOrders) {
 			if ((count + openOrders.length) > 0) {
@@ -272,45 +340,6 @@ async function clear(params) {
 	}
 
 }
-
-// function $u.getPairObj(param, letCoin1only = false) {
-
-// 	let pair = (param || '').toUpperCase().trim();
-// 	let coin1Decimals = 8;
-// 	let coin2Decimals = 8;
-// 	let isPairFromParam = true;
-// 	let coin1, coin2;
-
-// 	if (!pair || pair.indexOf('/') === -1 || pair === config.pair) { // Set default pair
-// 		if (pair != config.pair)
-// 			isPairFromParam = false;
-// 		if ((pair.indexOf('/') === -1) && letCoin1only) { // Not a pair, may be a coin only
-// 			coin1 = pair;
-// 			if (coin1 === config.coin1)
-// 				coin1Decimals = config.coin1Decimals;		
-// 			pair = null;
-// 			coin2 = null;
-// 		} else { // A pair
-// 			pair = config.pair;
-// 			coin1Decimals = config.coin1Decimals;
-// 			coin2Decimals = config.coin2Decimals;
-// 		}
-// 	}
-
-// 	if (pair) {
-// 		coin1 = pair.substr(0, pair.indexOf('/')); 
-// 		coin2 = pair.substr(pair.indexOf('/') + 1, pair.length);
-// 	}
-
-// 	return {
-// 		pair,
-// 		coin1,
-// 		coin2,
-// 		coin1Decimals,
-// 		coin2Decimals,
-// 		isPairFromParam
-// 	}
-// }
 
 async function fill(params) {
 
@@ -457,16 +486,30 @@ async function fill(params) {
 		price += $u.randomDeviation(step, deviation);
 		coin1Amount = $u.randomDeviation(orderAmount, deviation);
 		total += coin1Amount;
+
+		// Checks if total or price exceeded
+		if (total > amount) {
+			if (count === 1)
+				coin1Amount = amount
+			else
+				break;
+		}
+		if (price > high) {
+			if (count === 1)
+				price = high
+			else
+				break;
+		}
+
+		// Count base and quote currency amounts
 		if (type === 'buy') {
-			// console.log(price, coin1Amount, total);
 			coin2Amount = coin1Amount;
 			coin1Amount = coin1Amount / price;
 		} else {
 			coin1Amount = coin1Amount;
 			coin2Amount = coin1Amount * price;
 		}
-		if (price > high || total > amount)
-			break;
+		// console.log(price, coin1Amount, total);
 		orderList.push({
 			price: price,
 			amount: coin1Amount,
@@ -489,11 +532,14 @@ async function fill(params) {
 		}
 	}
 
-	output = `${items} orders to ${type} ${$u.thousandSeparator(+total1.toFixed(coin1Decimals), false)} ${coin1} for ${$u.thousandSeparator(+total2.toFixed(coin2Decimals), false)} ${coin2}.`;
+	if (items > 0)
+		output = `${items} orders to ${type} ${$u.thousandSeparator(+total1.toFixed(coin1Decimals), false)} ${coin1} for ${$u.thousandSeparator(+total2.toFixed(coin2Decimals), false)} ${coin2}.`;
+	else
+		output = `No orders were placed. Check log file for details.`;
 
 	return {
-		msgNotify: `${config.notifyName} placed ${output}`,
-		msgSendBack: `Placed ${output}`,
+		msgNotify: items > 0 ? `${config.notifyName} placed ${output}` : '',
+		msgSendBack: items > 0 ? `Placed ${output}` : output,
 		notifyType: 'log'
 	}
 
@@ -581,8 +627,8 @@ function getBuySellParams(params, type) {
 		}	
 	}
 
-	// when Market order, buy should follow quote, sell — amount
-	const allowBuyAmountExchanges = ['resfinex'];
+	// when Market order, buy should pass quote parameter, when sell — amount
+	const allowBuyAmountExchanges = ['resfinex', 'atomars'];
 	if (price === 'market' && !allowBuyAmountExchanges.includes(config.exchange)) {
 		if ((type === 'buy' && !quote) || ((type === 'sell' && !amount))) {
 			output = `When placing Market order, buy should follow with _quote_, sell with _amount_. Command works like this: */sell ADM/BTC amount=200 price=market*.`;
@@ -594,7 +640,7 @@ function getBuySellParams(params, type) {
 		}
 	}
 
-	const amountNecessaryExchanges = ['resfinex'];
+	const amountNecessaryExchanges = ['resfinex', 'atomars'];
 	if (price === 'market' && amountNecessaryExchanges.includes(config.exchange)) {
 		if (!amount) {
 			output = `When placing Market order on ${config.exchangeName}, _amount_ is necessary. Command works like this: */sell ADM/BTC amount=200 price=market*.`;
@@ -698,11 +744,15 @@ Commands:
 
 **/stop**: Stop trading (td) or market making (mm). F. e., /*stop mm*.
 
+**/enable**: Enable option. F. e., /*enable ob 10* to enable order book building with 10 maximum number of orders.
+
+**/disable**: Disable option. F. e., /*disable ob* to disable order book building.
+
 **/amount**: Set the amount range for market making orders. Example: */amount 0.1-20*.
 
 **/interval**: Set the frequency in [sec, *min*, hour] of transactions for market making. Example: */interval 1-5 min*.
 
-**/buyPercent**: Set the percentage of buy orders for market making. Try */buyPercent 85*.
+**/buyPercent**: Set the percentage of buy orders for market making, and 100-percentage of buy orders for order book building. Try */buyPercent 75*.
 
 **/fill**: Fill sell or buy order book. Works like this: */fill ADM/BTC buy amount=0.00200000 low=0.00000050 high=0.00000182 count=7*.
 
@@ -1034,5 +1084,7 @@ const commands = {
 	fill,
 	params,
 	buy,
-	sell
+	sell,
+	enable,
+	disable
 }

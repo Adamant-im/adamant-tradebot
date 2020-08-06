@@ -35,6 +35,10 @@ const fields = {
 		type: Number,
 		default: 8
 	},
+	clearAllOrdersInterval: {
+		type: Number,
+		default: 0
+	},
 	apikey: {
 		type: String,
 		isRequired: true
@@ -74,6 +78,10 @@ const fields = {
 	slack: {
 		type: String,
 		default: null
+	},
+	silent_mode: {
+		type: Boolean,
+		default: false
 	},
 	welcome_string: {
 		type: String,

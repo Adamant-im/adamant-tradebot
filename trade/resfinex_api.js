@@ -185,10 +185,10 @@ var EXCHANGE_API = {
      * @param symbol    eth_btc
      * ------------------------------------------------------------------
      */
-    orderBook: function(symbol, size = 1) {
+    orderBook: function(symbol, size) {
         let data = {};
         data.pair = symbol;
-        data.size = size;
+        if (size) data.size = size;
         return public_api(`/engine/depth`, data);
     }
 

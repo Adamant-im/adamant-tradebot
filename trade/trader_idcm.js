@@ -68,13 +68,13 @@ module.exports = (PubK, PrivK) => {
 
 			if (pairObj) { // Set precision (decimals)				
 				if (coin1Amount) {
-					coin1Amount = +coin1Amount.toFixed(pairObj.coin1Decimals);
+					coin1Amount = (+coin1Amount).toFixed(pairObj.coin1Decimals);
 				}
 				if (coin2Amount) {
-					coin2Amount = +coin2Amount.toFixed(pairObj.coin2Decimals)
+					coin2Amount = (+coin2Amount).toFixed(pairObj.coin2Decimals)
 				}
 				if (price)
-					price = +price.toFixed(pairObj.coin2Decimals);
+					price = (+price).toFixed(pairObj.coin2Decimals);
 			}
 			
 			if (limit) { // Limit order

@@ -151,20 +151,20 @@ module.exports = (apiKey, secretKey, pwd) => {
 
 			if (pairObj) { // Set precision (decimals)				
 				if (coin1Amount) {
-					coin1Amount = +coin1Amount.toFixed(pairObj.coin1Decimals);
+					coin1Amount = (+coin1Amount).toFixed(pairObj.coin1Decimals);
 				}
 				if (coin2Amount) {
-					coin2Amount = +coin2Amount.toFixed(pairObj.coin2Decimals)
+					coin2Amount = (+coin2Amount).toFixed(pairObj.coin2Decimals)
 				}
 				if (price)
-					price = +price.toFixed(pairObj.coin2Decimals);
+					price = (+price).toFixed(pairObj.coin2Decimals);
 			}
 
 			if (limit) { // Limit order
 				output = `${orderType} ${coin1Amount} ${pair_.coin1.toUpperCase()} at ${price} ${pair_.coin2.toUpperCase()}.`;
 
 				return new Promise((resolve, reject) => {
-					BITZ.addEntrustSheet(pair_.pair, +coin1Amount, +price, type).then(function (data) {
+					BITZ.addEntrustSheet(pair_.pair, coin1Amount, price, type).then(function (data) {
 						try {						
 							// console.log(data);
 							let result = JSON.parse(data).data;
@@ -218,7 +218,7 @@ module.exports = (apiKey, secretKey, pwd) => {
 				}
 
 				return new Promise((resolve, reject) => {
-					BITZ.addMarketOrder(pair_.pair, +size, type).then(function (data) {
+					BITZ.addMarketOrder(pair_.pair, size, type).then(function (data) {
 						try {						
 							// console.log(data);
 							let result = JSON.parse(data).data;
@@ -247,7 +247,7 @@ module.exports = (apiKey, secretKey, pwd) => {
 			}
 		}, // placeOrder()
 		getOrderBook(pair) {
-			// depth(symbol)
+			// orderBook(symbol)
 
 		},
 		getDepositAddress(coin) {

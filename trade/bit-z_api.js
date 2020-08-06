@@ -292,7 +292,7 @@ var EXCHANGE_API = {
      * @param symbol    eth_btc
      * ------------------------------------------------------------------
      */
-    depth: function(symbol) {
+    orderBook: function(symbol) {
         var data = {};
         data.symbol = symbol;
         return market_api("/Market/depth", data);
