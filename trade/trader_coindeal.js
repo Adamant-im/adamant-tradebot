@@ -215,6 +215,67 @@ module.exports = (apiKey, secretKey, pwd) => {
                 return order;	
 
 			}
+		},
+		getOrderBook(pair) {
+            let pair_ = formatPairName(pair);
+			return new Promise((resolve, reject) => {
+				COINDEAL.orderBook(pair_.pair).then(function (data) {
+					try {
+						// console.log(data);
+						let book = JSON.parse(data);
+						if (!book)
+							book = [];
+                        let result = {
+                            bids: new Array(),
+                            asks: new Array()
+                        };
+						book.ask.forEach(crypto => {
+							result.asks.push({
+								amount: +crypto.amount,
+								price: +crypto.price,
+                                count: 1,
+                                type: 'ask-sell-right'
+							});
+                        })
+                        result.asks.sort(function(a, b) {
+                            return parseFloat(a.price) - parseFloat(b.price);
+                        });
+						book.bid.forEach(crypto => {
+							result.bids.push({
+								amount: +crypto.amount,
+								price: +crypto.price,
+                                count: 1,
+                                type: 'bid-buy-left'
+							});
+						})
+                        result.bids.sort(function(a, b) {
+                            return parseFloat(b.price) - parseFloat(a.price);
+                        });
+						resolve(result);
+					} catch (e) {
+						resolve(false);
+						log.warn('Error while making orderBook() request: ' + e);
+					};
+				});
+			});
+		},
+		getDepositAddress(coin) {
+			return new Promise((resolve, reject) => {
+				COINDEAL.getDepositAddress(coin).then(function (data) {
+					// console.log(data);
+					data = JSON.parse(data);
+					try {
+						if (data && data.items && data.items[0]) {
+							resolve(data.items[0].address);
+						} else {
+							resolve(false);
+						}
+					} catch (e) {
+						resolve(false);
+						log.warn('Error while making getDepositAddress() request: ' + e);
+					};
+				});
+			});
 		}
 	}
 }

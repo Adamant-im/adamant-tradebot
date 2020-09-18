@@ -27,7 +27,7 @@ function sign_api(path, data, type = 'get') {
             var httpOptions = {
                 url: url,
                 method: type,
-                timeout: 3000,
+                timeout: 7000,
                 headers: headersWithSign
             }
             if (type === 'post') {
@@ -42,13 +42,13 @@ function sign_api(path, data, type = 'get') {
                 } else {
                     resolve(data);
                 }
-            }).on('error', function(err){
-                console.log('http get err:'+url);
+            }).on('error', function(err) {
+                console.log(`Error while executing sign_api() request to ${url}: ${err}`);
                 reject(null);
             });
-        }catch(err){
-            console.log('http get err:'+url);
-            reject(null);    
+        } catch(err) {
+            console.log(`Exception while executing sign_api() request to ${url}: ${err}`);
+            reject(null);
         }
     });
 }
@@ -67,12 +67,12 @@ function public_api(url, data, type = 'get') {
                 } else {
                     resolve(data);
                 }
-            }).on('error', function(err){
-                console.log('http get err:'+url);
+            }).on('error', function(err) {
+                console.log(`Error while executing public_api() request to ${url}: ${err}`);
                 reject(null);
             });
-        }catch(err){
-            console.log('http get err:'+url);
+        } catch(err) {
+            console.log(`Exception while executing public_api() request to ${url}: ${err}`);
             reject(null);    
         }
     });
@@ -162,10 +162,20 @@ var EXCHANGE_API = {
      * @param symbol    ADMBTC
      * ------------------------------------------------------------------
      */
-    ticker: function(symbol) {
+    orderBook: function(symbol) {
         let data = {};
-        data.limit = '1';
         return sign_api(`/api/v1/public/orderbook/${symbol}`, data);
+    },
+
+    /**
+     * ------------------------------------------------------------------
+     * (Get the deposit address)
+     * @param symbol    ADM
+     * ------------------------------------------------------------------
+     */
+    getDepositAddress: function(symbol) {
+        let data = {};
+        return sign_api(`/api/v1/deposits/${symbol}/addresses`, data);
     },
 
     /**

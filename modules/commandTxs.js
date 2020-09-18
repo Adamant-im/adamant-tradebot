@@ -760,6 +760,8 @@ Commands:
 
 **/clear**: Cancel [*mm*, td, all] active orders. F. e., */clear ETH/BTC all* or just */clear* for mm-orders of default pair.
 
+**/deposit**: Show a deposit address for a coin. Try */deposit ADM*.
+
 **/params**: Show current trading settings
 
 **/version**: Show bot’s software version
@@ -827,6 +829,42 @@ ${res}.`;
 Ask: ${exchangeRates.ask.toFixed(coin2Decimals)}, bid: ${exchangeRates.bid.toFixed(coin2Decimals)}.`;
 		} else {
 			output += `Unable to get ${config.exchangeName} rates for ${pair}.`;
+		}
+	}
+
+	return {
+		msgNotify: ``,
+		msgSendBack: `${output}`,
+		notifyType: 'log'
+	}
+
+}
+
+async function deposit(params) {
+
+	let output = '';
+
+	const pairObj = $u.getPairObj(params[0], true);
+	const pair = pairObj.pair;
+	const coin1 = pairObj.coin1;
+
+	if (!coin1 || !coin1.length || pair) {
+		output = 'Please specify coin to get a deposit address. F. e., */deposit ADM*.';
+		return {
+			msgNotify: ``,
+			msgSendBack: `${output}`,
+			notifyType: 'log'
+		}	
+	}
+
+	const depositAddress = await traderapi.getDepositAddress(coin1);
+	if (depositAddress) {
+		output = `The deposit address for ${coin1}: ${depositAddress}`;
+	} else {
+		output = `Unable to get a deposit address for ${coin1}.`;
+		const dontCreateAddresses = ['coindeal'];
+		if (dontCreateAddresses.includes(config.exchange)) {
+			output += ` Note: ${config.exchangeName} don't create new deposit addresses via API. Create it manually with a website.`;
 		}
 	}
 
@@ -1086,5 +1124,6 @@ const commands = {
 	buy,
 	sell,
 	enable,
-	disable
+	disable,
+	deposit
 }
