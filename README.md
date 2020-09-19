@@ -5,6 +5,8 @@ ADAMANT Trading & Market making bot is a software that allows to run trades on c
 
 Trade bots work in ADAMANT Messenger chats directly.
 
+![Market Making & OrderBook Building](./assets/OrderBook-Builder.gif)
+
 Features:
 
 * Managed with your commands using ADAMANT Messenger
@@ -26,7 +28,7 @@ Supported exchanges (more in progress):
 
 # Usage
 
-Available commands: ask a bot with `/help` command. Read more how to use the bot: [Crypto trading & Market making bot in ADAMANT](https://medium.com/adamant-im/crypto-trading-market-making-bot-in-adamant-82fa48b78f51).
+Available commands: ask a bot with `/help` command. Read more how to install and use the bot: [Crypto trading & Market making bot in ADAMANT](https://medium.com/adamant-im/crypto-trading-market-making-bot-in-adamant-82fa48b78f51).
 
 # Installation
 
@@ -68,6 +70,7 @@ Parameters:
 * `infoservice` <string, array> List of [ADAMANT InfoServices](https://github.com/Adamant-im/adamant-currencyinfo-services) for catching exchange rates, recommended
 * `slack` <string> Token for Slack alerts for the bot’s administrator. No alerts if not set.
 * `adamant_notify` <string> ADM address for the bot’s administrator. Recommended.
+* `silent_mode` <boolean> Enable if you don't want to receive "not enough balance" and "unable to execute cross-order" notifications. Default is "false".
 * `socket` <boolean> If to use WebSocket connection. Recommended for better user experience.
 * `ws_type` <string> Choose socket connection, "ws" or "wss" depending on your server.
 * `bot_name` <string> Bot's name for notifications.

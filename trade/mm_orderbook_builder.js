@@ -198,7 +198,9 @@ async function setPrice(type, pair, position) {
     let output = '';
 
     let high, low;
-    const orderBook = await traderapi.getOrderBook(pair, tradeParams.mm_orderBookHeight + 1);
+    const orderBook = await traderapi.getOrderBook(pair);
+    // const orderBook = await traderapi.getOrderBook(pair, tradeParams.mm_orderBookHeight + 1);
+
     if (!orderBook) {
         log.warn(`Unable to get order book for ${pair} to set a price while placing ob-order.`);
         return {

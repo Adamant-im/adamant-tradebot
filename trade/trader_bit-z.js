@@ -247,8 +247,47 @@ module.exports = (apiKey, secretKey, pwd) => {
 			}
 		}, // placeOrder()
 		getOrderBook(pair) {
-			// orderBook(symbol)
-
+            let pair_ = formatPairName(pair);
+			return new Promise((resolve, reject) => {
+				BITZ.orderBook(pair_.pair).then(function (data) {
+					try {
+						// console.log(data);
+						let book = JSON.parse(data).data;
+						if (!book)
+							book = [];
+                        let result = {
+                            bids: new Array(),
+                            asks: new Array()
+                        };
+						book.asks.forEach(crypto => { // ["0.0108","6991.7021","75.5103"]
+							result.asks.push({
+								amount: +crypto[1],
+								price: +crypto[0],
+                                count: 1,
+                                type: 'ask-sell-right'
+							});
+                        })
+                        result.asks.sort(function(a, b) {
+                            return parseFloat(a.price) - parseFloat(b.price);
+                        });
+						book.bids.forEach(crypto => {
+							result.bids.push({
+								amount: +crypto[1],
+								price: +crypto[0],
+                                count: 1,
+                                type: 'bid-buy-left'
+							});
+						})
+                        result.bids.sort(function(a, b) {
+                            return parseFloat(b.price) - parseFloat(a.price);
+                        });
+						resolve(result);
+					} catch (e) {
+						resolve(false);
+						log.warn('Error while making orderBook() request: ' + e);
+					};
+				});
+			});
 		},
 		getDepositAddress(coin) {
 			return new Promise((resolve, reject) => {

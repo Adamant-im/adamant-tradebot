@@ -12,6 +12,22 @@ var config = {
     'tradePwd': ''
 };
 
+const wrongAccountErrors = [ // https://apidoc.bit-z.com/en/Error-code/Error-code-comparison-table.html
+    -109, // Invalid secretKey
+    -111, // Current IP is not in the range of trusted IP
+    -117, // The apikey expires
+    -100015, // Trade password error
+    -200003, // Please set trade password
+    -200005, // This account can not trade
+    -200032, // Please contact customer service
+    -300069, // api_key is illegal
+    -300103, // Trade password error
+    -300046, // Please bind your email first
+    -300007, // Please turn on SMS verification or Google verification
+    -200003, // Please set the transaction password first
+    -100015 // Incorrect transaction password
+]
+
 function market_api(path, data) {
     var url = `${WEB_BASE}${path}`; 
     var pars = [];
@@ -22,7 +38,7 @@ function market_api(path, data) {
     var p = pars.join("&");
     url = url + "?" + p;
     return new Promise((resolve, reject) => {
-        try{
+        try {
             var httpOptions = {
                 url: url,
                 method: 'get',
@@ -41,12 +57,12 @@ function market_api(path, data) {
                         reject(res.statusCode);
                     }
                 }
-            }).on('error', function(err){
-                console.log('http get err:'+url);
+            }).on('error', function(err) {
+                console.log(`Error while executing market_api() request to ${url}: ${err}`);
                 reject(null);
             });
-        }catch(err){
-            console.log('http get err:'+url);
+        } catch(err) {
+            console.log(`Exception while executing market_api() request to ${url}: ${err}`);
             reject(null);    
         }
     });
@@ -56,7 +72,7 @@ function sign_api(path, data) {
     var url = `${WEB_BASE}${path}`; 
     data = setSign(data);
     return new Promise((resolve, reject) => {
-        try{
+        try {
             var httpOptions = {
                 url: url,
                 form: data,
@@ -72,16 +88,24 @@ function sign_api(path, data) {
                 } else {
                     if (res.statusCode == 200) {
                         resolve(data);
+                        try {
+                            let status = JSON.parse(data).status;
+                            if (wrongAccountErrors.includes(status)) {
+                                console.log(`Bit-Z declined a request to ${url} because of wrong account data. Make sure API keys are correct, not expired, bot's IP set as trusted, trade password is set. Reply data: ${data}.`);
+                            }
+                        } catch (err) {
+                            console.log(`Exception while processing data in sign_api() request to ${url}: ${err}`);
+                        }
                     } else {
                         reject(res.statusCode);
                     }
                 }
             }).on('error', function(err){
-                console.log('http form_post err:'+err);
+                console.log(`Error while executing sign_api() request to ${url}: ${err}`);
                 reject(null);
             });
-        }catch(err){
-            console.log('http form_post err:'+err);
+        } catch(err) {
+            console.log(`Exception while executing sign_api() request to ${url}: ${err}`);
             reject(null);    
         }
     });
@@ -215,7 +239,7 @@ var EXCHANGE_API = {
      */
     getDepositAddress: function(coin, type) {
         var data = getSignBaseParams();
-        data.coin = coin;
+        data.coin = coin.toLowerCase();
         if(type) data.type   = type;
         return sign_api("/Trade/getCoinAddress", data);
     },
@@ -314,7 +338,7 @@ var EXCHANGE_API = {
     },
     /**
      * ------------------------------------------------------------------
-     * 获取所有交易对的详细信息 (Get the detail of erery symbol)
+     * 获取所有交易对的详细信息 (Get the details of all symbols)
      * ------------------------------------------------------------------
      */
     symbolList: function() {
