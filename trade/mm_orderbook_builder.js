@@ -9,8 +9,8 @@ const db = require('../modules/DB');
 let lastNotifyBalancesTimestamp = 0;
 let lastNotifyPriceTimestamp = 0;
 const hour = 1000 * 60 * 60;
-const INTERVAL_MIN = 1000;
-const INTERVAL_MAX = 3000;
+const INTERVAL_MIN = 2000;
+const INTERVAL_MAX = 4000;
 const LIFETIME_MIN = 1000;
 const LIFETIME_MAX = 20000;
 
@@ -30,39 +30,31 @@ module.exports = {
     },
 	async buildOrderBook() {
         const {ordersDb} = db;
-        const orderBookOrdersCount = (await ordersDb.find({
+        const orderBookOrders = await ordersDb.find({
             isProcessed: false,
             purpose: 'ob', // ob: dynamic order book order
             pair: config.pair,
             exchange: config.exchange
-        })).length;
-
-//        console.log(orderBookOrdersCount);
-        if (orderBookOrdersCount < tradeParams.mm_orderBookOrdersCount)
-            this.placeOrderBookOrder(orderBookOrdersCount);
-    
-        this.closeOrderBookOrders(orderBookOrdersCount);
-    },
-	async closeOrderBookOrders(orderBookOrdersCount) {
-        const {ordersDb} = db;
-        const ordersToClose = await ordersDb.find({
-            isProcessed: false,
-            purpose: 'ob', // ob: dynamic order book order
-            pair: config.pair,
-            exchange: config.exchange,
-            dateTill: {$lt: $u.unix()}
         });
-        orderBookOrdersCount-= ordersToClose.length;
-        ordersToClose.forEach(async order => {
-            try {
-                traderapi.cancelOrder(order._id, order.type, order.pair);
-                order.update({
-                    isProcessed: true,
-                    isClosed: true
-                });
-                await order.save();
-                log.info(`Closing ob-order with params: id=${order._id}, type=${order.targetType}, pair=${order.pair}, price=${order.price}, coin1Amount=${order.coin1Amount}, coin2Amount=${order.coin2Amount}. Open ob-orders: ~${orderBookOrdersCount}.`);
+
+        if (orderBookOrders.length < tradeParams.mm_orderBookOrdersCount)
+            this.placeOrderBookOrder(orderBookOrders.length);
     
+        this.closeOrderBookOrders(orderBookOrders);
+    },
+	async closeOrderBookOrders(orderBookOrders) {
+        let orderBookOrdersCount = orderBookOrders.length;
+        orderBookOrders.forEach(async order => {
+            try {
+                if (order.dateTill < $u.unix()) {
+                    orderBookOrdersCount -= 1;
+                    traderapi.cancelOrder(order._id, order.type, order.pair);
+                    order.update({
+                        isProcessed: true,
+                        isClosed: true
+                    }, true);
+                    log.info(`Closing ob-order with params: id=${order._id}, type=${order.targetType}, pair=${order.pair}, price=${order.price}, coin1Amount=${order.coin1Amount}, coin2Amount=${order.coin2Amount}. Open ob-orders: ~${orderBookOrdersCount}.`);
+                }
             } catch (e) {
                 log.error('Error in removeOrderBookOrders(): ' + e);
             }
@@ -130,8 +122,7 @@ module.exports = {
                 isExecuted: false,
                 isCancelled: false,
                 isClosed: false
-            });
-            await order.save();
+            }, true);
             output = `${type} ${coin1Amount.toFixed(config.coin1Decimals)} ${config.coin1} for ${coin2Amount.toFixed(config.coin2Decimals)} ${config.coin2}`;
             log.info(`Successfully placed ob-order to ${output}. Open ob-orders: ~${orderBookOrdersCount+1}.`);
         } else {
