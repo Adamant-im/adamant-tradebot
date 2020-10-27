@@ -39,9 +39,9 @@ module.exports = {
 
 //        console.log(orderBookOrdersCount);
         if (orderBookOrdersCount < tradeParams.mm_orderBookOrdersCount)
-            this.placeOrderBookOrder(orderBookOrdersCount);
+            await this.placeOrderBookOrder(orderBookOrdersCount);
     
-        this.closeOrderBookOrders(orderBookOrdersCount);
+        await this.closeOrderBookOrders(orderBookOrdersCount);
     },
 	async closeOrderBookOrders(orderBookOrdersCount) {
         const {ordersDb} = db;
@@ -53,7 +53,10 @@ module.exports = {
             dateTill: {$lt: $u.unix()}
         });
         orderBookOrdersCount-= ordersToClose.length;
-        ordersToClose.forEach(async order => {
+
+        let order = {};
+        for (i=0; i < ordersToClose.length; i++) {
+            order = ordersToClose[i];
             try {
                 traderapi.cancelOrder(order._id, order.type, order.pair);
                 order.update({
@@ -66,7 +69,7 @@ module.exports = {
             } catch (e) {
                 log.error('Error in removeOrderBookOrders(): ' + e);
             }
-        });
+        }
     },
 	async placeOrderBookOrder(orderBookOrdersCount) {
         const type = setType();
