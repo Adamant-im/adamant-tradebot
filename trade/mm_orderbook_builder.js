@@ -199,7 +199,13 @@ async function setPrice(type, pair, position) {
         }
     }
     
-    const orderList = type === 'buy' ? orderBook.bids : orderBook.asks;
+    let orderList = type === 'buy' ? orderBook.bids : orderBook.asks;
+    // Remove duplicates by 'price' field
+    orderList = orderList.filter((order, index, self) =>
+        index === self.findIndex((o) => (
+            o.price === order.price
+        ))
+    )
     // console.log();
     // console.log(type);
     // console.log(orderList);

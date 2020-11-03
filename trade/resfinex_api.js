@@ -136,6 +136,7 @@ var EXCHANGE_API = {
     getUserNowEntrustSheet: function(coinFrom, coinTo) {
         let data = {};
         data.pair = coinFrom + "_" + coinTo;
+        data.limit = 200;
         return sign_api("/order/open_orders", data, 'post');
     },
     /**
