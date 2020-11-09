@@ -107,6 +107,7 @@ try {
 	config.address = address;
 	config.exchangeName = config.exchange;
 	config.exchange = config.exchangeName.toLowerCase();
+	config.pair = config.pair.toUpperCase();
 	config.coin1 = config.pair.split('/')[0];
 	config.coin2 = config.pair.split('/')[1];
 

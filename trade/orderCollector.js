@@ -5,9 +5,11 @@ const traderapi = require('./trader_' + config.exchange)(config.apikey, config.a
 
 /** 
  * Purposes:
+ * all — (String) all type of orders
  * mm: market making order
  * ob: dynamic order book order
  * tb: trade bot order
+ * liq: liquidity order
 */
 
 module.exports = async (purposes, pair) => {
@@ -15,12 +17,22 @@ module.exports = async (purposes, pair) => {
     // log.info(`Order collector..`);
 
     const {ordersDb} = db;
-    let ordersToClear = await ordersDb.find({
-        isProcessed: false,
-        purpose: {$in: purposes},
-        pair: pair || config.pair,
-        exchange: config.exchange
-    });
+    let ordersToClear;
+
+    if (purposes === 'all') {
+        ordersToClear = await ordersDb.find({
+            isProcessed: false,
+            pair: pair || config.pair,
+            exchange: config.exchange
+        });
+    } else {
+        ordersToClear = await ordersDb.find({
+            isProcessed: false,
+            purpose: {$in: purposes},
+            pair: pair || config.pair,
+            exchange: config.exchange
+        });    
+    }
 
     ordersToClear.forEach(async order => {
         try {
@@ -44,8 +56,11 @@ module.exports = async (purposes, pair) => {
 };
 
 async function clearAllOrders() {
-	// First, close orders which are in bot's database
-	let count = await module.exports(['mm', 'tb', 'ob'], config.pair);
+
+    // First, close orders which are in bot's database
+    // 'all' = ['mm', 'tb', 'ob', 'liq']
+    let count = await module.exports('all', config.pair);
+    
 	// Next, if need to clear all orders, close orders which are not closed yet
     const openOrders = await traderapi.getOpenOrders(config.pair);
     log.info(`Clearing all opened orders every ${config.clearAllOrdersInterval} minutes.. Orders to close: ${count + openOrders.length}.`);
@@ -54,12 +69,15 @@ async function clearAllOrders() {
             traderapi.cancelOrder(order.orderid, order.side, order.symbol);
         });
     }
+
 }
 
+// Clear Market-making orders every 20 sec — In case if API errors
 setInterval(() => {
-	module.exports(['mm', 'tb'], config.pair);
-}, 15 * 1000);
+	module.exports(['mm'], config.pair);
+}, 20 * 1000);
 
+// Clear all orders, if clearAllOrdersInterval set in config
 if (config.clearAllOrdersInterval) {
     setInterval(() => {
         clearAllOrders();

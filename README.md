@@ -1,13 +1,21 @@
-ADAMANT Trading & Market making bot is a software that allows to run trades on crypto exchanges, make fake volume (wash trading) and build live-like dynamic order book.
+ADAMANT Trading & Market making bot is a software that allows to run trades on crypto exchanges, make trade volume, maintain spread and liquidity, and build live-like dynamic order book.
 
-* In Market making mode, the bot places orders and execute them by himself, making a trade volume; and builds live-like dynamic order book.
-* Trading is a mode when bot run orders according to some strategy. It can be profitable or not. Unavailable now—use [Zenbot](https://github.com/DeviaVir/zenbot).
+# Market making
 
-Trade bots work in ADAMANT Messenger chats directly.
+In Market making mode, the bot places orders and execute them by himself, making a trade volume, maintaining spread and liquidity; and builds live-like dynamic order book. Market making helps:
+
+* Cryptocurrency projects (token issuers)
+* Cryptocurrency exchanges
+
+See [marketmaking.app](https://marketmaking.app) to have a look at the bot possibilities.
 
 ![Market Making & OrderBook Building](./assets/OrderBook-Builder.gif)
 
-Features:
+# Profit trading
+
+Trading is a mode when bot run orders according to some strategy. It can be profitable or not. This feature is unavailable now—we recommend to use [Zenbot](https://github.com/DeviaVir/zenbot) instead.
+
+# Features
 
 * Managed with your commands using ADAMANT Messenger
 * Easy to install and configure
@@ -17,8 +25,11 @@ Features:
 * Market making
 * Dynamic order book
 * Stores and displays statistics
+* 88888888!!!!!!
 
-Supported exchanges (more in progress):
+# Supported exchanges
+
+If the bot don't support the exchange you need, code it by yourself, or [hire developers](https://marketmaking.app/services/).
 
 * [IDCM](https://idcm.io/invitation/receive?code=LM5510&lang=en)
 * [Bit-Z](https://u.bit-z.com/register?invite_code=2423317)
@@ -26,16 +37,18 @@ Supported exchanges (more in progress):
 * [Resfinex](https://trade.resfinex.com?ref=7ccb34d867&pair=ADM_USDT)
 * [Atomars](https://atomars.com/refcode/kaba)
 
-# Usage
+# Usage and Installation
+
+After installation, you control the bot in secure ADAMANT Messenger chat directly.
 
 Available commands: ask a bot with `/help` command. Read more how to install and use the bot: [Crypto trading & Market making bot in ADAMANT](https://medium.com/adamant-im/crypto-trading-market-making-bot-in-adamant-82fa48b78f51).
 
-# Installation
+We can run market making for you, see [marketmaking.app/services](https://marketmaking.app/services/).
 
 ## Requirements
 
-* Ubuntu 16 / Ubuntu 18 (other OS had not been tested)
-* NodeJS v 8+
+* Ubuntu 16 / Ubuntu 18 (we didn't test others)
+* NodeJS v 10+
 * MongoDB ([installation instructions](https://docs.mongodb.com/manual/tutorial/install-mongodb-on-ubuntu/))
 
 ## Setup

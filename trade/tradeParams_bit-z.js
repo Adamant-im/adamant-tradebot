@@ -7,5 +7,10 @@ module.exports = {
    "mm_maxAmount": 10,
    "mm_isOrderBookActive": true,
    "mm_orderBookHeight": 14,
-   "mm_orderBookOrdersCount": 12
+   "mm_orderBookOrdersCount": 12,
+   "mm_isLiquidityActive": false,
+   "mm_liquiditySellAmount": 100,
+   "mm_liquidityBuyAmount": 50,
+   "mm_liquiditySpreadPercent": 2,
+   "mm_liquidityTrend": "middle"
 }

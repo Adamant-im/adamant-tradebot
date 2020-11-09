@@ -56,20 +56,36 @@ function start(params) {
 	}
 	if (type === "mm") {
 		if (!tradeParams.mm_isActive) {
+
 			tradeParams.mm_isActive = true;
+
+			let optionsString = '';
+			let notesStringNotify = '';
+			let notesStringMsg = '';
+
 			if (tradeParams.mm_isOrderBookActive) {
-				msgNotify = `${config.notifyName} set to start market making & order book building for ${config.pair}.`;
-				msgSendBack = `Starting market making & order book building for ${config.pair} pair.`;
+				optionsString += ' & order book building';
 			} else {
-				msgNotify = `${config.notifyName} set to start market making for ${config.pair}. Order book building is disabled.`;
-				msgSendBack = `Starting market making for ${config.pair} pair. Note, order book building is disabled. To enable, type */enable ob*.`;
+				notesStringNotify += ' Order book building is disabled.';
+				notesStringMsg += ' Order book building is disabled—type */enable ob* to enable.';
+			}
+
+			if (tradeParams.mm_isLiquidityActive) {
+				optionsString += ' & liquidity and spread maintenance';
+			} else {
+				notesStringNotify += ' Liquidity and spread maintenance is disabled.';
+				notesStringMsg += ' Liquidity and spread maintenance is disabled—type */enable liq* to enable.';
 			}
 	
+			msgNotify = `${config.notifyName} set to start market making${optionsString} for ${config.pair}.${notesStringNotify}`;
+			msgSendBack = `Starting market making${optionsString} for ${config.pair} pair.${notesStringMsg}`;
+
 			return {
 				msgNotify,
 				msgSendBack,
 				notifyType: 'log'
 			}
+
 		} else {
 			tradeParams.mm_isActive = true;
 			return {
@@ -82,6 +98,7 @@ function start(params) {
 }
 
 function stop(params) {
+
 	const type = (params[0] || '').trim();
 	if (!type || !type.length || !["mm"].includes(type)) {
         return {
@@ -90,82 +107,210 @@ function stop(params) {
             notifyType: 'log'
 		} 
 	}
+
+	let msgNotify, msgSendBack;
+
 	if (type === "mm") {
+
+		let optionsString = ', order book building, liquidity and spread maintenance';
+
 		if (tradeParams.mm_isActive) {
-			tradeParams.mm_isActive = false;
-			return {
-				msgNotify: `${config.notifyName} stopped market making & order book building for ${config.pair} pair.`,
-				msgSendBack: `Market making & order book building for ${config.pair} pair is disabled now.`,
-				notifyType: 'log'
-			}
+			msgNotify = `${config.notifyName} stopped Market making${optionsString} for ${config.pair} pair.`;
+			msgSendBack = `Market making${optionsString} for ${config.pair} pair is disabled now.`;
 		} else {
-			tradeParams.mm_isActive = false;
-			return {
-				msgNotify: '',
-				msgSendBack: `Market making for ${config.pair} pair is disabled already.`,
-				notifyType: 'log'
-			} 
+			msgNotify = '';
+			msgSendBack = `Market making for ${config.pair} pair is disabled already.`;
 		}
+
+		tradeParams.mm_isActive = false;
+
 	}
+
+	return {
+		msgNotify,
+		msgSendBack,
+		notifyType: 'log'
+	} 
+
 }
 
 function enable(params) {
+
+	// enable ob 15 — enable order book building with X maximum number of orders
+	// enable liq 2% 1000 ADM 50 USDT downtrend — provide liquidity with maximum of 1000 ADM asks (sell) and 50 USDT bids (buy) within 2% spread & keep average price lower
+		// downtrend, uptrend, middle
+
 	const type = (params[0] || '').trim();
-	if (!type || !type.length || !["ob"].includes(type)) {
+	if (!type || !type.length || !["ob", "liq"].includes(type)) {
         return {
             msgNotify: '',
-            msgSendBack: `Indicate option, _ob_ for order book building. Example: */enable ob 15*.`,
+            msgSendBack: `Indicate option: _ob_ for order book building, _liq_ for liquidity and spread maintenance. Example: */enable ob 15*.`,
             notifyType: 'log'
 		} 
 	}
-	const value = +params[1];
+
+	let msgNotify, msgSendBack, infoString, notesStringNotify, notesStringMsg, optionsString;
+
 	if (type === "ob") {
+
+		const orderBookOrdersCount = +params[1];
 		tradeParams.mm_isOrderBookActive = true;
-		if (value && value != Infinity)
-			tradeParams.mm_orderBookOrdersCount = value;
-		else if (!value.length && !tradeParams.mm_orderBookOrdersCount)
-			value = 15; // default for mm_orderBookOrdersCount
-		let msgNotify, msgSendBack;
-		if (tradeParams.mm_isActive) {
-			msgNotify = `${config.notifyName} enabled order book building for ${config.pair} pair with ${tradeParams.mm_orderBookOrdersCount} maximum number of orders.`;
-			msgSendBack = `Order book building is enabled for ${config.pair} pair with ${tradeParams.mm_orderBookOrdersCount} maximum number of orders.`;
+		if (orderBookOrdersCount && orderBookOrdersCount != Infinity)
+			tradeParams.mm_orderBookOrdersCount = orderBookOrdersCount;
+		else if (!orderBookOrdersCount.length && !tradeParams.mm_orderBookOrdersCount)
+			orderBookOrdersCount = 15; // default for mm_orderBookOrdersCount
+
+		infoString = `with ${tradeParams.mm_orderBookOrdersCount} maximum number of orders`;	
+		optionsString = `Order book building`;
+
+	} else if (type === "liq") {
+
+		const spreadString = params[1];
+		console.log(spreadString);
+
+		if (!spreadString || (spreadString.slice(-1) !== '%')) {
+			return {
+				msgNotify: '',
+				msgSendBack: `Set a spread in percentage. Example: */enable liq 2% 1000 ADM 50 USDT uptrend*.`,
+				notifyType: 'log'
+			}	
+		}
+		const spreadValue = +spreadString.slice(0, -1);
+		console.log(spreadValue);
+		if (!spreadValue || spreadValue === Infinity || spreadValue <= 0 || spreadValue > 80) {
+			return {
+				msgNotify: '',
+				msgSendBack: `Set correct spread in percentage. Example: */enable liq 2% 1000 ADM 50 USDT uptrend*.`,
+				notifyType: 'log'
+			}
+		}
+
+		const coin1 = params[3].toUpperCase();
+		const coin2 = params[5].toUpperCase();
+		console.log(coin1, coin2);
+
+		if (!coin1 || !coin2 || coin1 === coin2 || (![config.coin1, config.coin2].includes(coin1)) || (![config.coin1, config.coin2].includes(coin2))) {
+			return {
+				msgNotify: '',
+				msgSendBack: `Incorrect liquidity coins. Config is set to trade ${config.pair} pair. Example: */enable liq 2% 100 ${config.coin1} 50 ${config.coin2} uptrend*.`,
+				notifyType: 'log'
+			}
+		}
+		console.log(coin1, coin2, "good");
+
+		const coin1Amount = +params[2];
+		console.log(coin1Amount);
+
+		if (!coin1Amount || coin1Amount === Infinity || coin1Amount <= 0) {
+			return {
+				msgNotify: '',
+				msgSendBack: `Incorrect ${coin1} amount: ${coin1Amount}. Example: */enable liq 2% 100 ${config.coin1} 50 ${config.coin2} uptrend*.`,
+				notifyType: 'log'
+			}
+		}
+		console.log(coin1Amount, "good");
+
+		const coin2Amount = +params[4];
+		console.log(coin2Amount);
+
+		if (!coin2Amount || coin2Amount === Infinity || coin2Amount <= 0) {
+			return {
+				msgNotify: '',
+				msgSendBack: `Incorrect ${coin2} amount: ${coin2Amount}. Example: */enable liq 2% 100 ${config.coin1} 50 ${config.coin2} uptrend*.`,
+				notifyType: 'log'
+			}
+		}
+		console.log(coin2Amount, "good");
+
+		let trend = params[6];
+		console.log(trend);
+
+		if (!trend) {
+			trend = 'middle';
+		}
+
+		trend = trend.toLowerCase();;
+
+		if ((!['middle', 'downtrend', 'uptrend'].includes(trend))) {
+			return {
+				msgNotify: '',
+				msgSendBack: `Incorrect trend. Example: */enable liq 2% 100 ${config.coin1} 50 ${config.coin2} uptrend*.`,
+				notifyType: 'log'
+			}
+		}
+		console.log(trend, "good");
+
+		if (coin1 === config.coin1) {
+			tradeParams.mm_liquiditySellAmount = coin1Amount;
+			tradeParams.mm_liquidityBuyAmount = coin2Amount;
 		} else {
-			msgNotify = `${config.notifyName} enabled order book building for ${config.pair} pair with ${tradeParams.mm_orderBookOrdersCount} maximum number of orders. Market making and order book building are not started yet.`;
-			msgSendBack = `Order book building is enabled for ${config.pair} pair with ${tradeParams.mm_orderBookOrdersCount} maximum number of orders. To start market making and order book building, type */start mm*.`;
+			tradeParams.mm_liquiditySellAmount = coin2Amount;
+			tradeParams.mm_liquidityBuyAmount = coin1Amount;
 		}
-		return {
-			msgNotify,
-			msgSendBack,
-			notifyType: 'log'
-		}
+		console.log(tradeParams.mm_liquiditySellAmount, tradeParams.mm_liquidityBuyAmount);
+
+		tradeParams.mm_liquidityTrend = trend;
+		tradeParams.mm_liquiditySpreadPercent = spreadValue;
+		tradeParams.mm_isLiquidityActive = true;
+		
+		infoString = `with ${tradeParams.mm_liquiditySellAmount} ${config.coin1} asks (sell) and ${tradeParams.mm_liquidityBuyAmount} ${config.coin2} bids (buy) within ${spreadValue}% spread & ${trend}`;
+		optionsString = `Liquidity and spread maintenance`;
+
 	}
+
+	if (tradeParams.mm_isActive) {
+		msgNotify = `${config.notifyName} enabled ${optionsString} for ${config.pair} pair ${infoString}.`;
+		msgSendBack = `${optionsString} is enabled for ${config.pair} pair ${infoString}.`;
+	} else {
+		notesStringNotify = ` Market making and ${optionsString} are not started yet.`
+		notesStringMsg = ` To start Market making and ${optionsString}, type */start mm*.`
+		msgNotify = `${config.notifyName} enabled ${optionsString} for ${config.pair} pair ${infoString}.${notesStringNotify}`;
+		msgSendBack = `${optionsString} is enabled for ${config.pair} pair ${infoString}.${notesStringMsg}`;
+	}
+
+	return {
+		msgNotify,
+		msgSendBack,
+		notifyType: 'log'
+	}
+	
 }
 
 function disable(params) {
+
 	const type = (params[0] || '').trim();
-	if (!type || !type.length || !["ob"].includes(type)) {
+	if (!type || !type.length || !["ob", "liq"].includes(type)) {
         return {
             msgNotify: '',
-            msgSendBack: `Indicate option, _ob_ for order book building. Example: */disable ob*.`,
+            msgSendBack: `Indicate option: _ob_ for order book building, _liq_ for liquidity and spread maintenance. Example: */disable ob*.`,
             notifyType: 'log'
 		} 
 	}
+
+	let msgNotify, msgSendBack, optionsString;
+
 	if (type === "ob") {
 		tradeParams.mm_isOrderBookActive = false;
-		let msgNotify, msgSendBack;
-		if (tradeParams.mm_isActive) {
-			msgNotify = `${config.notifyName} disable order book building for ${config.pair} pair. Market making is still active.`;
-			msgSendBack = `Order book building is disabled for ${config.pair}. Market making is still active. To stop market making, type */stop mm*. To close current ob-orders, type */clear ob*.`;
-		} else {
-			msgNotify = `${config.notifyName} disabled order book building for ${config.pair}.`;
-			msgSendBack = `Order book building is disabled for ${config.pair}.`;
-		}
-		return {
-			msgNotify,
-			msgSendBack,
-			notifyType: 'log'
-		}
+		optionsString = `Order book building`;
+	} else if (type === "liq") {
+		tradeParams.mm_isLiquidityActive = false;
+		optionsString = `Liquidity and spread maintenance`;
 	}
+
+	if (tradeParams.mm_isActive) {
+		msgNotify = `${config.notifyName} disabled ${optionsString} for ${config.pair} pair. Market making is still active.`;
+		msgSendBack = `${optionsString} is disabled for ${config.pair} pair. Market making is still active. To stop market making, type */stop mm*. To close current ob-orders, type */clear ob*. To close current liq-orders, type */clear liq*.`;
+	} else {
+		msgNotify = `${config.notifyName} disabled ${optionsString} for ${config.pair}.`;
+		msgSendBack = `${optionsString} is disabled for ${config.pair}.`;
+	}
+
+	return {
+		msgNotify,
+		msgSendBack,
+		notifyType: 'log'
+	}
+
 }
 
 function buypercent(param) {
@@ -278,9 +423,12 @@ async function clear(params) {
 
 	let purposes;
 	let purposeString;
+
 	params.forEach(param => {
+
 		if (['all'].includes(param)) {
-			purposes = ['mm', 'tb', 'ob'];
+			// purposes = ['mm', 'tb', 'ob', 'liq'];
+			purposes = 'all';
 		}
 		if (['tb'].includes(param)) {
 			purposes = ['tb'];
@@ -289,6 +437,10 @@ async function clear(params) {
 		if (['ob'].includes(param)) {
 			purposes = ['ob'];
 			purposeString = `order book`;
+		}
+		if (['liq'].includes(param)) {
+			purposes = ['liq'];
+			purposeString = `liquidity`;
 		}
 	});
 	if (!purposes) {
@@ -303,21 +455,9 @@ async function clear(params) {
 	// First, close orders which are in bot's database
 	count = await orderCollector(purposes, pair);
 
-	if (purposeString) {
-		if (count > 0) {
-			output = `Clearing ${count} **${purposeString}** orders for ${pair} pair on ${config.exchangeName}..`;
-		} else {
-			output = `No open **${purposeString}** orders on ${config.exchangeName} for ${pair}.`;
-		}	
-		return {
-			msgNotify: ``,
-			msgSendBack: `${output}`,
-			notifyType: 'log'
-		}	
-	}
-	
 	// Next, if need to clear all orders, close orders which are not closed yet
-	if (!purposeString) { // Need to clear all orders
+	if (purposes === 'all') {
+
 		const openOrders = await traderapi.getOpenOrders(pair);
 		if (openOrders) {
 			if ((count + openOrders.length) > 0) {
@@ -331,6 +471,15 @@ async function clear(params) {
 		} else {
 			output = `Unable to get ${config.exchangeName} orders for ${pair}.`;
 		}
+
+	} else {
+
+		if (count > 0) {
+			output = `Clearing ${count} **${purposeString}** orders for ${pair} pair on ${config.exchangeName}..`;
+		} else {
+			output = `No open **${purposeString}** orders on ${config.exchangeName} for ${pair}.`;
+		}	
+
 	}
 
 	return {
@@ -714,11 +863,11 @@ function params() {
 	let output = `I am set to work with ${config.pair} pair on ${config.exchangeName}. Current trading settings:`;
 	output += "\n\n" + JSON.stringify(tradeParams, null, 3);;
 
-return {
-	msgNotify: ``,
-	msgSendBack: `${output}`,
-	notifyType: 'log'
-}
+	return {
+		msgNotify: ``,
+		msgSendBack: `${output}`,
+		notifyType: 'log'
+	}
 
 }
 
@@ -744,7 +893,7 @@ Commands:
 
 **/stop**: Stop trading (td) or market making (mm). F. e., /*stop mm*.
 
-**/enable**: Enable option. F. e., /*enable ob 10* to enable order book building with 10 maximum number of orders.
+**/enable**: Enable option, *ob* or *liq*. F. e., /*enable ob 10* to enable order book building with 10 maximum number of orders.
 
 **/disable**: Disable option. F. e., /*disable ob* to disable order book building.
 
@@ -769,11 +918,11 @@ Commands:
 Happy trading!
 `;
 
-return {
-	msgNotify: ``,
-	msgSendBack: `${output}`,
-	notifyType: 'log'
-}
+	return {
+		msgNotify: ``,
+		msgSendBack: `${output}`,
+		notifyType: 'log'
+	}
 
 }
 
@@ -977,6 +1126,9 @@ async function orders(params) {
 			output = `Unable to get ${config.exchangeName} orders for ${pair}.`;
 		}
 	}
+
+	// console.log($u.getOrderBookInfo(await traderapi.getOrderBook(pair)));
+
 
 	return {
 		msgNotify: ``,

@@ -167,12 +167,16 @@ var EXCHANGE_API = {
         if(coinTo) data.coinTo = coinTo;
         if(type) data.type = type;
 
-        if(page) data.page = page;
-        if(pageSize) data.pageSize = pageSize;
         if(startTime) data.startTime = startTime;
         if(endTime) data.endTime = endTime;
 
-        data.pageSize = 100;
+        // limit/site parameter is pageSize; Number of records per page Maximum 100
+        // https://apidoc.bit-z.com/market-trade-data/Get-now-trust.html
+        if(page) data.page = page;
+        if(pageSize) 
+            data.pageSize = pageSize
+        else
+            data.pageSize = 100;
 
         return sign_api("/Trade/getUserNowEntrustSheet", data);
     },
@@ -319,6 +323,8 @@ var EXCHANGE_API = {
     orderBook: function(symbol) {
         var data = {};
         data.symbol = symbol;
+        // no limit/size parameter according to docs
+        // https://apidoc.bit-z.com/market-quotation-data/Get-depth-data.html
         return market_api("/Market/depth", data);
     },
     /**

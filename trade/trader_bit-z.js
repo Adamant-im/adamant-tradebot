@@ -59,6 +59,23 @@ module.exports = (apiKey, secretKey, pwd) => {
 
 						let result = [];
 						openOrders.forEach(order => {
+							let orderStatus;
+							switch (order.status) {
+								case 0:
+									orderStatus = "new";
+									break;
+								case 3:
+									orderStatus = "closed";
+									break;
+								case 2:
+									orderStatus = "filled";
+									break;
+								case 1:
+									orderStatus = "part_filled";
+									break;										
+								default:
+									break;
+							}
 							result.push({
 								orderid: order.id,
 								symbol: order.coinFrom + '_' + order.coinTo,
@@ -67,8 +84,9 @@ module.exports = (apiKey, secretKey, pwd) => {
 								type: 1, // limit
 								timestamp: order.created,
 								amount: order.number,
-								executedamount: order.numberDeal,
-								status: order.status,
+								amountExecuted: order.numberDeal,
+								amountLeft: order.numberOver,
+								status: orderStatus,
 								uid: order.uid,
 								coin2Amount: order.total,
 								coinFrom: order.coinFrom,

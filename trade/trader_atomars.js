@@ -56,7 +56,30 @@ module.exports = (apiKey, secretKey, pwd) => {
 
 						let result = [];
 						openOrders.forEach(order => {
-                            // console.log(order);
+							// console.log(order);
+							let orderStatus;
+							// no docs for order status for Atomars
+							// https://docs.atomars.com/#api-Private_API-Active_Orders
+							switch (order.status) {
+								case "OPEN":
+									break;
+								case "CANCELED":
+									break;
+								case "FILLED":
+									break;
+								case "PARTIAL_FILED":
+									break;										
+								default:
+									break;
+							}
+
+							if (order.volume_done === order.volume)
+								orderStatus = "filled"
+							else if (order.volume_done > 0)
+								orderStatus = "part_filled"
+							else
+								orderStatus = "new"
+
                             if (order.pair === pair_.pair)
                                 result.push({
                                     orderid: order.id,
@@ -66,8 +89,9 @@ module.exports = (apiKey, secretKey, pwd) => {
                                     type: order.type_trade, // Limit/Market (0/1)
                                     timestamp: order.time_create,
                                     amount: order.volume,
-                                    executedamount: order.volume_done,
-                                    status: order.status,
+                                    amountExecuted: order.volume_done,
+                                    amountLeft: order.volume - order.volume_done,
+                                    status: orderStatus,
                                     uid: order.id,
                                     coin2Amount: order.price,
                                     coinFrom: pair_.coin1,

@@ -110,6 +110,8 @@ var EXCHANGE_API = {
     getUserNowEntrustSheet: function(coinFrom, coinTo) {
         let data = {};
         data.symbol = coinFrom + coinTo;
+        // no limit/size parameter according to docs
+        // https://apigateway.coindeal.com/api/doc#operation/v1getOrder
         return sign_api("/api/v1/order", data);
     },
     /**
@@ -162,8 +164,15 @@ var EXCHANGE_API = {
      * @param symbol    ADMBTC
      * ------------------------------------------------------------------
      */
-    orderBook: function(symbol) {
+    orderBook: function(symbol, size) {
         let data = {};
+        // default limit/size is 100; 
+        // no limit according to docs; 0 - full orderbook otherwise number of levels
+        // https://apigateway.coindeal.com/api/doc#operation/v1getPublicOrderbookCurrencyPair
+        if (size) 
+            data.limit = size;
+        else
+            data.limit = 0;
         return sign_api(`/api/v1/public/orderbook/${symbol}`, data);
     },
 

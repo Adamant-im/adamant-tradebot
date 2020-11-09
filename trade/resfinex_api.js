@@ -136,6 +136,8 @@ var EXCHANGE_API = {
     getUserNowEntrustSheet: function(coinFrom, coinTo) {
         let data = {};
         data.pair = coinFrom + "_" + coinTo;
+        // size/limit not documented, but limit fits
+        // https://docs.resfinex.com/guide/rest-auth-endpoints.html#post-get-open-orders
         data.limit = 200;
         return sign_api("/order/open_orders", data, 'post');
     },
@@ -189,7 +191,12 @@ var EXCHANGE_API = {
     orderBook: function(symbol, size) {
         let data = {};
         data.pair = symbol;
-        if (size) data.size = size;
+        // default limit/size is 500; no limit according to docs
+        // https://docs.resfinex.com/guide/rest-public-endpoints.html#get-orderbook
+        if (size) 
+            data.size = size;
+        else 
+            data.size = 1000;
         return public_api(`/engine/depth`, data);
     }
 

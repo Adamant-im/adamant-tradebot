@@ -56,7 +56,7 @@ module.exports = {
                     log.info(`Closing ob-order with params: id=${order._id}, type=${order.targetType}, pair=${order.pair}, price=${order.price}, coin1Amount=${order.coin1Amount}, coin2Amount=${order.coin2Amount}. Open ob-orders: ~${orderBookOrdersCount}.`);
                 }
             } catch (e) {
-                log.error('Error in removeOrderBookOrders(): ' + e);
+                log.error('Error in closeOrderBookOrders(): ' + e);
             }
         });
     },
@@ -146,6 +146,7 @@ function setType() {
 async function isEnoughCoins(coin1, coin2, amount1, amount2, type) {
 	const balances = await traderapi.getBalances(false);
     let balance1, balance2;
+    let balance1freezed, balance2freezed;
     let isBalanceEnough = true;
     let output = '';
 
@@ -153,14 +154,15 @@ async function isEnoughCoins(coin1, coin2, amount1, amount2, type) {
 		try {
             balance1 = balances.filter(crypto => crypto.code === coin1)[0].free;
             balance2 = balances.filter(crypto => crypto.code === coin2)[0].free;
-
+            balance1freezed = balances.filter(crypto => crypto.code === coin1)[0].freezed;
+            balance2freezed = balances.filter(crypto => crypto.code === coin2)[0].freezed;
 
             if ((!balance1 || balance1 < amount1) && type === 'sell') {
-                output = `${config.notifyName}: Not enough ${coin1} for placing ${type} ob-order. Check balances.`;
+                output = `${config.notifyName}: Not enough balance to place ${amount1.toFixed(config.coin1Decimals)} ${coin1} ${type} ob-order. Free: ${balance1.toFixed(config.coin1Decimals)} ${coin1}, freezed: ${balance1.toFixed(config.coin1Decimals)} ${coin1}.`;
                 isBalanceEnough = false;
             }
             if ((!balance2 || balance2 < amount2) && type === 'buy') {
-                output = `${config.notifyName}: Not enough ${coin2} for placing ${type} ob-order. Check balances.`;
+                output = `${config.notifyName}: Not enough balance to place ${amount2.toFixed(config.coin2Decimals)} ${coin2} ${type} ob-order. Free: ${balance2.toFixed(config.coin2Decimals)} ${coin2}, freezed: ${balance2.toFixed(config.coin2Decimals)} ${coin2}.`;
                 isBalanceEnough = false;
             }
 
@@ -189,8 +191,9 @@ async function setPrice(type, pair, position) {
     let output = '';
 
     let high, low;
-    const orderBook = await traderapi.getOrderBook(pair);
+    // not all exchanges have limit/size parameter for orderBook/depth
     // const orderBook = await traderapi.getOrderBook(pair, tradeParams.mm_orderBookHeight + 1);
+    const orderBook = await traderapi.getOrderBook(pair);
 
     if (!orderBook) {
         log.warn(`Unable to get order book for ${pair} to set a price while placing ob-order.`);
@@ -211,7 +214,7 @@ async function setPrice(type, pair, position) {
     // console.log(orderList);
 
     if (!orderList || !orderList[0] || !orderList[1]) {
-        output = `${config.notifyName}: Orders count of type ${type} is less then 2. Unable to set a price for ${pair} while placing ob-order.`;
+        output = `${config.notifyName}: Orders count of type ${type} is less then 2, or temporary API error. Unable to set a price for ${pair} while placing ob-order.`;
         return {
             price: false,
             message: output

@@ -113,6 +113,8 @@ var EXCHANGE_API = {
     getUserNowEntrustSheet: function() {
         var data = {};
         data.request_id = Date.now().toString();
+        // not size/limit parameter
+        // https://docs.atomars.com/#api-Private_API-Active_Orders
         return api("/private/orders", data, true, 'post', true);
     },
 
@@ -214,6 +216,8 @@ var EXCHANGE_API = {
     orderBook: function(pair) {
         var data = {};
         data.pair = pair;
+        // no limit/size parameter according to docs
+        // https://docs.atomars.com/#api-Public_API-Order_Book
         return api("/public/book", data, false, 'get', false);
     }
 

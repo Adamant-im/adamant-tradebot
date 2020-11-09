@@ -139,10 +139,141 @@ module.exports = {
 			isPairFromParam
 		}
 	},
+	randomValue(low, high, doRound = false) {
+		let random = Math.random() * (high - low) + low;
+		if (doRound)
+			random = Math.round(random);
+		return random;
+	},
 	randomDeviation(number, deviation) {
 		const min = number - number * deviation;
 		const max = number + number * deviation;
 		return Math.random() * (max - min) + min;
+	},
+	getOrderBookInfo(orderBook) {
+
+		if (!orderBook || !orderBook.asks[0] || !orderBook.bids[0])
+			return false;
+		
+		const highestBid = orderBook.bids[0].price;
+		const lowestAsk = orderBook.asks[0].price
+		const lowestOrderPrice = orderBook.bids[orderBook.bids.length-1].price;
+		const highestOrderPrice = orderBook.asks[orderBook.asks.length-1].price;
+
+		const spread = lowestAsk - highestBid;
+		const averagePrice = (lowestAsk + highestBid) / 2;
+		const spreadPercent = spread / averagePrice * 100;
+
+		let downtrendAveragePrice = highestBid + this.randomValue(0, 0.15) * spread;
+		if (downtrendAveragePrice >= lowestAsk)
+			downtrendAveragePrice = highestBid;
+
+		let uptrendAveragePrice = lowestAsk - this.randomValue(0, 0.15) * spread;
+		if (uptrendAveragePrice <= highestBid)
+			uptrendAveragePrice = lowestAsk;
+
+		let middleAveragePrice = averagePrice - this.randomValue(-0.3, 0.3) * spread;
+		if (middleAveragePrice >= lowestAsk || middleAveragePrice <= highestBid)
+			middleAveragePrice = averagePrice;
+
+		let liquidity = [];
+		liquidity.percent2 = {};
+		liquidity.percent2.lowPrice = averagePrice - averagePrice * 0.02;
+		liquidity.percent2.highPrice = averagePrice + averagePrice * 0.02;
+		liquidity.percent5 = {};
+		liquidity.percent5.lowPrice = averagePrice - averagePrice * 0.05;
+		liquidity.percent5.highPrice = averagePrice + averagePrice * 0.05;
+		liquidity.percent10 = {};
+		liquidity.percent10.lowPrice = averagePrice - averagePrice * 0.10;
+		liquidity.percent10.highPrice = averagePrice + averagePrice * 0.10;
+		liquidity.full = {};
+
+		for (const key in liquidity) {
+			liquidity[key].bidsCount = 0;
+			liquidity[key].amountBids = 0;
+			liquidity[key].amountBidsQuote = 0;
+			liquidity[key].asksCount = 0;
+			liquidity[key].amountAsks = 0;
+			liquidity[key].amountAsksQuote = 0;
+			liquidity[key].totalCount = 0;
+			liquidity[key].amountTotal = 0;
+			liquidity[key].amountTotalQuote = 0;
+		}
+
+		for (const bid of orderBook.bids) {
+			for (const key in liquidity) {
+				if (!liquidity[key].lowPrice || bid.price > liquidity[key].lowPrice) {
+					liquidity[key].bidsCount += 1;
+					liquidity[key].amountBids += bid.amount;
+					liquidity[key].amountBidsQuote += bid.amount * bid.price;
+					liquidity[key].totalCount += 1;
+					liquidity[key].amountTotal += bid.amount;
+					liquidity[key].amountTotalQuote += bid.amount * bid.price;
+				}
+			}
+		}
+
+		for (const ask of orderBook.asks) {
+			for (const key in liquidity) {
+				if (!liquidity[key].highPrice || ask.price < liquidity[key].highPrice) {
+					liquidity[key].asksCount += 1;
+					liquidity[key].amountAsks += ask.amount;
+					liquidity[key].amountAsksQuote += ask.amount * ask.price;
+					liquidity[key].totalCount += 1;
+					liquidity[key].amountTotal += ask.amount;
+					liquidity[key].amountTotalQuote += ask.amount * ask.price;
+				}
+			}
+		}
+
+		return {
+			highestBid,
+			lowestAsk,
+			spread,
+			spreadPercent,
+			averagePrice,
+			lowestOrderPrice,
+			highestOrderPrice,
+			liquidity,
+			downtrendAveragePrice,
+			uptrendAveragePrice,
+			middleAveragePrice
+		}
+	},
+	getOrdersStats(orders) { 
+
+		// order is an object of ordersDb
+		// type: type,
+		// price: price,
+		// coin1Amount: coin1Amount,
+		// coin2Amount: coin2Amount,
+				
+		let bidsTotalAmount = 0, asksTotalAmount = 0, 
+			bidsTotalQuoteAmount = 0, asksTotalQuoteAmount = 0, 
+			totalAmount = 0, totalQuoteAmount = 0,
+			asksCount = 0, bidsCount = 0, totalCount = 0;
+		for (const order of orders) {
+			if (order.type === 'buy') {
+				bidsTotalAmount += order.coin1Amount;
+				bidsTotalQuoteAmount += order.coin2Amount;
+				bidsCount += 1;
+			}
+			if (order.type === 'sell') {
+				asksTotalAmount += order.coin1Amount;
+				asksTotalQuoteAmount += order.coin2Amount;
+				asksCount += 1;
+			}
+			totalAmount += order.coin1Amount;
+			totalQuoteAmount += order.coin2Amount;
+			totalCount += 1;
+		}
+
+		return {
+			bidsTotalAmount, asksTotalAmount, 
+			bidsTotalQuoteAmount, asksTotalQuoteAmount, 
+			totalAmount, totalQuoteAmount,
+			asksCount, bidsCount, totalCount
+		}
 	},
 	ADM: adm_utils
 };
