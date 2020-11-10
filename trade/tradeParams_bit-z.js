@@ -5,6 +5,7 @@ module.exports = {
    "mm_isActive": false,
    "mm_minAmount": 1,
    "mm_maxAmount": 10,
+   "mm_Policy": "optimal",
    "mm_isOrderBookActive": true,
    "mm_orderBookHeight": 14,
    "mm_orderBookOrdersCount": 12,

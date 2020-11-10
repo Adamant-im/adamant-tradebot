@@ -46,7 +46,8 @@ module.exports = async (cmd, tx, itx) => {
 }
 
 function start(params) {
-	const type = (params[0] || '').trim();
+
+	const type = (params[0] || '').trim().toLowerCase();
 	if (!type || !type.length || !["mm"].includes(type)) {
         return {
             msgNotify: '',
@@ -54,46 +55,48 @@ function start(params) {
             notifyType: 'log'
 		} 
 	}
+
+	let policy = (params[1] || 'optimal').trim().toLowerCase();
+	if (!policy || !policy.length || !["optimal", "spread", "orderbook"].includes(policy)) {
+        return {
+            msgNotify: '',
+            msgSendBack: `Wrong market making policy. It should be _spread_, _orderbook_, or _optimal_. Example: */start mm spread*.`,
+            notifyType: 'log'
+		} 
+	}
+
 	if (type === "mm") {
-		if (!tradeParams.mm_isActive) {
 
-			tradeParams.mm_isActive = true;
+		tradeParams.mm_isActive = true;
+		tradeParams.mm_Policy = policy;
 
-			let optionsString = '';
-			let notesStringNotify = '';
-			let notesStringMsg = '';
+		let optionsString = '';
+		let notesStringNotify = '';
+		let notesStringMsg = '';
 
-			if (tradeParams.mm_isOrderBookActive) {
-				optionsString += ' & order book building';
-			} else {
-				notesStringNotify += ' Order book building is disabled.';
-				notesStringMsg += ' Order book building is disabled—type */enable ob* to enable.';
-			}
-
-			if (tradeParams.mm_isLiquidityActive) {
-				optionsString += ' & liquidity and spread maintenance';
-			} else {
-				notesStringNotify += ' Liquidity and spread maintenance is disabled.';
-				notesStringMsg += ' Liquidity and spread maintenance is disabled—type */enable liq* to enable.';
-			}
-	
-			msgNotify = `${config.notifyName} set to start market making${optionsString} for ${config.pair}.${notesStringNotify}`;
-			msgSendBack = `Starting market making${optionsString} for ${config.pair} pair.${notesStringMsg}`;
-
-			return {
-				msgNotify,
-				msgSendBack,
-				notifyType: 'log'
-			}
-
+		if (tradeParams.mm_isOrderBookActive) {
+			optionsString += ' & order book building';
 		} else {
-			tradeParams.mm_isActive = true;
-			return {
-				msgNotify: '',
-				msgSendBack: `Market making for ${config.pair} pair is active already.`,
-				notifyType: 'log'
-			}
+			notesStringNotify += ' Order book building is disabled.';
+			notesStringMsg += ' Order book building is disabled—type */enable ob* to enable.';
 		}
+
+		if (tradeParams.mm_isLiquidityActive) {
+			optionsString += ' & liquidity and spread maintenance';
+		} else {
+			notesStringNotify += ' Liquidity and spread maintenance is disabled.';
+			notesStringMsg += ' Liquidity and spread maintenance is disabled—type */enable liq* to enable.';
+		}
+
+		msgNotify = `${config.notifyName} set to start market making${optionsString} with ${policy} policy for ${config.pair}.${notesStringNotify}`;
+		msgSendBack = `Starting market making${optionsString} with ${policy} policy for ${config.pair} pair.${notesStringMsg}`;
+
+		return {
+			msgNotify,
+			msgSendBack,
+			notifyType: 'log'
+		}
+
 	}
 }
 

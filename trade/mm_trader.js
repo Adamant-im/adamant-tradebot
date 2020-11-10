@@ -214,7 +214,7 @@ async function setPrice(type, pair) {
         }
     }
 
-    let mmPolicy = 'optimal'; // optimal, spreadOnly, orderBookOnly
+    let mmPolicy = tradeParams.mm_Policy; // optimal, spread, orderbook
     let mmCurrentAction; // doNotExecute, executeInSpread, executeInOrderBook
 
     const spread = ask_high - bid_low;
@@ -222,14 +222,14 @@ async function setPrice(type, pair) {
 
     if (noSpread) {
 
-        if (mmPolicy === 'orderBookOnly' || (mmPolicy === 'optimal' && tradeParams.mm_isLiquidityActive)) {
+        if (mmPolicy === 'orderbook' || (mmPolicy === 'optimal' && tradeParams.mm_isLiquidityActive)) {
             mmCurrentAction = 'executeInOrderBook';            
         } else {
             mmCurrentAction = 'doNotExecute';
         }
     } else {
 
-        if (mmPolicy === 'spreadOnly') {
+        if (mmPolicy === 'spread') {
             mmCurrentAction = 'executeInSpread';            
         } else {
             mmCurrentAction = 'executeInOrderBook';
