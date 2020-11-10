@@ -82,7 +82,7 @@ module.exports = (apiKey, secretKey, pwd) => {
 
                             if (order.pair === pair_.pair)
                                 result.push({
-                                    orderid: order.id,
+                                    orderid: order.id.toString(),
                                     symbol: order.pair,
                                     price: order.rate,
                                     side: order.type, // Buy/Sell (0/1)
@@ -92,7 +92,7 @@ module.exports = (apiKey, secretKey, pwd) => {
                                     amountExecuted: order.volume_done,
                                     amountLeft: order.volume - order.volume_done,
                                     status: orderStatus,
-                                    uid: order.id,
+                                    uid: order.id.toString(),
                                     coin2Amount: order.price,
                                     coinFrom: pair_.coin1,
                                     coinTo: pair_.coin2
@@ -198,9 +198,9 @@ module.exports = (apiKey, secretKey, pwd) => {
 							// console.log(data);
 							let result = JSON.parse(data);
 							if (result.data && result.data.id) {
-								message = `Order placed to ${output} Order Id: ${result.data.id}.`; 
+								message = `Order placed to ${output} Order Id: ${result.data.id.toString()}.`; 
 								log.info(message);
-								order.orderid = result.data.id;
+								order.orderid = result.data.id.toString();
 								order.message = message;
                                 resolve(order);	
 							} else {
@@ -253,9 +253,9 @@ module.exports = (apiKey, secretKey, pwd) => {
 							// console.log(data);
 							let result = JSON.parse(data);
 							if (result.data && result.data.id) {
-								message = `Order placed to ${output} Order Id: ${result.data.id}.`; 
+								message = `Order placed to ${output} Order Id: ${result.data.id.toString()}.`; 
 								log.info(message);
-								order.orderid = result.data.id;
+								order.orderid = result.data.id.toString();
 								order.message = message;
 								resolve(order);	
 							} else {

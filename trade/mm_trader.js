@@ -161,7 +161,7 @@ async function isEnoughCoins(coin1, coin2, amount1, amount2) {
 
 async function setPrice(type, pair) {
 
-    const precision = Math.pow(10, -config.coin2Decimals).toFixed(config.coin2Decimals); // decimals
+    const precision = $u.getPrecision(config.coin2Decimals); // decimals
     const smallSpread = precision * 15; // if spread is small and should do market making less careful
     // console.log(precision, smallSpread);
 

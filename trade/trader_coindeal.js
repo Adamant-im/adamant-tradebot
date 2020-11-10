@@ -77,7 +77,7 @@ module.exports = (apiKey, secretKey, pwd) => {
 									break;
 							}
 							result.push({
-								orderid: order.id,
+								orderid: order.id.toString(),
 								symbol: order.symbol,
 								price: order.price,
 								side: order.side, // sell or buy
@@ -87,7 +87,7 @@ module.exports = (apiKey, secretKey, pwd) => {
 								amountExecuted: order.cumQuantity - order.quantity,
 								amountLeft: order.quantity,
 								status: orderStatus,
-								uid: order.clientOrderId,
+								uid: order.clientOrderId.toString(),
 								// coin2Amount: order.total,
 								coinFrom: order.baseCurrency,
 								coinTo: order.quoteCurrency
@@ -180,9 +180,9 @@ module.exports = (apiKey, secretKey, pwd) => {
 							// console.log(data);
 							let result = JSON.parse(data);
 							if (result && result.id) {
-								message = `Order placed to ${output} Order Id: ${result.id}.`; 
+								message = `Order placed to ${output} Order Id: ${result.id.toString()}.`; 
 								log.info(message);
-								order.orderid = result.id;
+								order.orderid = result.id.toString();
 								order.message = message;
                                 resolve(order);	
 							} else {

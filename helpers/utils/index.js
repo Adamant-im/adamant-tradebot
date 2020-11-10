@@ -275,5 +275,8 @@ module.exports = {
 			asksCount, bidsCount, totalCount
 		}
 	},
+	getPrecision(decimals) {
+		return +(Math.pow(10, -decimals).toFixed(decimals))
+	},
 	ADM: adm_utils
 };

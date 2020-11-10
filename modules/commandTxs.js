@@ -166,7 +166,7 @@ function enable(params) {
 	} else if (type === "liq") {
 
 		const spreadString = params[1];
-		console.log(spreadString);
+		// console.log(spreadString);
 
 		if (!spreadString || (spreadString.slice(-1) !== '%')) {
 			return {
@@ -176,7 +176,7 @@ function enable(params) {
 			}	
 		}
 		const spreadValue = +spreadString.slice(0, -1);
-		console.log(spreadValue);
+		// console.log(spreadValue);
 		if (!spreadValue || spreadValue === Infinity || spreadValue <= 0 || spreadValue > 80) {
 			return {
 				msgNotify: '',
@@ -187,7 +187,7 @@ function enable(params) {
 
 		const coin1 = params[3].toUpperCase();
 		const coin2 = params[5].toUpperCase();
-		console.log(coin1, coin2);
+		// console.log(coin1, coin2);
 
 		if (!coin1 || !coin2 || coin1 === coin2 || (![config.coin1, config.coin2].includes(coin1)) || (![config.coin1, config.coin2].includes(coin2))) {
 			return {
@@ -196,10 +196,10 @@ function enable(params) {
 				notifyType: 'log'
 			}
 		}
-		console.log(coin1, coin2, "good");
+		// console.log(coin1, coin2, "good");
 
 		const coin1Amount = +params[2];
-		console.log(coin1Amount);
+		// console.log(coin1Amount);
 
 		if (!coin1Amount || coin1Amount === Infinity || coin1Amount <= 0) {
 			return {
@@ -208,10 +208,10 @@ function enable(params) {
 				notifyType: 'log'
 			}
 		}
-		console.log(coin1Amount, "good");
+		// console.log(coin1Amount, "good");
 
 		const coin2Amount = +params[4];
-		console.log(coin2Amount);
+		// console.log(coin2Amount);
 
 		if (!coin2Amount || coin2Amount === Infinity || coin2Amount <= 0) {
 			return {
@@ -220,10 +220,10 @@ function enable(params) {
 				notifyType: 'log'
 			}
 		}
-		console.log(coin2Amount, "good");
+		// console.log(coin2Amount, "good");
 
 		let trend = params[6];
-		console.log(trend);
+		// console.log(trend);
 
 		if (!trend) {
 			trend = 'middle';
@@ -238,7 +238,7 @@ function enable(params) {
 				notifyType: 'log'
 			}
 		}
-		console.log(trend, "good");
+		// console.log(trend, "good");
 
 		if (coin1 === config.coin1) {
 			tradeParams.mm_liquiditySellAmount = coin1Amount;
@@ -247,7 +247,7 @@ function enable(params) {
 			tradeParams.mm_liquiditySellAmount = coin2Amount;
 			tradeParams.mm_liquidityBuyAmount = coin1Amount;
 		}
-		console.log(tradeParams.mm_liquiditySellAmount, tradeParams.mm_liquidityBuyAmount);
+		// console.log(tradeParams.mm_liquiditySellAmount, tradeParams.mm_liquidityBuyAmount);
 
 		tradeParams.mm_liquidityTrend = trend;
 		tradeParams.mm_liquiditySpreadPercent = spreadValue;
