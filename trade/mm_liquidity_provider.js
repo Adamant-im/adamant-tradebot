@@ -239,14 +239,14 @@ module.exports = {
 
             if (type === 'sell') {
                 if (coin1Amount > (tradeParams.mm_liquiditySellAmount - amountPlaced)) {
-                    console.log(`Exceeded liquidity amounts to ${type}. Pending: ${coin1Amount.toFixed(config.coin1Decimals)}, placed: ${amountPlaced.toFixed(config.coin1Decimals)}, limit: ${tradeParams.mm_liquiditySellAmount} ${config.coin1}.`);
+                    // console.log(`Exceeded liquidity amounts to ${type}. Pending: ${coin1Amount.toFixed(config.coin1Decimals)}, placed: ${amountPlaced.toFixed(config.coin1Decimals)}, limit: ${tradeParams.mm_liquiditySellAmount} ${config.coin1}.`);
                     return false;    
                 } 
             }
 
             if (type === 'buy') {
                 if (coin2Amount > (tradeParams.mm_liquidityBuyAmount - amountPlaced)) {
-                    console.log(`Exceeded liquidity amounts to ${type}. Pending: ${coin2Amount.toFixed(config.coin2Decimals)}, placed: ${amountPlaced.toFixed(config.coin2Decimals)}, limit: ${tradeParams.mm_liquidityBuyAmount} ${config.coin2}.`);
+                    // console.log(`Exceeded liquidity amounts to ${type}. Pending: ${coin2Amount.toFixed(config.coin2Decimals)}, placed: ${amountPlaced.toFixed(config.coin2Decimals)}, limit: ${tradeParams.mm_liquidityBuyAmount} ${config.coin2}.`);
                     return false;    
                 } 
             }

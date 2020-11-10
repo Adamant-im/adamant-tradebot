@@ -26,6 +26,7 @@ module.exports = {
         }
     },
 	async executeMmOrder() {
+
         const type = setType();
         const priceReq = await setPrice(type, config.pair);
         const price = priceReq.price;
@@ -44,12 +45,13 @@ module.exports = {
             return;
         }
 
-        orderParamsString = `type=${type}, pair=${config.pair}, price=${price}, coin1Amount=${coin1Amount}, coin2Amount=${coin2Amount}`;
+        orderParamsString = `type=${type}, pair=${config.pair}, price=${price}, mmCurrentAction=${priceReq.mmCurrentAction}, coin1Amount=${coin1Amount}, coin2Amount=${coin2Amount}`;
         if (!type || !price || !coin1Amount || !coin2Amount) {
             notify(`${config.notifyName} unable to run mm-order with params: ${orderParamsString}.`, 'warn');
             return;
         }
 
+        // console.log(orderParamsString);
         // console.log(type, price.toFixed(8), coin1Amount.toFixed(0), coin2Amount.toFixed(0));
 
         // Check balances
@@ -62,48 +64,84 @@ module.exports = {
             return;
         }
 
-        order1 = (await traderapi.placeOrder(crossType(type), config.pair, price, coin1Amount, 1, null, pairObj)).orderid;
-        if (order1) {
-            const {ordersDb} = db;
-            const order = new ordersDb({
-                _id: order1,
-                crossOrderId: null,
-                date: $u.unix(),
-                purpose: 'mm', // Market making
-                type: crossType(type),
-                targetType: type,
-                exchange: config.exchange,
-                pair: config.pair,
-                coin1: config.coin1,
-                coin2: config.coin2,
-                price: price,
-                coin1Amount: coin1Amount,
-                coin2Amount: coin2Amount,
-                LimitOrMarket: 1,  // 1 for limit price. 0 for Market price.
-                isProcessed: false,
-                isExecuted: false,
-                isCancelled: false
-            });
-            // await order.save();
-            order2 = (await traderapi.placeOrder(type, config.pair, price, coin1Amount, 1, null, pairObj)).orderid;
-            if (order2) {
-                output = `${type} ${coin1Amount.toFixed(config.coin1Decimals)} ${config.coin1} for ${coin2Amount.toFixed(config.coin2Decimals)} ${config.coin2}`;
-                log.info(`Successfully executed mm-order to ${output}.`);
-                order.update({
+        if (priceReq.mmCurrentAction === 'executeInSpread') {
+
+            order1 = (await traderapi.placeOrder(crossType(type), config.pair, price, coin1Amount, 1, null, pairObj)).orderid;
+            if (order1) {
+                const {ordersDb} = db;
+                const order = new ordersDb({
+                    _id: order1,
+                    crossOrderId: null,
+                    date: $u.unix(),
+                    purpose: 'mm', // Market making
+                    mmOrderAction: priceReq.mmCurrentAction,
+                    type: crossType(type),
+                    targetType: type,
+                    exchange: config.exchange,
+                    pair: config.pair,
+                    coin1: config.coin1,
+                    coin2: config.coin2,
+                    price: price,
+                    coin1Amount: coin1Amount,
+                    coin2Amount: coin2Amount,
+                    LimitOrMarket: 1,  // 1 for limit price. 0 for Market price.
+                    isProcessed: false,
+                    isExecuted: false,
+                    isCancelled: false
+                });
+                // await order.save();
+                order2 = (await traderapi.placeOrder(type, config.pair, price, coin1Amount, 1, null, pairObj)).orderid;
+                if (order2) {
+                    output = `${type} ${coin1Amount.toFixed(config.coin1Decimals)} ${config.coin1} for ${coin2Amount.toFixed(config.coin2Decimals)} ${config.coin2}`;
+                    log.info(`Successfully executed mm-order to ${output}. Action: executeInSpread.`);
+                    order.update({
+                        isProcessed: true,
+                        isExecuted: true,
+                        crossOrderId: order2
+                    });
+                    await order.save();
+                } else {
+                    await order.save();
+                    notify(`${config.notifyName} unable to execute cross-order for mm-order with params: id=${order1}, ${orderParamsString}. Action: executeInSpread. Check balances. Running order collector now.`, 'warn', config.silent_mode);
+                    orderCollector(['mm'], config.pair);
+                }         
+            } else { // if order1
+                console.warn(`${config.notifyName} unable to execute mm-order with params: ${orderParamsString}. Action: executeInSpread. No order id returned.`);
+            }
+        } else if (priceReq.mmCurrentAction === 'executeInOrderBook') {
+
+            order1 = (await traderapi.placeOrder(type, config.pair, price, coin1Amount, 1, null, pairObj)).orderid;
+            if (order1) {
+                const {ordersDb} = db;
+                const order = new ordersDb({
+                    _id: order1,
+                    crossOrderId: null,
+                    date: $u.unix(),
+                    purpose: 'mm', // Market making
+                    mmOrderAction: priceReq.mmCurrentAction,
+                    type: type,
+                    // targetType: type,
+                    exchange: config.exchange,
+                    pair: config.pair,
+                    coin1: config.coin1,
+                    coin2: config.coin2,
+                    price: price,
+                    coin1Amount: coin1Amount,
+                    coin2Amount: coin2Amount,
+                    LimitOrMarket: 1,  // 1 for limit price. 0 for Market price.
                     isProcessed: true,
                     isExecuted: true,
-                    crossOrderId: order2
+                    isCancelled: false
                 });
                 await order.save();
-            } else {
-                await order.save();
-                notify(`${config.notifyName} unable to execute cross-order for mm-order with params: id=${order1}, ${orderParamsString}. Check balances. Running order collector now.`, 'warn', config.silent_mode);
-                orderCollector(['mm'], config.pair);
-            }         
-        } else { // if order1
-            console.warn(`${config.notifyName} unable to execute mm-order with params: ${orderParamsString}. No order id returned.`);
-        }
 
+                output = `${type} ${coin1Amount.toFixed(config.coin1Decimals)} ${config.coin1} for ${coin2Amount.toFixed(config.coin2Decimals)} ${config.coin2}`;
+                log.info(`Successfully executed mm-order to ${output}. Action: executeInOrderBook.`);
+                      
+            } else { // if order1
+                console.warn(`${config.notifyName} unable to execute mm-order with params: ${orderParamsString}.  Action: executeInOrderBook. No order id returned.`);
+            }
+        }
 	},
 };
 
@@ -128,7 +166,6 @@ async function isEnoughCoins(coin1, coin2, amount1, amount2) {
 		try {
             balance1 = balances.filter(crypto => crypto.code === coin1)[0].free;
             balance2 = balances.filter(crypto => crypto.code === coin2)[0].free;
-
 
             if (!balance1 || balance1 < amount1) {
                 output = `${config.notifyName}: Not enough ${coin1} for placing market making order. Check balances.`;
@@ -161,19 +198,9 @@ async function isEnoughCoins(coin1, coin2, amount1, amount2) {
 
 async function setPrice(type, pair) {
 
-    const precision = $u.getPrecision(config.coin2Decimals); // decimals
+    const precision = $u.getPrecision(config.coin2Decimals);
     const smallSpread = precision * 15; // if spread is small and should do market making less careful
-    // console.log(precision, smallSpread);
-
     let output = '';
-    let isCareful = true;
-    if (tradeParams && (tradeParams.mm_isCareful != undefined)) {
-        isCareful = tradeParams.mm_isCareful;
-    }
-    let allowNoSpread = false;
-    if (tradeParams && (tradeParams.mm_allowNoSpread != undefined)) {
-        allowNoSpread = tradeParams.mm_allowNoSpread;
-    }
 
     let ask_high, bid_low;
     const exchangeRates = await traderapi.getRates(pair);
@@ -181,70 +208,99 @@ async function setPrice(type, pair) {
         bid_low = +exchangeRates.bid;
         ask_high = +exchangeRates.ask;
     } else {
-        log.warn(`Unable to get current rates for ${pair} to set a price.`);
+        log.warn(`Unable to get current rates for ${pair} to set a price. It may be a temporary API error.`);
         return {
             price: false,
         }
-
     }
+
+    let mmPolicy = 'optimal'; // optimal, spreadOnly, orderBookOnly
+    let mmCurrentAction; // doNotExecute, executeInSpread, executeInOrderBook
 
     const spread = ask_high - bid_low;
-    if (spread <= precision * 2) {
-        if (allowNoSpread) {
-            return type === 'buy'? bid_low : ask_high;
+    const noSpread = spread < precision * 2;
+
+    if (noSpread) {
+
+        if (mmPolicy === 'orderBookOnly' || (mmPolicy === 'optimal' && tradeParams.mm_isLiquidityActive)) {
+            mmCurrentAction = 'executeInOrderBook';            
         } else {
-            output = `${config.notifyName}: No spread currently, and mm_allowNoSpread is disabled. Unable to set a price for ${pair}.`;
-            return {
-                price: false,
-                message: output
-            }
+            mmCurrentAction = 'doNotExecute';
+        }
+    } else {
+
+        if (mmPolicy === 'spreadOnly') {
+            mmCurrentAction = 'executeInSpread';            
+        } else {
+            mmCurrentAction = 'executeInOrderBook';
+        }
+
+    }
+
+    // console.log('mmCurrentAction', mmCurrentAction);
+
+    if (mmCurrentAction === 'doNotExecute') {
+        output = `${config.notifyName}: No spread currently, and market making settings deny trading in the order book. Low: ${bid_low.toFixed(config.coin2Decimals)}, high: ${ask_high.toFixed(config.coin2Decimals)} ${config.coin2}. Unable to set a price for ${pair}. Update settings or create spread manually.`;
+        return {
+            price: false,
+            message: output
         }
     }
+
+    if (mmCurrentAction === 'executeInOrderBook') {
+        // output = `${config.notifyName}: No spread currently, and market making settings deny trading in the order book. Low: ${bid_low.toFixed(config.coin2Decimals)}, high: ${ask_high.toFixed(config.coin2Decimals)} ${config.coin2}. Unable to set a price for ${pair}. Update settings or create spread manually.`;
+        return {
+            price: type === 'sell'? bid_low : ask_high,
+            mmCurrentAction
+        }
+    }
+
+    if (mmCurrentAction === 'executeInSpread') {
+
+        let isCareful = true; // set price closer to bids & asks
+        if (tradeParams && (tradeParams.mm_isCareful != undefined)) {
+            isCareful = tradeParams.mm_isCareful;
+        }
     
-    let deltaPercent;
-    const interval = ask_high - bid_low;
-    // console.log(interval, smallSpread);
-    if (isCareful) {
-        if (interval > smallSpread) {
-            // 1-25% of spread
-            deltaPercent = Math.random() * (0.25 - 0.01) + 0.01;
+        let deltaPercent;
+        const interval = ask_high - bid_low;
+        // console.log(interval, smallSpread);
+        if (isCareful) {
+            if (interval > smallSpread) {
+                // 1-25% of spread
+                deltaPercent = $u.randomValue(0.01, 0.25);
+            } else {
+                // 5-35% of spread
+                deltaPercent = $u.randomValue(0.05, 0.35);
+            }
         } else {
-            // 5-35% of spread
-            deltaPercent = Math.random() * (0.35 - 0.05) + 0.05;
+            // 1-45% of spread
+            deltaPercent = $u.randomValue(0.01, 0.45);
         }
-    } else {
-        // 1-45% of spread
-        deltaPercent = Math.random() * (0.45 - 0.01) + 0.01;
-    }
 
-    // console.log('2:', bid_low.toFixed(8), ask_high.toFixed(8), interval.toFixed(8), deltaPercent.toFixed(2));
-    let price, from, to;
-    if (type === 'buy') {
-        // from = +bid_low;
-        // to = bid_low + interval*deltaPercent;
-        // price = Math.random() * (to - from) + +from;
-        price = bid_low + interval*deltaPercent;
-    } else {
-        // from = ask_high - interval*deltaPercent;
-        // to = +ask_high;
-        // price = Math.random() * (to - from) + +from;
-        price = ask_high - interval*deltaPercent;
-    }
+        // console.log('2:', bid_low.toFixed(8), ask_high.toFixed(8), interval.toFixed(8), deltaPercent.toFixed(2));
+        let price, from, to;
+        if (type === 'buy') {
+            price = bid_low + interval*deltaPercent;
+        } else {
+            price = ask_high - interval*deltaPercent;
+        }
 
-    const minPrice = +bid_low + +precision;
-    const maxPrice = ask_high - precision;
-    // price = 0.009618977658650832;
-    // console.log('low, high', bid_low, ask_high);
-    // console.log('min, max', minPrice, maxPrice);
-    // console.log('price1', price);
-    if (price >= maxPrice)
-        price = ask_high - precision;
-    if (price <= minPrice)
-        price = +bid_low + +precision;
-    // console.log('price2', price);
+        const minPrice = +bid_low + +precision;
+        const maxPrice = ask_high - precision;
+        // price = 0.009618977658650832;
+        // console.log('low, high', bid_low, ask_high);
+        // console.log('min, max', minPrice, maxPrice);
+        // console.log('price1', price);
+        if (price >= maxPrice)
+            price = ask_high - precision;
+        if (price <= minPrice)
+            price = +bid_low + +precision;
 
-    return {
-        price: price
+        return {
+            price,
+            mmCurrentAction
+        }
     }
 
 }
