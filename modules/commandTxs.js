@@ -1127,7 +1127,7 @@ async function orders(params) {
 		}
 	}
 
-	// console.log($u.getOrderBookInfo(await traderapi.getOrderBook(pair)));
+	// console.log($u.getOrderBookInfo(await traderapi.getOrderBook(pair), 30));
 
 
 	return {

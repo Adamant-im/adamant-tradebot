@@ -73,13 +73,13 @@ module.exports = (apiKey, secretKey, pwd) => {
 							result.push({
 								orderid: order.orderId.toString(),
 								symbol: order.pair,
-								price: order.price,
+								price: +order.price,
 								side: order.side, // SELL or BUY
 								type: order.type, // LIMIT or MARKET, etc.
 								timestamp: order.timestamp,
-								amount: order.amount,
-								amountExecuted: order.filled,
-								amountLeft: order.amount - order.filled,
+								amount: +order.amount,
+								amountExecuted: +order.filled,
+								amountLeft: +order.amount - +order.filled,
 								status: orderStatus, // OPEN, etc.
 								uid: order.orderId.toString(),
 								// coin2Amount: order.total,

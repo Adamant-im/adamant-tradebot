@@ -51,9 +51,10 @@ module.exports = {
                     traderapi.cancelOrder(order._id, order.type, order.pair);
                     order.update({
                         isProcessed: true,
-                        isClosed: true
+                        isClosed: true,
+                        isExpired: true
                     }, true);
-                    log.info(`Closing ob-order with params: id=${order._id}, type=${order.targetType}, pair=${order.pair}, price=${order.price}, coin1Amount=${order.coin1Amount}, coin2Amount=${order.coin2Amount}. Open ob-orders: ~${orderBookOrdersCount}.`);
+                    log.info(`Closing ob-order with params: id=${order._id}, type=${order.targetType}, pair=${order.pair}, price=${order.price}, coin1Amount=${order.coin1Amount}, coin2Amount=${order.coin2Amount}. It is expired. Open ob-orders: ~${orderBookOrdersCount}.`);
                 }
             } catch (e) {
                 log.error('Error in closeOrderBookOrders(): ' + e);

@@ -84,16 +84,16 @@ module.exports = (apiKey, secretKey, pwd) => {
                                 result.push({
                                     orderid: order.id.toString(),
                                     symbol: order.pair,
-                                    price: order.rate,
+                                    price: +order.rate,
                                     side: order.type, // Buy/Sell (0/1)
                                     type: order.type_trade, // Limit/Market (0/1)
                                     timestamp: order.time_create,
-                                    amount: order.volume,
-                                    amountExecuted: order.volume_done,
-                                    amountLeft: order.volume - order.volume_done,
+                                    amount: +order.volume,
+                                    amountExecuted: +order.volume_done,
+                                    amountLeft: +order.volume - +order.volume_done,
                                     status: orderStatus,
                                     uid: order.id.toString(),
-                                    coin2Amount: order.price,
+                                    coin2Amount: +order.price,
                                     coinFrom: pair_.coin1,
                                     coinTo: pair_.coin2
                                 });

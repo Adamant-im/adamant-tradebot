@@ -8,13 +8,14 @@ const db = require('../modules/DB');
 
 let lastNotifyBalancesTimestamp = 0;
 let lastNotifyPriceTimestamp = 0;
+let lastNotifyOrderBooksTimestamp = 0;
 const HOUR = 1000 * 60 * 60;
 const INTERVAL_MIN = 50000;
 const INTERVAL_MAX = 90000;
 // const INTERVAL_MIN = 20000;
 // const INTERVAL_MAX = 40000;
-const LIFETIME_MIN = HOUR;
-const LIFETIME_MAX = HOUR * 10;
+const LIFETIME_MIN = 1000 * 60 * 7; // 7 minutes
+const LIFETIME_MAX = HOUR * 7; // 7 hours
 const MAX_ORDERS = 6; // each side
 
 module.exports = {
@@ -43,26 +44,41 @@ module.exports = {
                 exchange: config.exchange
             });
 
-            console.log('liquidityOrders-0', liquidityOrders.length);
-            liquidityOrders = await this.closeLiquidityOrders(liquidityOrders); // close expired orders
-            console.log('liquidityOrders-1', liquidityOrders.length);
-            liquidityOrders = await this.updateLiquidityOrders(liquidityOrders); // update orders which partially filled
-            console.log('liquidityOrders-2', liquidityOrders.length);
-            // console.log('liquidityOrders-2', liquidityOrders);
+            let orderBookInfo = $u.getOrderBookInfo(await traderapi.getOrderBook(config.pair), tradeParams.mm_liquiditySpreadPercent);
+            if (!orderBookInfo) {
+                if (Date.now()-lastNotifyOrderBooksTimestamp > HOUR) {
+                    notify(`${config.notifyName}: Order books are empty for ${config.pair}, or temporary API error. Unable to get spread for ${pair} while placing liq-order.`, 'warn');
+                    lastNotifyOrderBooksTimestamp = Date.now();
+                }
+                return;
+            }
+            // console.log(orderBookInfo);
+
+            console.log('liquidityOrders-Untouched', liquidityOrders.length);
+            liquidityOrders = await this.updateLiquidityOrders(liquidityOrders); // update orders which partially filled or not found
+            console.log('liquidityOrders-AfterUpdate', liquidityOrders.length);
+            liquidityOrders = await this.closeLiquidityOrders(liquidityOrders, orderBookInfo); // close orders which expired or out of spread
+            console.log('liquidityOrders-AfterClose', liquidityOrders.length);
 
             let liquidityStats = $u.getOrdersStats(liquidityOrders);
             // console.log(liquidityStats);
 
             let amountPlaced;
             do {
-                amountPlaced = await this.placeLiquidityOrder(liquidityStats.bidsTotalQuoteAmount, 'buy');            
-                liquidityStats.bidsTotalQuoteAmount += amountPlaced;
-                liquidityStats.bidsCount += 1;
+                amountPlaced = await this.placeLiquidityOrder(liquidityStats.bidsTotalQuoteAmount, 'buy', orderBookInfo);            
+                if (amountPlaced) {
+                    liquidityStats.bidsTotalQuoteAmount += amountPlaced;
+                    liquidityStats.bidsCount += 1;
+                    // console.log(`New buy liq-order placed: ${amountPlaced}. Total sell liq-orders: ${liquidityStats.bidsTotalQuoteAmount}.`)
+                }
             } while (amountPlaced);
             do {
-                amountPlaced = await this.placeLiquidityOrder(liquidityStats.asksTotalAmount, 'sell');            
-                liquidityStats.asksTotalAmount += amountPlaced;
-                liquidityStats.asksCount += 1;
+                amountPlaced = await this.placeLiquidityOrder(liquidityStats.asksTotalAmount, 'sell', orderBookInfo);
+                if (amountPlaced) {
+                    liquidityStats.asksTotalAmount += amountPlaced;
+                    liquidityStats.asksCount += 1;
+                }
+                // console.log(`New sell liq-order placed: ${amountPlaced}. Total sell liq-orders: ${liquidityStats.asksTotalAmount}.`)
             } while (amountPlaced);
     
             log.info(`Liquidity stats: opened ${liquidityStats.bidsCount} bids-buy orders for ${liquidityStats.bidsTotalQuoteAmount.toFixed(config.coin2Decimals)} of ${tradeParams.mm_liquidityBuyAmount} ${config.coin2} and ${liquidityStats.asksCount} asks-sell orders with ${liquidityStats.asksTotalAmount.toFixed(config.coin1Decimals)} of ${tradeParams.mm_liquiditySellAmount} ${config.coin1}.`);
@@ -71,7 +87,7 @@ module.exports = {
             log.error('Error in updateLiquidity(): ' + e);
         }
     },
-	async closeLiquidityOrders(liquidityOrders) {
+	async closeLiquidityOrders(liquidityOrders, orderBookInfo) {
 
         let updatedLiquidityOrders = [];
         for (const order of liquidityOrders) {
@@ -80,9 +96,18 @@ module.exports = {
                     await traderapi.cancelOrder(order._id, order.type, order.pair);
                     await order.update({
                         isProcessed: true,
-                        isClosed: true
+                        isClosed: true,
+                        isExpired: true
                     }, true);
-                    log.info(`Closing liq-order with params: id=${order._id}, type=${order.targetType}, pair=${order.pair}, price=${order.price}, coin1Amount=${order.coin1Amount}, coin2Amount=${order.coin2Amount}.`);
+                    log.info(`Closing liq-order with params: id=${order._id}, type=${order.targetType}, pair=${order.pair}, price=${order.price}, coin1Amount=${order.coin1Amount}, coin2Amount=${order.coin2Amount}. It is expired.`);
+                } else if ($u.isOrderOutOfSpread(order, orderBookInfo)) {
+                    await traderapi.cancelOrder(order._id, order.type, order.pair);
+                    await order.update({
+                        isProcessed: true,
+                        isClosed: true,
+                        isOutOfSpread: true
+                    }, true);
+                    log.info(`Closing liq-order with params: id=${order._id}, type=${order.targetType}, pair=${order.pair}, price=${order.price}, coin1Amount=${order.coin1Amount}, coin2Amount=${order.coin2Amount}. It is out of spread.`);
                 } else {
                     updatedLiquidityOrders.push(order);
                 }
@@ -103,14 +128,16 @@ module.exports = {
                 // console.log('exchangeOrders:', exchangeOrders.length);
                 for (const dbOrder of liquidityOrders) {
 
-                    let isLifeOrder = true;
+                    let isLifeOrder = false;
+                    let isOrderFound = false;
                     for (const exchangeOrder of exchangeOrders) {
-
                         // console.log(dbOrder._id, exchangeOrder.orderid, exchangeOrder.status);
                         if (dbOrder._id === exchangeOrder.orderid) {
                             // console.log('match:', dbOrder._id, exchangeOrder.orderid, exchangeOrder.status);
+                            isOrderFound = true;
                             switch (exchangeOrder.status) {
                                 case "new":
+                                    isLifeOrder = true;
                                     break;
                                 case "closed":
                                     await dbOrder.update({
@@ -118,7 +145,7 @@ module.exports = {
                                         isClosed: true
                                     }, true);
                                     isLifeOrder = false;
-                                    log.info(`Updating liq-order with params: id=${dbOrder._id}, type=${dbOrder.targetType}, pair=${dbOrder.pair}, price=${dbOrder.price}, coin1Amount=${dbOrder.coin1Amount}, coin2Amount=${dbOrder.coin2Amount}: order is closed.`);
+                                    log.info(`Updating (closing) liq-order with params: id=${dbOrder._id}, type=${dbOrder.targetType}, pair=${dbOrder.pair}, price=${dbOrder.price}, coin1Amount=${dbOrder.coin1Amount}, coin2Amount=${dbOrder.coin2Amount}: order is closed.`);
                                     break;
                                 case "filled":
                                     await dbOrder.update({
@@ -126,19 +153,21 @@ module.exports = {
                                         isFilled: true
                                     }, true);
                                     isLifeOrder = false;
-                                    log.info(`Updating liq-order with params: id=${dbOrder._id}, type=${dbOrder.targetType}, pair=${dbOrder.pair}, price=${dbOrder.price}, coin1Amount=${dbOrder.coin1Amount}, coin2Amount=${dbOrder.coin2Amount}: order is filled.`);
+                                    log.info(`Updating (closing) liq-order with params: id=${dbOrder._id}, type=${dbOrder.targetType}, pair=${dbOrder.pair}, price=${dbOrder.price}, coin1Amount=${dbOrder.coin1Amount}, coin2Amount=${dbOrder.coin2Amount}: order is filled.`);
                                     break;
                                 case "part_filled":
+                                    isLifeOrder = true;
                                     if (dbOrder.coin1Amount > exchangeOrder.amountLeft) {
                                         let prev_amount = dbOrder.coin1Amount;
                                         await dbOrder.update({
                                             isFilled: true,
                                             coin1Amount: exchangeOrder.amountLeft
                                         }, true);
-                                        log.info(`Updating liq-order with params: id=${dbOrder._id}, type=${dbOrder.targetType}, pair=${dbOrder.pair}, price=${dbOrder.price}, coin1Amount=${prev_amount}, coin2Amount=${dbOrder.coin2Amount}: order is partly filled—amount left: ${dbOrder.coin1Amount}.`);
+                                        log.info(`Updating liq-order with params: id=${dbOrder._id}, type=${dbOrder.targetType}, pair=${dbOrder.pair}, price=${dbOrder.price}, coin1Amount=${prev_amount}, coin2Amount=${dbOrder.coin2Amount}: order is partly filled. Amount left: ${dbOrder.coin1Amount}.`);
                                     }
                                     break;										
                                 default:
+                                    isLifeOrder = true;
                                     break;
                             } // switch
 
@@ -146,14 +175,25 @@ module.exports = {
                         
                     } // for (const exchangeOrder of exchangeOrders)
 
-                    if (isLifeOrder)
+                    if (isOrderFound) {
+                        if (isLifeOrder)
                         updatedLiquidityOrders.push(dbOrder);
+                    } else {
+                        await traderapi.cancelOrder(dbOrder._id, dbOrder.type, dbOrder.pair);
+                        await dbOrder.update({
+                            isProcessed: true,
+                            isClosed: true,
+                            isNotFound: true
+                        }, true);
+                        log.info(`Updating (closing) liq-order with params: id=${dbOrder._id}, type=${dbOrder.targetType}, pair=${dbOrder.pair}, price=${dbOrder.price}, coin1Amount=${dbOrder.coin1Amount}, coin2Amount=${dbOrder.coin2Amount}: unable to find it in the exchangeOrders.`);
+                    }
 
                 } // for (const dbOrder of liquidityOrders)
 
             } else { // if exchangeOrders
 
-                updatedLiquidityOrders = liquidityOrders; // unable to get exchangeOrders, leave dbOrders as is
+                log.warn(`Unable to get exchangeOrders in updateLiquidityOrders(), leaving dbOrders as is.`);
+                updatedLiquidityOrders = liquidityOrders;
             }
 
         } catch (e) {
@@ -163,13 +203,13 @@ module.exports = {
         return updatedLiquidityOrders;
 
     },
-	async placeLiquidityOrder(amountPlaced, orderType) {
+	async placeLiquidityOrder(amountPlaced, orderType, orderBookInfo) {
 
         try {
 
             const type = orderType;
 
-            const priceReq = await setPrice(type);
+            const priceReq = await setPrice(type, orderBookInfo);
             const price = priceReq.price;
             if (!price) {
                 if ((Date.now()-lastNotifyPriceTimestamp > HOUR) && priceReq.message) {
@@ -244,12 +284,13 @@ module.exports = {
                     isCancelled: false,
                     isClosed: false
                 }, true);
+                
                 output = `${type} ${coin1Amount.toFixed(config.coin1Decimals)} ${config.coin1} for ${coin2Amount.toFixed(config.coin2Decimals)} ${config.coin2}`;
                 log.info(`Successfully placed liq-order to ${output}.`);
                 if (type === 'sell')
-                    return coin1Amount
+                    return +coin1Amount
                 else
-                    return coin2Amount;
+                    return +coin2Amount;
 
             } else {
                 console.warn(`${config.notifyName} unable to execute liq-order with params: ${orderParamsString}. No order id returned.`);
@@ -307,22 +348,12 @@ async function isEnoughCoins(coin1, coin2, amount1, amount2, type) {
     }
 }
 
-async function setPrice(type) {
+async function setPrice(type, orderBookInfo) {
 
     try {
 
         let output = '';
-
         let high, low;
-        let orderBookInfo = $u.getOrderBookInfo(await traderapi.getOrderBook(config.pair));
-
-        if (!orderBookInfo) {
-            output = `${config.notifyName}: Order books are empty for ${config.pair}, or temporary API error. Unable to get spread for ${pair} while placing liq-order.`;
-            return {
-                price: false,
-                message: output
-            }
-        }
 
         switch (tradeParams.mm_liquidityTrend) {
             case "downtrend":

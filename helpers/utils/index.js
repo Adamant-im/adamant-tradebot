@@ -150,15 +150,15 @@ module.exports = {
 		const max = number + number * deviation;
 		return Math.random() * (max - min) + min;
 	},
-	getOrderBookInfo(orderBook) {
+	getOrderBookInfo(orderBook, customSpreadPercent) {
 
 		if (!orderBook || !orderBook.asks[0] || !orderBook.bids[0])
 			return false;
 		
 		const highestBid = orderBook.bids[0].price;
 		const lowestAsk = orderBook.asks[0].price
-		const lowestOrderPrice = orderBook.bids[orderBook.bids.length-1].price;
-		const highestOrderPrice = orderBook.asks[orderBook.asks.length-1].price;
+		// const lowestOrderPrice = orderBook.bids[orderBook.bids.length-1].price;
+		// const highestOrderPrice = orderBook.asks[orderBook.asks.length-1].price;
 
 		const spread = lowestAsk - highestBid;
 		const averagePrice = (lowestAsk + highestBid) / 2;
@@ -178,15 +178,15 @@ module.exports = {
 
 		let liquidity = [];
 		liquidity.percent2 = {};
-		liquidity.percent2.lowPrice = averagePrice - averagePrice * 0.02;
-		liquidity.percent2.highPrice = averagePrice + averagePrice * 0.02;
+		liquidity.percent2.spreadPercent = 2;
 		liquidity.percent5 = {};
-		liquidity.percent5.lowPrice = averagePrice - averagePrice * 0.05;
-		liquidity.percent5.highPrice = averagePrice + averagePrice * 0.05;
+		liquidity.percent5.spreadPercent = 5;
 		liquidity.percent10 = {};
-		liquidity.percent10.lowPrice = averagePrice - averagePrice * 0.10;
-		liquidity.percent10.highPrice = averagePrice + averagePrice * 0.10;
+		liquidity.percent10.spreadPercent = 10;
+		liquidity.percentCustom = {};
+		liquidity.percentCustom.spreadPercent = customSpreadPercent;
 		liquidity.full = {};
+		liquidity.full.spreadPercent = 0;
 
 		for (const key in liquidity) {
 			liquidity[key].bidsCount = 0;
@@ -198,11 +198,15 @@ module.exports = {
 			liquidity[key].totalCount = 0;
 			liquidity[key].amountTotal = 0;
 			liquidity[key].amountTotalQuote = 0;
-		}
+			liquidity[key].lowPrice = averagePrice - averagePrice * liquidity[key].spreadPercent/100;
+			liquidity[key].highPrice = averagePrice + averagePrice * liquidity[key].spreadPercent/100;
+			liquidity[key].spread = averagePrice * liquidity[key].spreadPercent / 100;
+			// average price is the same for any spread
+			}
 
 		for (const bid of orderBook.bids) {
 			for (const key in liquidity) {
-				if (!liquidity[key].lowPrice || bid.price > liquidity[key].lowPrice) {
+				if (!liquidity[key].spreadPercent || bid.price > liquidity[key].lowPrice) {
 					liquidity[key].bidsCount += 1;
 					liquidity[key].amountBids += bid.amount;
 					liquidity[key].amountBidsQuote += bid.amount * bid.price;
@@ -215,7 +219,7 @@ module.exports = {
 
 		for (const ask of orderBook.asks) {
 			for (const key in liquidity) {
-				if (!liquidity[key].highPrice || ask.price < liquidity[key].highPrice) {
+				if (!liquidity[key].spreadPercent || ask.price < liquidity[key].highPrice) {
 					liquidity[key].asksCount += 1;
 					liquidity[key].amountAsks += ask.amount;
 					liquidity[key].amountAsksQuote += ask.amount * ask.price;
@@ -232,8 +236,8 @@ module.exports = {
 			spread,
 			spreadPercent,
 			averagePrice,
-			lowestOrderPrice,
-			highestOrderPrice,
+			// lowestOrderPrice,
+			// highestOrderPrice,
 			liquidity,
 			downtrendAveragePrice,
 			uptrendAveragePrice,
@@ -277,6 +281,21 @@ module.exports = {
 	},
 	getPrecision(decimals) {
 		return +(Math.pow(10, -decimals).toFixed(decimals))
+	},
+	isOrderOutOfSpread(order, orderBookInfo) {
+
+		// order is an object of ordersDb
+		// type: type,
+		// price: price,
+
+		const laxityPercent = 30;
+		let minPrice = orderBookInfo.liquidity.percentCustom.lowPrice - orderBookInfo.liquidity.percentCustom.spread * laxityPercent / 100;
+		let maxPrice = orderBookInfo.liquidity.percentCustom.highPrice + orderBookInfo.liquidity.percentCustom.spread * laxityPercent / 100;
+		// console.log('isOrderOutOfSpread:', order.price, orderBookInfo.liquidity.percentCustom.lowPrice, orderBookInfo.liquidity.percentCustom.highPrice);
+		// console.log('isOrderOutOfSpread with laxity:', order.price, minPrice, maxPrice);
+
+		return (order.price < minPrice) || (order.price > maxPrice);
+
 	},
 	ADM: adm_utils
 };
