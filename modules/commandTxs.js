@@ -256,6 +256,8 @@ function enable(params) {
 		tradeParams.mm_liquiditySpreadPercent = spreadValue;
 		tradeParams.mm_isLiquidityActive = true;
 		
+		if (trend === 'middle')
+			trend = 'middle trend';
 		infoString = `with ${tradeParams.mm_liquiditySellAmount} ${config.coin1} asks (sell) and ${tradeParams.mm_liquidityBuyAmount} ${config.coin2} bids (buy) within ${spreadValue}% spread & ${trend}`;
 		optionsString = `Liquidity and spread maintenance`;
 

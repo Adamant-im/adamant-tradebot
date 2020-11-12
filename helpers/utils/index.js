@@ -297,5 +297,14 @@ module.exports = {
 		return (order.price < minPrice) || (order.price > maxPrice);
 
 	},
+	getModuleName(id) {
+		let n = id.lastIndexOf("\\");
+		if (n === -1)
+			n = id.lastIndexOf("/");
+		if (n === -1)
+			return ''
+		else
+			return id.substring(n + 1);
+	},
 	ADM: adm_utils
 };

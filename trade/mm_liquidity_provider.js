@@ -84,7 +84,7 @@ module.exports = {
             log.info(`Liquidity stats: opened ${liquidityStats.bidsCount} bids-buy orders for ${liquidityStats.bidsTotalQuoteAmount.toFixed(config.coin2Decimals)} of ${tradeParams.mm_liquidityBuyAmount} ${config.coin2} and ${liquidityStats.asksCount} asks-sell orders with ${liquidityStats.asksTotalAmount.toFixed(config.coin1Decimals)} of ${tradeParams.mm_liquiditySellAmount} ${config.coin1}.`);
 
         } catch (e) {
-            log.error('Error in updateLiquidity(): ' + e);
+            log.error(`Error in updateLiquidity() of ${$u.getModuleName(module.id)} module: ` + e);
         }
     },
 	async closeLiquidityOrders(liquidityOrders, orderBookInfo) {
@@ -112,7 +112,7 @@ module.exports = {
                     updatedLiquidityOrders.push(order);
                 }
             } catch (e) {
-                log.error('Error in closeLiquidityOrders(): ' + e);
+                log.error(`Error in closeLiquidityOrders() of ${$u.getModuleName(module.id)} module: ` + e);
             }
         }
         return updatedLiquidityOrders;
@@ -197,7 +197,7 @@ module.exports = {
             }
 
         } catch (e) {
-            log.error('Error in updateLiquidityOrders(): ' + e);
+            log.error(`Error in updateLiquidityOrders() of ${$u.getModuleName(module.id)} module: ` + e);
         }
         
         return updatedLiquidityOrders;
@@ -298,7 +298,7 @@ module.exports = {
             }
 
         } catch (e) {
-            log.error('Error in placeLiquidityOrder(): ' + e);
+            log.error(`Error in placeLiquidityOrder() of ${$u.getModuleName(module.id)} module: ` + e);
         }
 
     },
@@ -306,25 +306,26 @@ module.exports = {
 };
 
 async function isEnoughCoins(coin1, coin2, amount1, amount2, type) {
+
 	const balances = await traderapi.getBalances(false);
-    let balance1, balance2;
+    let balance1free, balance2free;
     let balance1freezed, balance2freezed;
     let isBalanceEnough = true;
     let output = '';
 
     if (balances) {
 		try {
-            balance1 = balances.filter(crypto => crypto.code === coin1)[0].free;
-            balance2 = balances.filter(crypto => crypto.code === coin2)[0].free;
+            balance1free = balances.filter(crypto => crypto.code === coin1)[0].free;
+            balance2free = balances.filter(crypto => crypto.code === coin2)[0].free;
             balance1freezed = balances.filter(crypto => crypto.code === coin1)[0].freezed;
             balance2freezed = balances.filter(crypto => crypto.code === coin2)[0].freezed;
 
-            if ((!balance1 || balance1 < amount1) && type === 'sell') {
-                output = `${config.notifyName}: Not enough balance to place ${amount1.toFixed(config.coin1Decimals)} ${coin1} ${type} liq-order. Free: ${balance1.toFixed(config.coin1Decimals)} ${coin1}, freezed: ${balance1.toFixed(config.coin1Decimals)} ${coin1}.`;
+            if ((!balance1free || balance1free < amount1) && type === 'sell') {
+                output = `${config.notifyName}: Not enough balance to place ${amount1.toFixed(config.coin1Decimals)} ${coin1} ${type} liq-order. Free: ${balance1free.toFixed(config.coin1Decimals)} ${coin1}, freezed: ${balance1freezed.toFixed(config.coin1Decimals)} ${coin1}.`;
                 isBalanceEnough = false;
             }
-            if ((!balance2 || balance2 < amount2) && type === 'buy') {
-                output = `${config.notifyName}: Not enough balance to place ${amount2.toFixed(config.coin2Decimals)} ${coin2} ${type} liq-order. Free: ${balance2.toFixed(config.coin2Decimals)} ${coin2}, freezed: ${balance2.toFixed(config.coin2Decimals)} ${coin2}.`;
+            if ((!balance2free || balance2free < amount2) && type === 'buy') {
+                output = `${config.notifyName}: Not enough balance to place ${amount2.toFixed(config.coin2Decimals)} ${coin2} ${type} liq-order. Free: ${balance2free.toFixed(config.coin2Decimals)} ${coin2}, freezed: ${balance2freezed.toFixed(config.coin2Decimals)} ${coin2}.`;
                 isBalanceEnough = false;
             }
 
@@ -396,7 +397,7 @@ async function setPrice(type, orderBookInfo) {
         }
     
     } catch (e) {
-        log.error('Error in setPrice(): ' + e);
+        log.error(`Error in setPrice() of ${$u.getModuleName(module.id)} module: ` + e);
     }
 
 }
