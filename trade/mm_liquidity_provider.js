@@ -10,10 +10,8 @@ let lastNotifyBalancesTimestamp = 0;
 let lastNotifyPriceTimestamp = 0;
 let lastNotifyOrderBooksTimestamp = 0;
 const HOUR = 1000 * 60 * 60;
-const INTERVAL_MIN = 50000;
+const INTERVAL_MIN = 30000;
 const INTERVAL_MAX = 90000;
-// const INTERVAL_MIN = 20000;
-// const INTERVAL_MAX = 40000;
 const LIFETIME_MIN = 1000 * 60 * 7; // 7 minutes
 const LIFETIME_MAX = HOUR * 7; // 7 hours
 const MAX_ORDERS = 6; // each side
@@ -329,14 +327,13 @@ async function isEnoughCoins(coin1, coin2, amount1, amount2, type) {
                 isBalanceEnough = false;
             }
 
-            // console.log(balance1.toFixed(0), amount1.toFixed(0), balance2.toFixed(8), amount2.toFixed(8));
             return {
                 result: isBalanceEnough,
                 message: output
             }
 
 		} catch (e) {
-            log.warn(`Unable to process balances for placing liq-order.`);
+            log.warn(`Unable to process balances for placing liq-order: ` + e);
             return {
                 result: false
             }

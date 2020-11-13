@@ -182,7 +182,7 @@ async function isEnoughCoins(coin1, coin2, amount1, amount2, type) {
             }
 
 		} catch (e) {
-            log.warn(`Unable to process balances for placing ob-order.`);
+            log.warn(`Unable to process balances for placing ob-order: ` + e);
             return {
                 result: false
             }

@@ -229,7 +229,7 @@ async function isEnoughCoins(coin1, coin2, amount1, amount2, type, mmCurrentActi
             }
 
 		} catch (e) {
-            log.warn(`Unable to process balances for placing mm-order.`);
+            log.warn(`Unable to process balances for placing mm-order: ` + e);
             return {
                 result: false
             }
@@ -303,18 +303,22 @@ async function setPrice(type, pair, coin1Amount) {
 
         if (mmCurrentAction === 'executeInOrderBook') {
 
-            let obAmount, firstOrderAmount;
+            let amountInSpread, amountInConfig, amountMaxAllowed, firstOrderAmount;
             // fill not more, than liquidity amount * allowedAmountKoef
             let allowedAmountKoef = tradeParams.mm_isLiquidityActive ? 0.9 : 0.5;
 
             if (type === 'sell') {
 
-                obAmount = orderBookInfo.liquidity.percentCustom.amountBids * allowedAmountKoef;
-                console.log(`Selling; coin1Amount: ${coin1Amount}, obAmount: ${obAmount}, in order book: ${orderBookInfo.liquidity.percentCustom.amountBids}.`)
-                if (obAmount) {
+                amountInSpread = orderBookInfo.liquidity.percentCustom.amountBids;
+                amountInConfig = tradeParams.mm_isLiquidityBuyAmount / bid_low;
+                amountMaxAllowed = amountInSpread > amountInConfig ? amountInConfig : amountInSpread;
+                amountMaxAllowed *= allowedAmountKoef;
+
+                console.log(`Selling; coin1Amount: ${coin1Amount}, amountInSpread: ${amountInSpread}, amountInConfig: ${amountInConfig}, amountMaxAllowed: ${amountMaxAllowed}.`)
+                if (amountMaxAllowed) {
                     price = orderBookInfo.liquidity.percentCustom.lowPrice;
-                    if (coin1Amount > obAmount) {
-                        coin1Amount = obAmount;
+                    if (coin1Amount > amountMaxAllowed) {
+                        coin1Amount = amountMaxAllowed;
                     } else {
                         coin1Amount = coin1Amount;
                     }
@@ -332,12 +336,16 @@ async function setPrice(type, pair, coin1Amount) {
 
             if (type === 'buy') {
 
-                obAmount = orderBookInfo.liquidity.percentCustom.amountAsks * allowedAmountKoef;
-                console.log(`Buying; coin1Amount: ${coin1Amount}, obAmount: ${obAmount}, in order book: ${orderBookInfo.liquidity.percentCustom.amountAsks}.`)
-                if (obAmount) {
+                amountInSpread = orderBookInfo.liquidity.percentCustom.amountAsks;
+                amountInConfig = tradeParams.mm_isLiquiditySellAmount;
+                amountMaxAllowed = amountInSpread > amountInConfig ? amountInConfig : amountInSpread;
+                amountMaxAllowed *= allowedAmountKoef;
+
+                console.log(`Buying; coin1Amount: ${coin1Amount}, amountInSpread: ${amountInSpread}, amountInConfig: ${amountInConfig}, amountMaxAllowed: ${amountMaxAllowed}.`)
+                if (amountMaxAllowed) {
                     price = orderBookInfo.liquidity.percentCustom.highPrice;
-                    if (coin1Amount > obAmount) {
-                        coin1Amount = obAmount;
+                    if (coin1Amount > amountMaxAllowed) {
+                        coin1Amount = amountMaxAllowed;
                     } else {
                         coin1Amount = coin1Amount;
                     }
