@@ -52,6 +52,8 @@ module.exports = (apiKey, secretKey, pwd) => {
 							openOrders = [];
 
 						let result = [];
+
+						// this doesn't work as Resfinex don't update orders' statuses
 						openOrders.forEach(order => {
 							let orderStatus;
 							switch (order.status) {
@@ -70,6 +72,13 @@ module.exports = (apiKey, secretKey, pwd) => {
 								default:
 									break;
 							}
+
+							// so we need to update orders' statuses our own way
+							if (order.amount === order.filled)
+								orderStatus = "filled"
+							else if (order.filled > 0)
+								orderStatus = "part_filled";
+
 							result.push({
 								orderid: order.orderId.toString(),
 								symbol: order.pair,

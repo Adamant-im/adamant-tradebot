@@ -131,7 +131,10 @@ module.exports = {
                     for (const exchangeOrder of exchangeOrders) {
                         // console.log(dbOrder._id, exchangeOrder.orderid, exchangeOrder.status);
                         if (dbOrder._id === exchangeOrder.orderid) {
+                            // console.log('========');
                             // console.log('match:', dbOrder._id, exchangeOrder.orderid, exchangeOrder.status);
+                            // console.log(exchangeOrder);
+                            // console.log('========');
                             isOrderFound = true;
                             switch (exchangeOrder.status) {
                                 case "new":
