@@ -310,7 +310,7 @@ async function setPrice(type, pair, coin1Amount) {
             if (type === 'sell') {
 
                 amountInSpread = orderBookInfo.liquidity.percentCustom.amountBids;
-                amountInConfig = tradeParams.mm_isLiquidityBuyAmount / bid_low;
+                amountInConfig = tradeParams.mm_liquidityBuyAmount / bid_low;
                 amountMaxAllowed = amountInSpread > amountInConfig ? amountInConfig : amountInSpread;
                 amountMaxAllowed *= allowedAmountKoef;
 
@@ -337,7 +337,7 @@ async function setPrice(type, pair, coin1Amount) {
             if (type === 'buy') {
 
                 amountInSpread = orderBookInfo.liquidity.percentCustom.amountAsks;
-                amountInConfig = tradeParams.mm_isLiquiditySellAmount;
+                amountInConfig = tradeParams.mm_liquiditySellAmount;
                 amountMaxAllowed = amountInSpread > amountInConfig ? amountInConfig : amountInSpread;
                 amountMaxAllowed *= allowedAmountKoef;
 
