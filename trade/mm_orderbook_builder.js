@@ -113,7 +113,7 @@ module.exports = {
                     dateTill: $u.unix() + lifeTime,
                     purpose: 'ob', // ob: dynamic order book order
                     type: type,
-                    targetType: type,
+                    // targetType: type,
                     exchange: config.exchange,
                     pair: config.pair,
                     coin1: config.coin1,

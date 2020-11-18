@@ -271,7 +271,7 @@ module.exports = {
                     dateTill: $u.unix() + lifeTime,
                     purpose: 'liq', // liq: liquidity & spread
                     type: type,
-                    targetType: type,
+                    // targetType: type,
                     exchange: config.exchange,
                     pair: config.pair,
                     coin1: config.coin1,
