@@ -150,15 +150,24 @@ module.exports = {
 		const max = number + number * deviation;
 		return Math.random() * (max - min) + min;
 	},
-	getOrderBookInfo(orderBook, customSpreadPercent) {
+	getOrderBookInfo(orderBook, customSpreadPercent, targetPrice) {
 
 		if (!orderBook || !orderBook.asks[0] || !orderBook.bids[0])
 			return false;
 		
 		const highestBid = orderBook.bids[0].price;
 		const lowestAsk = orderBook.asks[0].price
-		// const lowestOrderPrice = orderBook.bids[orderBook.bids.length-1].price;
-		// const highestOrderPrice = orderBook.asks[orderBook.asks.length-1].price;
+
+		let typeTargetPrice, amountTargetPrice = 0, targetPriceOrdersCount = 0, amountTargetPriceQuote = 0;
+		if (targetPrice) {
+			if (targetPrice > highestBid && targetPrice < lowestAsk) {
+				typeTargetPrice = 'inSpread';
+			} else if (targetPrice < highestBid) {
+				typeTargetPrice = 'sell';
+			} else if (targetPrice > lowestAsk) {
+				typeTargetPrice = 'buy';
+			}
+		}
 
 		const spread = lowestAsk - highestBid;
 		const averagePrice = (lowestAsk + highestBid) / 2;
@@ -215,6 +224,11 @@ module.exports = {
 					liquidity[key].amountTotalQuote += bid.amount * bid.price;
 				}
 			}
+			if (typeTargetPrice === 'sell' && bid.price >= targetPrice) {
+				amountTargetPrice += bid.amount;
+				amountTargetPriceQuote += bid.amount * bid.price;
+				targetPriceOrdersCount += 1;
+			}
 		}
 
 		for (const ask of orderBook.asks) {
@@ -228,6 +242,11 @@ module.exports = {
 					liquidity[key].amountTotalQuote += ask.amount * ask.price;
 				}
 			}
+			if (typeTargetPrice === 'buy' && ask.price <= targetPrice) {
+				amountTargetPrice += ask.amount;
+				amountTargetPriceQuote += ask.amount * ask.price;
+				targetPriceOrdersCount += 1;
+			}
 		}
 
 		return {
@@ -236,12 +255,14 @@ module.exports = {
 			spread,
 			spreadPercent,
 			averagePrice,
-			// lowestOrderPrice,
-			// highestOrderPrice,
 			liquidity,
 			downtrendAveragePrice,
 			uptrendAveragePrice,
-			middleAveragePrice
+			middleAveragePrice,
+			typeTargetPrice,
+			amountTargetPrice,
+			amountTargetPriceQuote,
+			targetPriceOrdersCount
 		}
 	},
 	getOrdersStats(orders) { 

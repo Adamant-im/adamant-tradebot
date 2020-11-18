@@ -9,9 +9,15 @@ const traderapi = require('../trade/trader_' + config.exchange)(config.apikey, c
 const orderCollector = require('../trade/orderCollector');
 const getStats = require('../trade/orderStats');
 
+const timeToConfirm = 1000 * 60 * 10; // 10 minutes to confirm
+let pendingConfirmation = {
+	command: '',
+	timestamp: 0
+}
+
 module.exports = async (cmd, tx, itx) => {
 
-	if (itx.isProcessed) return;
+	if (itx && itx.isProcessed) return;
 	log.info('Got new command Tx to process: ' + cmd);
 	try {
 		let res = [];
@@ -32,7 +38,7 @@ module.exports = async (cmd, tx, itx) => {
 			return res.msgSendBack;
 		}
 		if (tx) {
-            itx.update({isProcessed: true}, true);
+            if (itx) itx.update({isProcessed: true}, true);
             if (res.msgNotify)
                 notify(res.msgNotify, res.notifyType);
             if (res.msgSendBack)
@@ -43,6 +49,36 @@ module.exports = async (cmd, tx, itx) => {
 		tx = tx || {};
 		log.error('Error while processing command ' + cmd + ' from senderId ' + tx.senderId + '. Tx Id: ' + tx.id + '. Error: ' + e);
 	}
+}
+
+function y(params, tx) {
+	try {
+		if (pendingConfirmation.command) {
+			if (Date.now() - pendingConfirmation.timestamp > timeToConfirm) {
+				return {
+					msgNotify: '',
+					msgSendBack: `I will not confirm command ${pendingConfirmation.command} as it is expired. Try again.`,
+					notifyType: 'log'
+				}
+			} else {
+				module.exports(`${pendingConfirmation.command} -y`, tx);
+				return {
+					msgNotify: '',
+					msgSendBack: '',
+					notifyType: 'log'
+				}
+			}
+		} else {
+			return {
+				msgNotify: '',
+				msgSendBack: `There is no pending command to confirm.`,
+				notifyType: 'log'
+			}
+		}
+	} catch (e) {
+		log.error(`Error in y()-confirmation of ${$u.getModuleName(module.id)} module: ` + e);
+	}
+	pendingConfirmation.command = '';
 }
 
 function start(params) {
@@ -432,7 +468,7 @@ async function clear(params) {
 	params.forEach(param => {
 
 		if (['all'].includes(param)) {
-			// purposes = ['mm', 'tb', 'ob', 'liq'];
+			// purposes = ['mm', 'tb', 'ob', 'liq', 'pw'];
 			purposes = 'all';
 		}
 		if (['tb'].includes(param)) {
@@ -446,6 +482,10 @@ async function clear(params) {
 		if (['liq'].includes(param)) {
 			purposes = ['liq'];
 			purposeString = `liquidity`;
+		}
+		if (['pw'].includes(param)) {
+			purposes = ['pw'];
+			purposeString = `price watcher`;
 		}
 	});
 	if (!purposes) {
@@ -935,7 +975,11 @@ async function rates(params) {
 
 	let output = '';
 
-	const pairObj = $u.getPairObj(params[0], true);
+	// if coin1 only, treat it as pair set in config
+	if (params[0].toUpperCase().trim() === config.coin1)
+		params[0] = config.pair;
+
+	const pairObj = $u.getPairObj(params[0], false);
 	const pair = pairObj.pair;
 	const coin1 = pairObj.coin1;
 	const coin2 = pairObj.coin2;
@@ -962,7 +1006,7 @@ async function rates(params) {
 
 	if (!res.length) {
 		if (!pair) {
-			output = `I can’t get rates for *${coin1}*. Made a typo? Try */rates ADM*.`;
+			output = `I can’t get rates for *${coin1} from Infoservice*. Try */rates ADM*.`;
 			return {
 				msgNotify: ``,
 				msgSendBack: `${output}`,
@@ -979,8 +1023,7 @@ ${res}.`;
 		if (output)
 			output += "\n\n";
 		if (exchangeRates) {
-			output += `${config.exchangeName} rates for ${pair} pair:
-Ask: ${exchangeRates.ask.toFixed(coin2Decimals)}, bid: ${exchangeRates.bid.toFixed(coin2Decimals)}.`;
+			output += `${config.exchangeName} rates for ${pair} pair:\nBid: ${exchangeRates.bid.toFixed(coin2Decimals)}, ask: ${exchangeRates.ask.toFixed(coin2Decimals)}.`;
 		} else {
 			output += `Unable to get ${config.exchangeName} rates for ${pair}.`;
 		}
@@ -1057,9 +1100,9 @@ async function stats(params) {
 			if (exchangeRates.volume_Coin2) {
 				volume_Coin2 = ` & ${$u.thousandSeparator(+exchangeRates.volume_Coin2.toFixed(coin2Decimals), true)} ${coin2}`;
 			}
-			output += `${config.exchangeName} 24h stats for ${pair} pair:
-Vol: ${$u.thousandSeparator(+exchangeRates.volume.toFixed(coin1Decimals), true)} ${coin1}${volume_Coin2}. High: ${exchangeRates.high.toFixed(coin2Decimals)}, low: ${exchangeRates.low.toFixed(coin2Decimals)}, delta: _${(exchangeRates.high-exchangeRates.low).toFixed(coin2Decimals)}_ ${coin2}.
-Ask: ${exchangeRates.ask.toFixed(coin2Decimals)}, bid: ${exchangeRates.bid.toFixed(coin2Decimals)}, spread: _${(exchangeRates.ask-exchangeRates.bid).toFixed(coin2Decimals)}_ ${coin2}.`;
+			output += `${config.exchangeName} 24h stats for ${pair} pair:`;
+			output += `\nVol: ${$u.thousandSeparator(+exchangeRates.volume.toFixed(coin1Decimals), true)} ${coin1}${volume_Coin2}. High: ${exchangeRates.high.toFixed(coin2Decimals)}, low: ${exchangeRates.low.toFixed(coin2Decimals)}, delta: _${(exchangeRates.high-exchangeRates.low).toFixed(coin2Decimals)}_ ${coin2}.`;
+			output += `\nBid: ${exchangeRates.bid.toFixed(coin2Decimals)}, ask: ${exchangeRates.ask.toFixed(coin2Decimals)}, spread: _${(exchangeRates.ask-exchangeRates.bid).toFixed(coin2Decimals)}_ ${coin2}.`;
 		} else {
 			output += `Unable to get ${config.exchangeName} stats for ${pair}.`;
 		}
@@ -1143,6 +1186,146 @@ async function orders(params) {
 
 }
 
+async function make(params, tx, confirmation) {
+
+	// make price 1.1 — buy/sell to achieve target price of 1.1 COIN2
+
+	try {
+
+		const param = (params[0] || '').trim();
+		if (!param || !param.length || !["price"].includes(param)) {
+			return {
+				msgNotify: '',
+				msgSendBack: `Indicate option: _price_ to buy/sell to achieve target price. Example: */make price 1.1*.`,
+				notifyType: 'log'
+			} 
+		}
+
+		let msgNotify, msgSendBack, actionString, priceString;
+
+		if (param === "price") {
+
+			let priceInfoString = '';
+
+			const pairObj = $u.getPairObj(config.pair, false);
+			const pair = pairObj.pair;
+			const coin1 = pairObj.coin1;
+			const coin2 = pairObj.coin2;
+			const coin1Decimals =  pairObj.coin1Decimals;
+			const coin2Decimals =  pairObj.coin2Decimals;
+
+			const currencies = Store.currencies;
+			const res = Object
+				.keys(Store.currencies)
+				.filter(t => t.startsWith(coin1 + '/'))
+				.map(t => {
+					let p = `${coin1}/**${t.replace(coin1 + '/', '')}**`;
+					return `${p}: ${currencies[t]}`;
+				})
+				.join(', ');
+
+			if (!res.length) {
+				if (!pair) {
+					priceInfoString = `I can’t get rates for *${coin1} from Infoservice*.`;
+				}
+			} else {
+				priceInfoString = `Global market rates for ${coin1}:\n${res}.`;
+			}
+
+			const exchangeRatesBefore = await traderapi.getRates(pair);
+			if (priceInfoString)
+				priceInfoString += "\n\n";
+			if (exchangeRatesBefore) {
+				priceInfoString += `${config.exchangeName} rates for ${pair} pair:\nBid: ${exchangeRatesBefore.bid.toFixed(coin2Decimals)}, ask: ${exchangeRatesBefore.ask.toFixed(coin2Decimals)}, .`;
+			} else {
+				priceInfoString += `Unable to get ${config.exchangeName} rates for ${pair}.`;
+			}
+
+			let targetPrice = +params[1];
+			if (!targetPrice || targetPrice === Infinity || targetPrice <= 0) {
+				return {
+					msgNotify: '',
+					msgSendBack: `Incorrect ${config.coin2} target price: ${targetPrice}. Example: */make price 1.1*.\n\n${priceInfoString}`,
+					notifyType: 'log'
+				}
+			}
+
+			isConfirmed = params[2];
+			if (isConfirmed && (['-y', '-Y'].includes(isConfirmed))) {
+				confirmation = true;
+			} else {
+				confirmation = false;
+			}
+
+			// get amount from orderBook to but or sell
+
+			/* reliabilityKoef: we must be sure that we'll fill all orders in the order book,
+			   and users/bot can add more orders while filling these orders
+			   Moreover, we should place counter-order to set new spread
+			*/
+			const reliabilityKoef = $u.randomValue(1.05, 1.1);
+			let orderBookInfo = $u.getOrderBookInfo(await traderapi.getOrderBook(config.pair), tradeParams.mm_liquiditySpreadPercent, targetPrice);
+			orderBookInfo.amountTargetPrice *= reliabilityKoef;
+			orderBookInfo.amountTargetPriceQuote *= reliabilityKoef;
+
+			priceString = `${config.pair} price of ${targetPrice} ${config.coin2}`;
+			if (orderBookInfo.typeTargetPrice === 'inSpread') {
+				return {
+					msgNotify: '',
+					msgSendBack: `${priceString} is already in spread. **No action needed**.\n\n${priceInfoString}`,
+					notifyType: 'log'
+				}
+			} else {
+				actionString = `${orderBookInfo.typeTargetPrice} ${orderBookInfo.amountTargetPrice.toFixed(config.coin1Decimals)} ${config.coin1} ${orderBookInfo.typeTargetPrice === 'buy' ? 'with' : 'for'} ${orderBookInfo.amountTargetPriceQuote.toFixed(config.coin2Decimals)} ${config.coin2}`;
+			}
+	
+			if (confirmation) {
+				// let order = true;
+				let order = await traderapi.placeOrder(orderBookInfo.typeTargetPrice, config.pair, targetPrice, orderBookInfo.amountTargetPrice, 1, orderBookInfo.amountTargetPriceQuote, pairObj);
+				if (order) {
+					var showRatesAfterOrder = async function (exchangeRatesBefore, priceString, actionString) {
+						setTimeout(async () => { 
+
+							priceInfoString = '';
+							const exchangeRatesAfter = await traderapi.getRates(pair);
+							if (exchangeRatesAfter) {
+								priceInfoString += `${config.exchangeName} rates for ${pair} pair:\nBefore action — bid: ${exchangeRatesBefore.bid.toFixed(coin2Decimals)}, ask: ${exchangeRatesBefore.ask.toFixed(coin2Decimals)}.\nAfter action — bid: ${exchangeRatesAfter.bid.toFixed(coin2Decimals)}, ask: ${exchangeRatesAfter.ask.toFixed(coin2Decimals)}.`;
+							} else {
+								priceInfoString += `Unable to get ${config.exchangeName} rates for ${pair}.`;
+							}
+
+							msgNotify = `Making ${priceString}: Successfully placed an order to *${actionString}*.\n\n${priceInfoString}`;
+							msgSendBack = `Making ${priceString}: Successfully placed an order to **${actionString}**.\n\n${priceInfoString}`;
+							notifyType = 'log';
+							notify(msgNotify, notifyType);
+							$u.sendAdmMsg(tx.senderId, msgSendBack);
+
+						}, 2000);
+					}
+					await showRatesAfterOrder(exchangeRatesBefore, priceString, actionString);
+				}
+	
+			} else {
+				pendingConfirmation.command = `/make ${params.join(' ')}`;
+				pendingConfirmation.timestamp = Date.now();
+				msgNotify = '';
+				msgSendBack = `Are you sure to make ${priceString}? I am going to **${actionString}**. Confirm with **/y** command or ignore.\n\n${priceInfoString}`;
+			}	
+
+		} // if (param === "price")
+
+		return {
+			msgNotify,
+			msgSendBack,
+			notifyType: 'log'
+		}
+
+	} catch (e) {
+		log.error(`Error in make() of ${$u.getModuleName(module.id)} module: ` + e);
+	}
+	
+}
+
 async function calc(arr) {
 
 	if (arr.length !== 4) {
@@ -1202,15 +1385,13 @@ async function calc(arr) {
 	if (exchangeRates) {
 		askValue = exchangeRates.ask * amount;
 		bidValue = exchangeRates.bid * amount;
-		output += `${config.exchangeName} value of ${$u.thousandSeparator(amount)} ${inCurrency}:
-Ask: **${$u.thousandSeparator(askValue.toFixed(8))} ${outCurrency}**, bid: **${$u.thousandSeparator(bidValue.toFixed(8))} ${outCurrency}**.`;
+		output += `${config.exchangeName} value of ${$u.thousandSeparator(amount)} ${inCurrency}:\nBid: **${$u.thousandSeparator(bidValue.toFixed(8))} ${outCurrency}**, ask: **${$u.thousandSeparator(askValue.toFixed(8))} ${outCurrency}**.`;
 	} else {
 		exchangeRates = await traderapi.getRates(pair2);
 		if (exchangeRates) {
 			askValue = amount / exchangeRates.ask;
 			bidValue = amount / exchangeRates.bid;
-			output += `${config.exchangeName} value of ${$u.thousandSeparator(amount)} ${inCurrency}:
-	Ask: **${$u.thousandSeparator(askValue.toFixed(8))} ${outCurrency}**, bid: **${$u.thousandSeparator(bidValue.toFixed(8))} ${outCurrency}**.`;
+			output += `${config.exchangeName} value of ${$u.thousandSeparator(amount)} ${inCurrency}:\nBid: **${$u.thousandSeparator(bidValue.toFixed(8))} ${outCurrency}**, ask: **${$u.thousandSeparator(askValue.toFixed(8))} ${outCurrency}**.`;
 		} else {
 			output += `Unable to get ${config.exchangeName} rates for ${pair}.`;
 		}
@@ -1282,5 +1463,7 @@ const commands = {
 	sell,
 	enable,
 	disable,
-	deposit
+	deposit,
+	make,
+	y
 }

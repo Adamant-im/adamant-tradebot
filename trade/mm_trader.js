@@ -57,8 +57,8 @@ module.exports = {
                 return;
             }
 
-            console.log(orderParamsString);
-            console.log(type, price.toFixed(8), coin1Amount.toFixed(0), coin2Amount.toFixed(0));
+            // console.log(orderParamsString);
+            // console.log(type, price.toFixed(8), coin1Amount.toFixed(0), coin2Amount.toFixed(0));
 
             // Check balances
             const balances = await isEnoughCoins(config.coin1, config.coin2, coin1Amount, coin2Amount, type, priceReq.mmCurrentAction);
@@ -314,7 +314,7 @@ async function setPrice(type, pair, coin1Amount) {
                 amountMaxAllowed = amountInSpread > amountInConfig ? amountInConfig : amountInSpread;
                 amountMaxAllowed *= allowedAmountKoef;
 
-                console.log(`Selling; coin1Amount: ${coin1Amount}, amountInSpread: ${amountInSpread}, amountInConfig: ${amountInConfig}, amountMaxAllowed: ${amountMaxAllowed}.`)
+                // console.log(`Selling; coin1Amount: ${coin1Amount}, amountInSpread: ${amountInSpread}, amountInConfig: ${amountInConfig}, amountMaxAllowed: ${amountMaxAllowed}.`)
                 if (amountMaxAllowed) {
                     price = orderBookInfo.liquidity.percentCustom.lowPrice;
                     if (coin1Amount > amountMaxAllowed) {
@@ -341,7 +341,7 @@ async function setPrice(type, pair, coin1Amount) {
                 amountMaxAllowed = amountInSpread > amountInConfig ? amountInConfig : amountInSpread;
                 amountMaxAllowed *= allowedAmountKoef;
 
-                console.log(`Buying; coin1Amount: ${coin1Amount}, amountInSpread: ${amountInSpread}, amountInConfig: ${amountInConfig}, amountMaxAllowed: ${amountMaxAllowed}.`)
+                // console.log(`Buying; coin1Amount: ${coin1Amount}, amountInSpread: ${amountInSpread}, amountInConfig: ${amountInConfig}, amountMaxAllowed: ${amountMaxAllowed}.`)
                 if (amountMaxAllowed) {
                     price = orderBookInfo.liquidity.percentCustom.highPrice;
                     if (coin1Amount > amountMaxAllowed) {
@@ -361,7 +361,7 @@ async function setPrice(type, pair, coin1Amount) {
 
             }
 
-            console.log(`Price: ${price}, coin1Amount: ${coin1Amount}.`)
+            // console.log(`Price: ${price}, coin1Amount: ${coin1Amount}.`)
             
             return {
                 price,

@@ -13,5 +13,12 @@ module.exports = {
    "mm_liquiditySellAmount": 100,
    "mm_liquidityBuyAmount": 50,
    "mm_liquiditySpreadPercent": 2,
-   "mm_liquidityTrend": "middle"
+   "mm_liquidityTrend": "middle",
+   "mm_isPriceWatcherActive": false,
+   "mm_priceWatcherLowPrice": 0.98,
+   "mm_priceWatcherMidPrice": 1,
+   "mm_priceWatcherHighPrice": 1.02,
+   "mm_priceWatcherDeviationPercent": 2,
+   "mm_priceWatcherSource": "const",
+   "mm_priceWatcherAction": "fill"
 }

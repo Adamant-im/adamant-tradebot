@@ -10,6 +10,7 @@ const traderapi = require('./trader_' + config.exchange)(config.apikey, config.a
  * ob: dynamic order book order
  * tb: trade bot order
  * liq: liquidity order
+ * pw: price watcher order
 */
 
 module.exports = async (purposes, pair) => {
@@ -58,7 +59,7 @@ module.exports = async (purposes, pair) => {
 async function clearAllOrders() {
 
     // First, close orders which are in bot's database
-    // 'all' = ['mm', 'tb', 'ob', 'liq']
+    // 'all' = ['mm', 'tb', 'ob', 'liq', 'pw']
     let count = await module.exports('all', config.pair);
     
 	// Next, if need to clear all orders, close orders which are not closed yet
