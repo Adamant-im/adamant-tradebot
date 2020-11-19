@@ -73,6 +73,7 @@ module.exports = {
             } else if (orderBook.bids[0].price > highPrice) {
                 targetPrice = highPrice;
             }
+
             console.log('highestBid:', orderBook.bids[0].price, 'lowestAsk:', orderBook.asks[0].price);
             console.log('targetPrice:', targetPrice, 'lowPrice:', lowPrice, 'highPrice:', highPrice);
 
@@ -80,7 +81,12 @@ module.exports = {
                 orderBookInfo = $u.getOrderBookInfo(orderBook, tradeParams.mm_liquiditySpreadPercent, targetPrice);
                 orderBookInfo.amountTargetPrice *= reliabilityKoef;
                 orderBookInfo.amountTargetPriceQuote *= reliabilityKoef;
+
                 console.log(orderBookInfo);
+                let priceString = `${config.pair} price of ${targetPrice.toFixed(config.coin2Decimals)} ${config.coin2}`;
+                let actionString = `${orderBookInfo.typeTargetPrice} ${orderBookInfo.amountTargetPrice.toFixed(config.coin1Decimals)} ${config.coin1} ${orderBookInfo.typeTargetPrice === 'buy' ? 'with' : 'for'} ${orderBookInfo.amountTargetPriceQuote.toFixed(config.coin2Decimals)} ${config.coin2}`;
+                let logMessage = `To make ${priceString}, the bot is going to ${actionString}.`;
+                log.info(logMessage);
                 await this.placePriceWatcherOrder(targetPrice, orderBookInfo);    
             }
 
@@ -232,8 +238,8 @@ module.exports = {
                 return;
             }
 
-//            orderId = (await traderapi.placeOrder(type, config.pair, price, coin1Amount, 1, null, pairObj)).orderid;
-            orderId = true;
+            orderId = (await traderapi.placeOrder(type, config.pair, price, coin1Amount, 1, null, pairObj)).orderid;
+            // orderId = true;
             if (orderId) {
                 const {ordersDb} = db;
                 const order = new ordersDb({

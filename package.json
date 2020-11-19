@@ -1,6 +1,6 @@
 {
   "name": "adamant-tradebot",
-  "version": "2.1.0beta",
+  "version": "2.2.0beta",
   "description": "ADAMANT Trading and Market Making bot",
   "main": "index.js",
   "scripts": {
@@ -32,7 +32,9 @@
     "spread",
     "liquidity",
     "target price",
-    "marketmaking.app"
+    "marketmaking.app",
+    "price watching",
+    "making price"
   ],
   "author": "Aleksei Lebedev <devs@adamant.im> (https://adamant.im)",
   "license": "GPL-3.0",
