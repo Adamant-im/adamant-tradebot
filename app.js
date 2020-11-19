@@ -34,6 +34,7 @@ function init() {
 				require('./trade/mm_orderbook_builder').run();
 				require('./trade/mm_liquidity_provider').run();
 				require('./trade/mm_price_watcher').run();
+				// require('./trade/mm_orderbook_builder').test();
 				notify(`*${config.notifyName} started* for address _${Store.user.ADM.address}_ (ver. ${Store.version}).`, 'info');
 			});
 		}

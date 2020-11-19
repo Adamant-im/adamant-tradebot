@@ -15,6 +15,13 @@ const LIFETIME_MIN = 1000;
 const LIFETIME_MAX = 20000;
 
 module.exports = {
+    async test() {
+        console.log('==========================');
+        console.log('**************before');
+        let req = await traderapi.getOrderBook('ADM_USDT');
+        console.log('**************after:');
+        console.log(req);
+    },
 	run() {
         this.iteration();
     },
