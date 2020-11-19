@@ -63,9 +63,13 @@ module.exports = {
             // Check balances
             const balances = await isEnoughCoins(config.coin1, config.coin2, coin1Amount, coin2Amount, type, priceReq.mmCurrentAction);
             if (!balances.result) {
-                if ((Date.now()-lastNotifyBalancesTimestamp > HOUR) && balances.message) {
-                    notify(balances.message, 'warn', config.silent_mode);
-                    lastNotifyBalancesTimestamp = Date.now();
+                if (balances.message) {
+                    if (Date.now()-lastNotifyBalancesTimestamp > HOUR) {
+                        notify(balances.message, 'warn', config.silent_mode);
+                        lastNotifyBalancesTimestamp = Date.now();
+                    } else {
+                        log.log(message);
+                    }
                 }
                 return;
             }
@@ -145,7 +149,7 @@ module.exports = {
                     log.info(`Successfully executed mm-order to ${output}. Action: executeInOrderBook.`);
                         
                 } else { // if order1
-                    console.warn(`${config.notifyName} unable to execute mm-order with params: ${orderParamsString}.  Action: executeInOrderBook. No order id returned.`);
+                    console.warn(`${config.notifyName} unable to execute mm-order with params: ${orderParamsString}. Action: executeInOrderBook. No order id returned.`);
                 }
             }
 
@@ -156,6 +160,8 @@ module.exports = {
 };
 
 function setType() {
+    // return 'buy';
+
     if (!tradeParams || !tradeParams.mm_buyPercent) {
         log.warn(`Param mm_buyPercent is not set. Check ${config.exchangeName} config.`);
         return false;
@@ -163,7 +169,8 @@ function setType() {
     let type = 'buy';
     if (Math.random() > tradeParams.mm_buyPercent)
         type = 'sell';
-	return type;
+    return type;
+    
 }
 
 async function isEnoughCoins(coin1, coin2, amount1, amount2, type, mmCurrentAction) {
@@ -264,41 +271,115 @@ async function setPrice(type, pair, coin1Amount) {
         }
         bid_low = orderBookInfo.highestBid;
         ask_high = orderBookInfo.lowestAsk;
+        console.log('bid_low:', bid_low, 'ask_high:', ask_high);
 
         let mmPolicy = tradeParams.mm_Policy; // optimal, spread, orderbook
         let mmCurrentAction; // doNotExecute, executeInSpread, executeInOrderBook
 
-        const spread = ask_high - bid_low;
-        const noSpread = spread < precision * 2;
+        if (tradeParams.mm_isPriceWatcherActive) {
+        // if (true) {
 
-        if (noSpread) {
-
-            if (mmPolicy === 'orderbook' || (mmPolicy === 'optimal' && tradeParams.mm_isLiquidityActive)) {
-                mmCurrentAction = 'executeInOrderBook';            
-            } else {
-                mmCurrentAction = 'doNotExecute';
+            let lowPrice = tradeParams.mm_priceWatcherLowPrice * $u.randomValue(0.98, 1.01);
+            let highPrice = tradeParams.mm_priceWatcherHighPrice * $u.randomValue(0.99, 1.02);
+            // let lowPrice = tradeParams.mm_priceWatcherLowPrice;
+            // let highPrice = tradeParams.mm_priceWatcherHighPrice;
+            if (lowPrice >= highPrice) {
+                lowPrice = tradeParams.mm_priceWatcherLowPrice;
+                highPrice = tradeParams.mm_priceWatcherHighPrice;
             }
-        } else {
+            console.log('lowPrice:', +lowPrice.toFixed(config.coin2Decimals), 'highPrice:', +highPrice.toFixed(config.coin2Decimals));
 
-            if (mmPolicy === 'spread') {
-                mmCurrentAction = 'executeInSpread';            
-            } if (mmPolicy === 'optimal') {
-                // 80% in order book and 20% in spread
-                mmCurrentAction = Math.random > 0.8 ? 'executeInSpread' : 'executeInOrderBook';
-            } else {
-                mmCurrentAction = 'executeInOrderBook';
+            if (type === 'buy') {
+
+                if (bid_low > highPrice) {
+
+                    output = `${config.notifyName}: Refusing to buy higher than ${highPrice.toFixed(config.coin2Decimals)}. Mm-order cancelled. Low: ${bid_low.toFixed(config.coin2Decimals)}, high: ${ask_high.toFixed(config.coin2Decimals)} ${config.coin2}.`;
+                    mmCurrentAction = 'doNotExecute'
+
+                } else if (ask_high > highPrice) {
+                    
+                    output = `${config.notifyName}: Corrected spread to buy not higher than ${highPrice.toFixed(config.coin2Decimals)}.`;
+                    if (mmPolicy === 'orderbook') {
+                        mmCurrentAction = 'doNotExecute';
+                        output += ` Market making settings deny trading in spread. Unable to set a price for ${pair}. Mm-order cancelled. Low: ${bid_low.toFixed(config.coin2Decimals)}, high: ${ask_high.toFixed(config.coin2Decimals)} ${config.coin2}.`;
+                    }
+                    else {
+                        mmPolicy = 'spread';
+                        output += ` Will trade in spread. Low: ${bid_low.toFixed(config.coin2Decimals)}, high: ${ask_high.toFixed(config.coin2Decimals)} ${config.coin2}.`;
+                        log.log(output);
+                        output = '';
+                    }
+                    ask_high = highPrice;
+
+                }
+
+            } else if (type === 'sell') {
+
+                if (ask_high < lowPrice) {
+
+                    output = `${config.notifyName}: Refusing to sell lower than ${lowPrice.toFixed(config.coin2Decimals)}. Mm-order cancelled. Low: ${bid_low.toFixed(config.coin2Decimals)}, high: ${ask_high.toFixed(config.coin2Decimals)} ${config.coin2}.`;
+                    mmCurrentAction = 'doNotExecute'
+
+                } else if (bid_low < lowPrice) {
+
+                    output = `${config.notifyName}: Corrected spread to sell not lower than ${lowPrice.toFixed(config.coin2Decimals)}.`;
+                    if (mmPolicy === 'orderbook') {
+                        mmCurrentAction = 'doNotExecute'
+                        output += ` Market making settings deny trading in spread. Unable to set a price for ${pair}. Mm-order cancelled. Low: ${bid_low.toFixed(config.coin2Decimals)}, high: ${ask_high.toFixed(config.coin2Decimals)} ${config.coin2}.`;
+                    }
+                    else {
+                        mmPolicy = 'spread';
+                        output += ` Will trade in spread. Low: ${bid_low.toFixed(config.coin2Decimals)}, high: ${ask_high.toFixed(config.coin2Decimals)} ${config.coin2}.`;
+                        log.log(output);
+                        output = '';
+                    }
+                    bid_low = lowPrice;
+
+                }
+
             }
 
         }
 
-        // console.log('mmCurrentAction', mmCurrentAction);
+        console.log('mmPolicy', mmPolicy);
+
+        if (mmCurrentAction !== 'doNotExecute') {
+
+            const spread = ask_high - bid_low;
+            const noSpread = spread < precision * 2;
+
+            if (noSpread) {
+
+                if (mmPolicy === 'orderbook' || (mmPolicy === 'optimal' && tradeParams.mm_isLiquidityActive)) {
+                    mmCurrentAction = 'executeInOrderBook';            
+                } else {
+                    mmCurrentAction = 'doNotExecute';
+                }
+            } else {
+
+                if (mmPolicy === 'spread') {
+                    mmCurrentAction = 'executeInSpread';            
+                } else if (mmPolicy === 'optimal') {
+                    // 80% in order book and 20% in spread
+                    mmCurrentAction = Math.random > 0.8 ? 'executeInSpread' : 'executeInOrderBook';
+                } else {
+                    mmCurrentAction = 'executeInOrderBook';
+                }
+
+            }
+
+        }
+
+        console.log('mmCurrentAction', mmCurrentAction);
 
         if (mmCurrentAction === 'doNotExecute') {
-            output = `${config.notifyName}: No spread currently, and market making settings deny trading in the order book. Low: ${bid_low.toFixed(config.coin2Decimals)}, high: ${ask_high.toFixed(config.coin2Decimals)} ${config.coin2}. Unable to set a price for ${pair}. Update settings or create spread manually.`;
+
+            if (!output) output = `${config.notifyName}: No spread currently, and market making settings deny trading in the order book. Low: ${bid_low.toFixed(config.coin2Decimals)}, high: ${ask_high.toFixed(config.coin2Decimals)} ${config.coin2}. Unable to set a price for ${pair}. Update settings or create spread manually.`;
             return {
                 price: false,
                 message: output
             }
+
         }
 
         if (mmCurrentAction === 'executeInOrderBook') {
