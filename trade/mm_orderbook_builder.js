@@ -48,7 +48,8 @@ module.exports = {
             try {
                 if (order.dateTill < $u.unix()) {
                     orderBookOrdersCount -= 1;
-                    traderapi.cancelOrder(order._id, order.type, order.pair);
+                    let req = await traderapi.cancelOrder(order._id, order.type, order.pair);
+                    // console.log('**************', req);
                     order.update({
                         isProcessed: true,
                         isClosed: true,
@@ -239,8 +240,8 @@ async function setPrice(type, pair, position) {
 
         let price = $u.randomValue(low, high);
         
-//        if (tradeParams.mm_isPriceWatcherActive) {
-        if (true) {
+        if (tradeParams.mm_isPriceWatcherActive) {
+        // if (true) {
         
             let lowPrice = tradeParams.mm_priceWatcherLowPrice * $u.randomValue(0.98, 1.01);
             let highPrice = tradeParams.mm_priceWatcherHighPrice * $u.randomValue(0.99, 1.02);
@@ -248,7 +249,7 @@ async function setPrice(type, pair, position) {
                 lowPrice = tradeParams.mm_priceWatcherLowPrice;
                 highPrice = tradeParams.mm_priceWatcherHighPrice;
             }
-            console.log('lowPrice:', +lowPrice.toFixed(config.coin2Decimals), 'highPrice:', +highPrice.toFixed(config.coin2Decimals));
+            // console.log('lowPrice:', +lowPrice.toFixed(config.coin2Decimals), 'highPrice:', +highPrice.toFixed(config.coin2Decimals));
 
             if (type === 'sell') {
                 if (price < lowPrice) {
