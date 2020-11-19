@@ -74,15 +74,15 @@ module.exports = {
                 targetPrice = highPrice;
             }
 
-            console.log('highestBid:', orderBook.bids[0].price, 'lowestAsk:', orderBook.asks[0].price);
-            console.log('targetPrice:', targetPrice, 'lowPrice:', lowPrice, 'highPrice:', highPrice);
+            // console.log('highestBid:', orderBook.bids[0].price, 'lowestAsk:', orderBook.asks[0].price);
+            // console.log('targetPrice:', targetPrice, 'lowPrice:', lowPrice, 'highPrice:', highPrice);
 
             if (targetPrice) {
                 orderBookInfo = $u.getOrderBookInfo(orderBook, tradeParams.mm_liquiditySpreadPercent, targetPrice);
                 orderBookInfo.amountTargetPrice *= reliabilityKoef;
                 orderBookInfo.amountTargetPriceQuote *= reliabilityKoef;
 
-                console.log(orderBookInfo);
+                // console.log(orderBookInfo);
                 let priceString = `${config.pair} price of ${targetPrice.toFixed(config.coin2Decimals)} ${config.coin2}`;
                 let actionString = `${orderBookInfo.typeTargetPrice} ${orderBookInfo.amountTargetPrice.toFixed(config.coin1Decimals)} ${config.coin1} ${orderBookInfo.typeTargetPrice === 'buy' ? 'with' : 'for'} ${orderBookInfo.amountTargetPriceQuote.toFixed(config.coin2Decimals)} ${config.coin2}`;
                 let logMessage = `To make ${priceString}, the bot is going to ${actionString}.`;
