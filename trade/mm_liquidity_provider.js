@@ -374,6 +374,20 @@ async function setPrice(type, orderBookInfo) {
         let price;
         // console.log('=====', price, precision);
 
+        // if (tradeParams.mm_isPriceWatcherActive) {
+        if (true) {
+    
+            let lowPrice = tradeParams.mm_priceWatcherLowPrice * $u.randomValue(0.98, 1.01);
+            let highPrice = tradeParams.mm_priceWatcherHighPrice * $u.randomValue(0.99, 1.02);
+            // let lowPrice = tradeParams.mm_priceWatcherLowPrice;
+            // let highPrice = tradeParams.mm_priceWatcherHighPrice;
+            if (lowPrice >= highPrice) {
+                lowPrice = tradeParams.mm_priceWatcherLowPrice;
+                highPrice = tradeParams.mm_priceWatcherHighPrice;
+            }
+            console.log('lowPrice:', +lowPrice.toFixed(config.coin2Decimals), 'highPrice:', +highPrice.toFixed(config.coin2Decimals));
+        }
+
         if (type === 'sell') {
             low = targetPrice;
             high = targetPrice * (1 + tradeParams.mm_liquiditySpreadPercent/100 / 2);

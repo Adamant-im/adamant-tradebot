@@ -35,7 +35,7 @@ module.exports = {
             let coin1Amount = setAmount();
             const priceReq = await setPrice(type, config.pair, coin1Amount);
             const price = priceReq.price;
-            coin1Amount = priceReq.coin1Amount; // it may be changed
+            if (priceReq.coin1Amount) coin1Amount = priceReq.coin1Amount; // it may be changed
             const coin2Amount = coin1Amount * price;
 
             let order1, order2;
