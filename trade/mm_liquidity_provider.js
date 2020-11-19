@@ -371,35 +371,44 @@ async function setPrice(type, orderBookInfo) {
         }
 
         const precision = $u.getPrecision(config.coin2Decimals);
-        let price;
+        let price, lowPrice = 0, highPrice = 0;
         // console.log('=====', price, precision);
 
-        // if (tradeParams.mm_isPriceWatcherActive) {
-        if (true) {
+        if (tradeParams.mm_isPriceWatcherActive) {
+        // if (true) {
     
-            let lowPrice = tradeParams.mm_priceWatcherLowPrice * $u.randomValue(0.98, 1.01);
-            let highPrice = tradeParams.mm_priceWatcherHighPrice * $u.randomValue(0.99, 1.02);
-            // let lowPrice = tradeParams.mm_priceWatcherLowPrice;
-            // let highPrice = tradeParams.mm_priceWatcherHighPrice;
+            lowPrice = tradeParams.mm_priceWatcherLowPrice * $u.randomValue(0.98, 1.01);
+            highPrice = tradeParams.mm_priceWatcherHighPrice * $u.randomValue(0.99, 1.02);
             if (lowPrice >= highPrice) {
                 lowPrice = tradeParams.mm_priceWatcherLowPrice;
                 highPrice = tradeParams.mm_priceWatcherHighPrice;
             }
-            console.log('lowPrice:', +lowPrice.toFixed(config.coin2Decimals), 'highPrice:', +highPrice.toFixed(config.coin2Decimals));
+            // console.log('lowPrice:', +lowPrice.toFixed(config.coin2Decimals), 'highPrice:', +highPrice.toFixed(config.coin2Decimals));
+
         }
 
         if (type === 'sell') {
             low = targetPrice;
             high = targetPrice * (1 + tradeParams.mm_liquiditySpreadPercent/100 / 2);
             price = $u.randomValue(low, high);
-            // console.log('****', price, low, high);
+            if (lowPrice && price < lowPrice) {
+                price = lowPrice;
+                output = `${config.notifyName}: Corrected price to sell not lower than ${lowPrice.toFixed(config.coin2Decimals)} while placing liq-order. Low: ${low.toFixed(config.coin2Decimals)}, high: ${high.toFixed(config.coin2Decimals)} ${config.coin2}.`;
+                log.log(output);
+            }
             if (price - precision < orderBookInfo.highestBid)
                 price = orderBookInfo.highestBid + precision;
+            // console.log('****', price, low, high);
             // console.log(`Sell price: ${price.toFixed(config.coin2Decimals)} must be MORE than highest bid: ${orderBookInfo.highestBid}. Low: ${low}, high: ${high}.`)
         } else {
             high = targetPrice;
             low = targetPrice * (1 - tradeParams.mm_liquiditySpreadPercent/100 / 2);
             price = $u.randomValue(low, high);
+            if (highPrice && price > highPrice) {
+                price = highPrice;
+                output = `${config.notifyName}: Corrected price to buy not higher than ${highPrice.toFixed(config.coin2Decimals)} while placing liq-order. Low: ${low.toFixed(config.coin2Decimals)}, high: ${high.toFixed(config.coin2Decimals)} ${config.coin2}.`;
+                log.log(output);
+            }
             // console.log('****', price, low, high);
             if (price + precision > orderBookInfo.lowestAsk)
                 price = orderBookInfo.lowestAsk - precision;

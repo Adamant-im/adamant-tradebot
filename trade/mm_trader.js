@@ -271,7 +271,7 @@ async function setPrice(type, pair, coin1Amount) {
         }
         bid_low = orderBookInfo.highestBid;
         ask_high = orderBookInfo.lowestAsk;
-        console.log('bid_low:', bid_low, 'ask_high:', ask_high);
+        // console.log('bid_low:', bid_low, 'ask_high:', ask_high);
 
         let mmPolicy = tradeParams.mm_Policy; // optimal, spread, orderbook
         let mmCurrentAction; // doNotExecute, executeInSpread, executeInOrderBook
@@ -281,13 +281,11 @@ async function setPrice(type, pair, coin1Amount) {
 
             let lowPrice = tradeParams.mm_priceWatcherLowPrice * $u.randomValue(0.98, 1.01);
             let highPrice = tradeParams.mm_priceWatcherHighPrice * $u.randomValue(0.99, 1.02);
-            // let lowPrice = tradeParams.mm_priceWatcherLowPrice;
-            // let highPrice = tradeParams.mm_priceWatcherHighPrice;
             if (lowPrice >= highPrice) {
                 lowPrice = tradeParams.mm_priceWatcherLowPrice;
                 highPrice = tradeParams.mm_priceWatcherHighPrice;
             }
-            console.log('lowPrice:', +lowPrice.toFixed(config.coin2Decimals), 'highPrice:', +highPrice.toFixed(config.coin2Decimals));
+            // console.log('lowPrice:', +lowPrice.toFixed(config.coin2Decimals), 'highPrice:', +highPrice.toFixed(config.coin2Decimals));
 
             if (type === 'buy') {
 
@@ -298,7 +296,7 @@ async function setPrice(type, pair, coin1Amount) {
 
                 } else if (ask_high > highPrice) {
                     
-                    output = `${config.notifyName}: Corrected spread to buy not higher than ${highPrice.toFixed(config.coin2Decimals)}.`;
+                    output = `${config.notifyName}: Corrected spread to buy not higher than ${highPrice.toFixed(config.coin2Decimals)} while placing mm-order.`;
                     if (mmPolicy === 'orderbook') {
                         mmCurrentAction = 'doNotExecute';
                         output += ` Market making settings deny trading in spread. Unable to set a price for ${pair}. Mm-order cancelled. Low: ${bid_low.toFixed(config.coin2Decimals)}, high: ${ask_high.toFixed(config.coin2Decimals)} ${config.coin2}.`;
@@ -322,7 +320,7 @@ async function setPrice(type, pair, coin1Amount) {
 
                 } else if (bid_low < lowPrice) {
 
-                    output = `${config.notifyName}: Corrected spread to sell not lower than ${lowPrice.toFixed(config.coin2Decimals)}.`;
+                    output = `${config.notifyName}: Corrected spread to sell not lower than ${lowPrice.toFixed(config.coin2Decimals)} while placing mm-order.`;
                     if (mmPolicy === 'orderbook') {
                         mmCurrentAction = 'doNotExecute'
                         output += ` Market making settings deny trading in spread. Unable to set a price for ${pair}. Mm-order cancelled. Low: ${bid_low.toFixed(config.coin2Decimals)}, high: ${ask_high.toFixed(config.coin2Decimals)} ${config.coin2}.`;
@@ -341,7 +339,7 @@ async function setPrice(type, pair, coin1Amount) {
 
         }
 
-        console.log('mmPolicy', mmPolicy);
+        // console.log('mmPolicy', mmPolicy);
 
         if (mmCurrentAction !== 'doNotExecute') {
 
@@ -370,7 +368,7 @@ async function setPrice(type, pair, coin1Amount) {
 
         }
 
-        console.log('mmCurrentAction', mmCurrentAction);
+        // console.log('mmCurrentAction', mmCurrentAction);
 
         if (mmCurrentAction === 'doNotExecute') {
 
