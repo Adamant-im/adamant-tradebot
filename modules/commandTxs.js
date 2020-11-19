@@ -281,12 +281,12 @@ function enable(params) {
 
 		if (coin1 === config.coin1) {
 			tradeParams.mm_liquiditySellAmount = coin1Amount;
-			tradeParams.mm_liquidityBuyAmount = coin2Amount;
+			tradeParams.mm_liquidityBuyQuoteAmount = coin2Amount;
 		} else {
 			tradeParams.mm_liquiditySellAmount = coin2Amount;
-			tradeParams.mm_liquidityBuyAmount = coin1Amount;
+			tradeParams.mm_liquidityBuyQuoteAmount = coin1Amount;
 		}
-		// console.log(tradeParams.mm_liquiditySellAmount, tradeParams.mm_liquidityBuyAmount);
+		// console.log(tradeParams.mm_liquiditySellAmount, tradeParams.mm_liquidityBuyQuoteAmount);
 
 		tradeParams.mm_liquidityTrend = trend;
 		tradeParams.mm_liquiditySpreadPercent = spreadValue;
@@ -294,7 +294,7 @@ function enable(params) {
 		
 		if (trend === 'middle')
 			trend = 'middle trend';
-		infoString = `with ${tradeParams.mm_liquiditySellAmount} ${config.coin1} asks (sell) and ${tradeParams.mm_liquidityBuyAmount} ${config.coin2} bids (buy) within ${spreadValue}% spread & ${trend}`;
+		infoString = `with ${tradeParams.mm_liquiditySellAmount} ${config.coin1} asks (sell) and ${tradeParams.mm_liquidityBuyQuoteAmount} ${config.coin2} bids (buy) within ${spreadValue}% spread & ${trend}`;
 		optionsString = `Liquidity and spread maintenance`;
 
 	}

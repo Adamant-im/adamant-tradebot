@@ -79,7 +79,7 @@ module.exports = {
                 // console.log(`New sell liq-order placed: ${amountPlaced}. Total sell liq-orders: ${liquidityStats.asksTotalAmount}.`)
             } while (amountPlaced);
     
-            log.info(`Liquidity stats: opened ${liquidityStats.bidsCount} bids-buy orders for ${liquidityStats.bidsTotalQuoteAmount.toFixed(config.coin2Decimals)} of ${tradeParams.mm_liquidityBuyAmount} ${config.coin2} and ${liquidityStats.asksCount} asks-sell orders with ${liquidityStats.asksTotalAmount.toFixed(config.coin1Decimals)} of ${tradeParams.mm_liquiditySellAmount} ${config.coin1}.`);
+            log.info(`Liquidity stats: opened ${liquidityStats.bidsCount} bids-buy orders for ${liquidityStats.bidsTotalQuoteAmount.toFixed(config.coin2Decimals)} of ${tradeParams.mm_liquidityBuyQuoteAmount} ${config.coin2} and ${liquidityStats.asksCount} asks-sell orders with ${liquidityStats.asksTotalAmount.toFixed(config.coin1Decimals)} of ${tradeParams.mm_liquiditySellAmount} ${config.coin1}.`);
 
         } catch (e) {
             log.error(`Error in updateLiquidity() of ${$u.getModuleName(module.id)} module: ` + e);
@@ -246,8 +246,8 @@ module.exports = {
             }
 
             if (type === 'buy') {
-                if (coin2Amount > (tradeParams.mm_liquidityBuyAmount - amountPlaced)) {
-                    // console.log(`Exceeded liquidity amounts to ${type}. Pending: ${coin2Amount.toFixed(config.coin2Decimals)}, placed: ${amountPlaced.toFixed(config.coin2Decimals)}, limit: ${tradeParams.mm_liquidityBuyAmount} ${config.coin2}.`);
+                if (coin2Amount > (tradeParams.mm_liquidityBuyQuoteAmount - amountPlaced)) {
+                    // console.log(`Exceeded liquidity amounts to ${type}. Pending: ${coin2Amount.toFixed(config.coin2Decimals)}, placed: ${amountPlaced.toFixed(config.coin2Decimals)}, limit: ${tradeParams.mm_liquidityBuyQuoteAmount} ${config.coin2}.`);
                     return false;    
                 } 
             }
@@ -427,8 +427,8 @@ async function setPrice(type, orderBookInfo) {
 
 function setAmount(type, price) {
 
-    if (!tradeParams || !tradeParams.mm_liquiditySellAmount || !tradeParams.mm_liquidityBuyAmount) {
-        log.warn(`Params mm_liquiditySellAmount or mm_liquidityBuyAmount are not set. Check ${config.exchangeName} config.`);
+    if (!tradeParams || !tradeParams.mm_liquiditySellAmount || !tradeParams.mm_liquidityBuyQuoteAmount) {
+        log.warn(`Params mm_liquiditySellAmount or mm_liquidityBuyQuoteAmount are not set. Check ${config.exchangeName} config.`);
         return false;
     }
 
@@ -438,8 +438,8 @@ function setAmount(type, price) {
         min = tradeParams.mm_liquiditySellAmount / MAX_ORDERS;
         max = tradeParams.mm_liquiditySellAmount / 3 * 2;
     } else {
-        min = tradeParams.mm_liquidityBuyAmount / price / MAX_ORDERS;
-        max = tradeParams.mm_liquidityBuyAmount / price / 3 * 2;
+        min = tradeParams.mm_liquidityBuyQuoteAmount / price / MAX_ORDERS;
+        max = tradeParams.mm_liquidityBuyQuoteAmount / price / 3 * 2;
     }
 
     return $u.randomValue(min, max);
