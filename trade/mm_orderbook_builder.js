@@ -18,6 +18,7 @@ module.exports = {
     async test() {
         console.log('==========================');
         console.log('**************before');
+        // let req = await traderapi.cancelOrder('ADM_USDT');
         let req = await traderapi.getOrderBook('ADM_USDT');
         console.log('**************after:');
         console.log(req);

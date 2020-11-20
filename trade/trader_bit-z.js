@@ -40,8 +40,11 @@ module.exports = (apiKey, secretKey, pwd) => {
 						resolve(result);
 					} catch (e) { 					
 						resolve(false);
-						log.warn('Error while making getBalances() request: ' + e);
+						log.warn('Error while processing getBalances() request: ' + e);
 					};
+				}).catch(err => {
+					log.log(`API request ${arguments.callee.name}(nonzero: ${nonzero}) of ${$u.getModuleName(module.id)} module failed. ${err}.`);
+					resolve(undefined);
 				});
 			});
 		},
@@ -100,8 +103,11 @@ module.exports = (apiKey, secretKey, pwd) => {
 						
 					} catch (e) {
 						resolve(false);
-						log.warn('Error while making getOpenOrders() request: ' + e);
+						log.warn('Error while processing getOpenOrders() request: ' + e);
 					};
+				}).catch(err => {
+					log.log(`API request ${arguments.callee.name}(pair: ${pair}) of ${$u.getModuleName(module.id)} module failed. ${err}.`);
+					resolve(undefined);
 				});
 			});
 		},
@@ -119,8 +125,11 @@ module.exports = (apiKey, secretKey, pwd) => {
 						}
 					} catch (e) {
 						resolve(false);
-						log.warn('Error while making cancelOrder() request: ' + e);
+						log.warn('Error while processing cancelOrder() request: ' + e);
 					};				
+				}).catch(err => {
+					log.log(`API request ${arguments.callee.name}(orderId: ${orderId}) of ${$u.getModuleName(module.id)} module failed. ${err}.`);
+					resolve(undefined);
 				});
 			});
 		},
@@ -152,8 +161,11 @@ module.exports = (apiKey, secretKey, pwd) => {
 						}
 					} catch (e) {
 						resolve(false);
-						log.warn('Error while making getRates() request: ' + e);
+						log.warn('Error while processing getRates() request: ' + e);
 					};
+				}).catch(err => {
+					log.log(`API request ${arguments.callee.name}(pair: ${pair_.pair}) of ${$u.getModuleName(module.id)} module failed. ${err}.`);
+					resolve(undefined);
 				});
 			});
 		},
@@ -200,12 +212,15 @@ module.exports = (apiKey, secretKey, pwd) => {
 								resolve(order);	
 							}
 						} catch (e) {
-							message = 'Error while making placeOrder() request: ' + e;
+							message = 'Error while processing placeOrder() request: ' + e;
 							log.warn(message);
 							order.orderid = false;
 							order.message = message;
 							resolve(order);
 						};
+					}).catch(err => {
+						log.log(`API request ${arguments.callee.name}(pair: ${pair_.pair}, coin1Amount: ${coin1Amount}, price: ${price}, type: ${type}) of ${$u.getModuleName(module.id)} module failed. ${err}.`);
+						resolve(undefined);
 					});
 				});
 	
@@ -254,13 +269,16 @@ module.exports = (apiKey, secretKey, pwd) => {
 								resolve(order);	
 							}
 						} catch (e) {
-							message = 'Error while making placeOrder() request: ' + e;
+							message = 'Error while processing placeOrder() request: ' + e;
 							log.warn(message);
 							order.orderid = false;
 							order.message = message;
 							resolve(order);
 						};
-					});
+					}).catch(err => {
+						log.log(`API request ${arguments.callee.name}(pair: ${pair_.pair}, size: ${size}, type: ${type}) of ${$u.getModuleName(module.id)} module failed. ${err}.`);
+						resolve(undefined);
+					});;
 				});
 			}
 		}, // placeOrder()
@@ -302,8 +320,11 @@ module.exports = (apiKey, secretKey, pwd) => {
 						resolve(result);
 					} catch (e) {
 						resolve(false);
-						log.warn('Error while making orderBook() request: ' + e);
+						log.warn('Error while processing orderBook() request: ' + e);
 					};
+				}).catch(err => {
+					log.log(`API request ${arguments.callee.name}(pair: ${pair}) of ${$u.getModuleName(module.id)} module failed. ${err}.`);
+					resolve(undefined);
 				});
 			});
 		},
@@ -320,8 +341,11 @@ module.exports = (apiKey, secretKey, pwd) => {
 						}
 					} catch (e) {
 						resolve(false);
-						log.warn('Error while making getDepositAddress() request: ' + e);
+						log.warn('Error while processing getDepositAddress() request: ' + e);
 					};				
+				}).catch(err => {
+					log.log(`API request ${arguments.callee.name}(coin: ${coin}) of ${$u.getModuleName(module.id)} module failed. ${err}.`);
+					resolve(undefined);
 				});
 			});
 
