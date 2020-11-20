@@ -10,9 +10,10 @@ let lastNotifyBalancesTimestamp = 0;
 let lastNotifyPriceTimestamp = 0;
 const HOUR = 1000 * 60 * 60;
 const INTERVAL_MIN = 2000;
-const INTERVAL_MAX = 4000;
+const INTERVAL_MAX = 3000;
 const LIFETIME_MIN = 1000;
-const LIFETIME_MAX = 20000;
+// const LIFETIME_MAX = 40000; — depends on mm_orderBookOrdersCount
+const LIFETIME_KOEF = 1.5;
 
 module.exports = {
     async test() {
@@ -298,9 +299,14 @@ function setPosition() {
 }
 
 function setLifeTime(position) {
-    return Math.round((Math.random() * (LIFETIME_MAX - LIFETIME_MIN) + LIFETIME_MIN) * Math.sqrt(position));
+
+    let positionKoef = Math.sqrt(position/1.5);
+    let lifetimeMax = tradeParams.mm_orderBookOrdersCount * LIFETIME_KOEF * 1000;
+    let orderLifeTime = Math.round($u.randomValue(LIFETIME_MIN, lifetimeMax, false) * positionKoef);
+    // console.log(orderLifeTime);
+    return orderLifeTime;
 }
 
 function setPause() {
-    return Math.round(Math.random() * (INTERVAL_MAX - INTERVAL_MIN) + INTERVAL_MIN);
+    return $u.randomValue(INTERVAL_MIN, INTERVAL_MAX, true);
 }
