@@ -41,7 +41,7 @@ module.exports = async (purposes, pair) => {
 
             let cancelReq = await traderapi.cancelOrder(order._id, order.type, order.pair);
             if (cancelReq !== undefined) {
-                log.info(`Order collector: Cancelling ${order.purpose}-order with params: id=${order._id}, type=${order.targetType}, pair=${order.pair}, price=${order.price}, coin1Amount=${order.coin1Amount}, coin2Amount=${order.coin2Amount}.`);
+                log.info(`Order collector: Cancelling ${order.purpose}-order with params: id=${order._id}, type=${order.type}, targetType=${order.targetType}, pair=${order.pair}, price=${order.price}, coin1Amount=${order.coin1Amount}, coin2Amount=${order.coin2Amount}.`);
                 await order.update({
                     isProcessed: true,
                     isCancelled: true

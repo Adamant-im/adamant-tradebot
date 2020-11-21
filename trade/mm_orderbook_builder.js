@@ -61,7 +61,7 @@ module.exports = {
                     orderBookOrdersCount -= 1;
                     let cancelReq = await traderapi.cancelOrder(order._id, order.type, order.pair);
                     if (cancelReq !== undefined) {
-                        log.info(`Closing ob-order with params: id=${order._id}, type=${order.targetType}, pair=${order.pair}, price=${order.price}, coin1Amount=${order.coin1Amount}, coin2Amount=${order.coin2Amount}. It is expired. Open ob-orders: ~${orderBookOrdersCount}.`);
+                        log.info(`Closing ob-order with params: id=${order._id}, type=${order.type}, pair=${order.pair}, price=${order.price}, coin1Amount=${order.coin1Amount}, coin2Amount=${order.coin2Amount}. It is expired. Open ob-orders: ~${orderBookOrdersCount}.`);
                         await order.update({
                             isProcessed: true,
                             isClosed: true,

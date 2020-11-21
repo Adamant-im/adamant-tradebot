@@ -94,7 +94,7 @@ module.exports = {
 
                     let cancelReq = await traderapi.cancelOrder(order._id, order.type, order.pair);
                     if (cancelReq !== undefined) {
-                        log.info(`Closing liq-order with params: id=${order._id}, type=${order.targetType}, pair=${order.pair}, price=${order.price}, coin1Amount=${order.coin1Amount}, coin2Amount=${order.coin2Amount}. It is expired.`);
+                        log.info(`Closing liq-order with params: id=${order._id}, type=${order.type}, pair=${order.pair}, price=${order.price}, coin1Amount=${order.coin1Amount}, coin2Amount=${order.coin2Amount}. It is expired.`);
                         await order.update({
                             isProcessed: true,
                             isClosed: true,
@@ -108,7 +108,7 @@ module.exports = {
 
                     let cancelReq = await traderapi.cancelOrder(order._id, order.type, order.pair);
                     if (cancelReq !== undefined) {
-                        log.info(`Closing liq-order with params: id=${order._id}, type=${order.targetType}, pair=${order.pair}, price=${order.price}, coin1Amount=${order.coin1Amount}, coin2Amount=${order.coin2Amount}. It is out of spread.`);
+                        log.info(`Closing liq-order with params: id=${order._id}, type=${order.type}, pair=${order.pair}, price=${order.price}, coin1Amount=${order.coin1Amount}, coin2Amount=${order.coin2Amount}. It is out of spread.`);
                         await order.update({
                             isProcessed: true,
                             isClosed: true,
@@ -158,7 +158,7 @@ module.exports = {
                                         isClosed: true
                                     }, true);
                                     isLifeOrder = false;
-                                    log.info(`Updating (closing) liq-order with params: id=${dbOrder._id}, type=${dbOrder.targetType}, pair=${dbOrder.pair}, price=${dbOrder.price}, coin1Amount=${dbOrder.coin1Amount}, coin2Amount=${dbOrder.coin2Amount}: order is closed.`);
+                                    log.info(`Updating (closing) liq-order with params: id=${dbOrder._id}, type=${dbOrder.type}, pair=${dbOrder.pair}, price=${dbOrder.price}, coin1Amount=${dbOrder.coin1Amount}, coin2Amount=${dbOrder.coin2Amount}: order is closed.`);
                                     break;
                                 case "filled":
                                     await dbOrder.update({
@@ -166,7 +166,7 @@ module.exports = {
                                         isFilled: true
                                     }, true);
                                     isLifeOrder = false;
-                                    log.info(`Updating (closing) liq-order with params: id=${dbOrder._id}, type=${dbOrder.targetType}, pair=${dbOrder.pair}, price=${dbOrder.price}, coin1Amount=${dbOrder.coin1Amount}, coin2Amount=${dbOrder.coin2Amount}: order is filled.`);
+                                    log.info(`Updating (closing) liq-order with params: id=${dbOrder._id}, type=${dbOrder.type}, pair=${dbOrder.pair}, price=${dbOrder.price}, coin1Amount=${dbOrder.coin1Amount}, coin2Amount=${dbOrder.coin2Amount}: order is filled.`);
                                     break;
                                 case "part_filled":
                                     isLifeOrder = true;
@@ -176,7 +176,7 @@ module.exports = {
                                             isFilled: true,
                                             coin1Amount: exchangeOrder.amountLeft
                                         }, true);
-                                        log.info(`Updating liq-order with params: id=${dbOrder._id}, type=${dbOrder.targetType}, pair=${dbOrder.pair}, price=${dbOrder.price}, coin1Amount=${prev_amount}, coin2Amount=${dbOrder.coin2Amount}: order is partly filled. Amount left: ${dbOrder.coin1Amount}.`);
+                                        log.info(`Updating liq-order with params: id=${dbOrder._id}, type=${dbOrder.type}, pair=${dbOrder.pair}, price=${dbOrder.price}, coin1Amount=${prev_amount}, coin2Amount=${dbOrder.coin2Amount}: order is partly filled. Amount left: ${dbOrder.coin1Amount}.`);
                                     }
                                     break;										
                                 default:
@@ -197,7 +197,7 @@ module.exports = {
 
                         let cancelReq = await traderapi.cancelOrder(dbOrder._id, dbOrder.type, dbOrder.pair);
                         if (cancelReq !== undefined) {
-                            log.info(`Updating (closing) liq-order with params: id=${dbOrder._id}, type=${dbOrder.targetType}, pair=${dbOrder.pair}, price=${dbOrder.price}, coin1Amount=${dbOrder.coin1Amount}, coin2Amount=${dbOrder.coin2Amount}: unable to find it in the exchangeOrders.`);
+                            log.info(`Updating (closing) liq-order with params: id=${dbOrder._id}, type=${dbOrder.type}, pair=${dbOrder.pair}, price=${dbOrder.price}, coin1Amount=${dbOrder.coin1Amount}, coin2Amount=${dbOrder.coin2Amount}: unable to find it in the exchangeOrders.`);
                             await dbOrder.update({
                                 isProcessed: true,
                                 isClosed: true,
