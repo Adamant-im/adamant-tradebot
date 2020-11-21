@@ -173,17 +173,23 @@ function stop(params) {
 
 }
 
-function enable(params) {
+async function enable(params) {
 
-	// enable ob 15 — enable order book building with X maximum number of orders
-	// enable liq 2% 1000 ADM 50 USDT downtrend — provide liquidity with maximum of 1000 ADM asks (sell) and 50 USDT bids (buy) within 2% spread & keep average price lower
-		// downtrend, uptrend, middle
+	/*
+		enable ob 15 — enable order book building with X maximum number of orders
+		enable liq 2% 1000 ADM 50 USDT downtrend — provide liquidity with maximum of 1000 ADM asks (sell) and 50 USDT bids (buy) within 2% spread & keep average price lower
+			- downtrend, uptrend, middle
+		[unavailable] enable pw 0.1—0.15 USDT — watching for price in range 0.1-0.15 USDT
+		[unavailable] enable pw 0.15 USDT 2% — watching for price in range 0.15 USDT +-2%
+		[unavailable] enable pw ADM/USDT@Bit-Z 1% — watching for price in range of ADM/USDT@Bit-Z +-1%
+	*/
+
 
 	const type = (params[0] || '').trim();
-	if (!type || !type.length || !["ob", "liq"].includes(type)) {
+	if (!type || !type.length || !["ob", "liq", "pw"].includes(type)) {
         return {
             msgNotify: '',
-            msgSendBack: `Indicate option: _ob_ for order book building, _liq_ for liquidity and spread maintenance. Example: */enable ob 15*.`,
+            msgSendBack: `Indicate option: _ob_ for order book building, _liq_ for liquidity and spread maintenance, _pw_ for price watching. Example: */enable ob 15*.`,
             notifyType: 'log'
 		} 
 	}
@@ -297,6 +303,120 @@ function enable(params) {
 		infoString = `with ${tradeParams.mm_liquiditySellAmount} ${config.coin1} asks (sell) and ${tradeParams.mm_liquidityBuyQuoteAmount} ${config.coin2} bids (buy) within ${spreadValue}% spread & ${trend}`;
 		optionsString = `Liquidity and spread maintenance`;
 
+	} else if (type === "pw") {
+
+		let rangeOrValue = $u.parseRangeOrValue(params[1]);
+		if (!rangeOrValue.isRange && !rangeOrValue.isValue) {
+			return {
+				msgNotify: '',
+				msgSendBack: `Set a price range or value. Example: */enable pw 0.1—0.2* or */enable pw 0.5 1%*.`,
+				notifyType: 'log'
+			}
+		}
+
+		let pwLowPrice, pwHighPrice, pwMidPrice, pwDeviationPercent, pwSource;
+
+		if (rangeOrValue.isRange) {
+			pwLowPrice = rangeOrValue.from;
+			pwHighPrice = rangeOrValue.to;
+			pwMidPrice = (rangeOrValue.from + rangeOrValue.to) / 2;
+			pwDeviationPercent = pwLowPrice / pwMidPrice * 100;
+			pwSource = 'const';
+		}
+
+		if (rangeOrValue.isValue) {
+
+			const percentString = params[2];
+				if (!percentString || (percentString.slice(-1) !== '%')) {
+				return {
+					msgNotify: '',
+					msgSendBack: `Set a deviation in percentage. Example: */enable pw 0.5 1%*.`,
+					notifyType: 'log'
+				}	
+			}
+			const percentValue = +percentString.slice(0, -1);
+			if (!percentValue || percentValue === Infinity || percentValue <= 0 || percentValue > 80) {
+				return {
+					msgNotify: '',
+					msgSendBack: `Set correct deviation in percentage. Example: */enable pw 0.5 1%*.`,
+					notifyType: 'log'
+				}
+			}
+			pwLowPrice = rangeOrValue.value * (1 - percentValue/100);
+			pwHighPrice = rangeOrValue.value * (1 + percentValue/100);
+			pwMidPrice = rangeOrValue.isValue;
+			pwDeviationPercent = percentValue;
+			pwSource = 'const';
+		}
+		
+		infoString = `from ${pwLowPrice} to ${pwHighPrice} ${config.coin2} (${pwDeviationPercent.toFixed(2)}% deviation)`;
+		optionsString = `Price watching`;
+
+		let isConfirmed = params[params.length-1];
+		if (isConfirmed && (['-y', '-Y'].includes(isConfirmed))) {
+			isConfirmed = true;
+		} else {
+			isConfirmed = false;
+		}
+
+		if (isConfirmed) {
+			tradeParams.mm_isPriceWatcherActive = true;
+			tradeParams.mm_priceWatcherLowPrice = pwLowPrice;
+			tradeParams.mm_priceWatcherHighPrice = pwHighPrice;
+			tradeParams.mm_priceWatcherMidPrice = pwMidPrice;
+			tradeParams.mm_priceWatcherDeviationPercent = pwDeviationPercent;
+			tradeParams.mm_priceWatcherSource = pwSource;
+
+		} else {
+
+			let priceInfoString = '';
+
+			const pairObj = $u.getPairObj(config.pair, false);
+			const pair = pairObj.pair;
+			const coin1 = pairObj.coin1;
+			const coin2 = pairObj.coin2;
+			const coin1Decimals =  pairObj.coin1Decimals;
+			const coin2Decimals =  pairObj.coin2Decimals;
+
+			const currencies = Store.currencies;
+			const res = Object
+				.keys(Store.currencies)
+				.filter(t => t.startsWith(coin1 + '/'))
+				.map(t => {
+					let p = `${coin1}/**${t.replace(coin1 + '/', '')}**`;
+					return `${p}: ${currencies[t]}`;
+				})
+				.join(', ');
+
+			if (!res.length) {
+				if (!pair) {
+					priceInfoString = `I can’t get rates for *${coin1} from Infoservice*.`;
+				}
+			} else {
+				priceInfoString = `Global market rates for ${coin1}:\n${res}.`;
+			}
+
+			const exchangeRatesBefore = await traderapi.getRates(pair);
+			if (priceInfoString)
+				priceInfoString += "\n\n";
+			if (exchangeRatesBefore) {
+				priceInfoString += `${config.exchangeName} rates for ${pair} pair:\nBid: ${exchangeRatesBefore.bid.toFixed(coin2Decimals)}, ask: ${exchangeRatesBefore.ask.toFixed(coin2Decimals)}.`;
+			} else {
+				priceInfoString += `Unable to get ${config.exchangeName} rates for ${pair}.`;
+			}
+
+			pendingConfirmation.command = `/enable ${params.join(' ')}`;
+			pendingConfirmation.timestamp = Date.now();
+			msgNotify = '';
+			msgSendBack = `Are you sure to enable ${optionsString} for ${config.pair} pair ${infoString}? Confirm with **/y** command or ignore.\n\n${priceInfoString}`;
+			
+			return {
+				msgNotify,
+				msgSendBack,
+				notifyType: 'log'
+			}
+
+		}
 	}
 
 	if (tradeParams.mm_isActive) {
@@ -1236,7 +1356,7 @@ async function make(params, tx, confirmation) {
 			if (priceInfoString)
 				priceInfoString += "\n\n";
 			if (exchangeRatesBefore) {
-				priceInfoString += `${config.exchangeName} rates for ${pair} pair:\nBid: ${exchangeRatesBefore.bid.toFixed(coin2Decimals)}, ask: ${exchangeRatesBefore.ask.toFixed(coin2Decimals)}, .`;
+				priceInfoString += `${config.exchangeName} rates for ${pair} pair:\nBid: ${exchangeRatesBefore.bid.toFixed(coin2Decimals)}, ask: ${exchangeRatesBefore.ask.toFixed(coin2Decimals)}.`;
 			} else {
 				priceInfoString += `Unable to get ${config.exchangeName} rates for ${pair}.`;
 			}

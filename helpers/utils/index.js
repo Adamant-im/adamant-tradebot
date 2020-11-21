@@ -327,5 +327,57 @@ module.exports = {
 		else
 			return id.substring(n + 1);
 	},
+	parseRangeOrValue(str) {
+
+		if (!str) {
+			return {
+				isRange: false,
+				isValue: false
+			}
+		}
+		
+		let from, to, value;
+		if (str.indexOf('-') > -1) { // hyphen
+			[from, to] = str.split('-');
+		} else if (str.indexOf('—') > -1) { // long dash
+			[from, to] = str.split('—');
+		} else if (str.indexOf('–') > -1) { // short dash
+			[from, to] = str.split('–');
+		} else if (str.indexOf('−') > -1) { // minus
+			[from, to] = str.split('−');
+		} else {
+			value = +str;
+			if (!value || value === Infinity) {
+				return {
+					isRange: false,
+					isValue: false
+				}
+			} else {
+				return {
+					isRange: false,
+					isValue: true,
+					value
+				}
+			}
+		}
+
+		from = +from;
+		to = +to;
+
+		if (!from || from === Infinity || !to || to === Infinity) {
+			return {
+				isRange: false,
+				isValue: false
+			}
+		}
+		
+		return {
+			isRange: true,
+			isValue: false,
+			from,
+			to
+		};
+
+	},
 	ADM: adm_utils
 };
