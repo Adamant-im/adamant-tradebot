@@ -266,7 +266,7 @@ async function setPrice(type, pair, coin1Amount) {
         let orderBookInfo = $u.getOrderBookInfo(orderBook, tradeParams.mm_liquiditySpreadPercent);
         if (!orderBookInfo) {
             if (Date.now()-lastNotifyOrderBooksTimestamp > HOUR) {
-                notify(`${config.notifyName}: Order books are empty for ${config.pair}, or temporary API error. Unable to set a price for ${pair} while placing mm-order.`, 'warn');
+                notify(`${config.notifyName}: Order books are empty for ${config.pair}, or temporary API error. Unable to set a price while placing mm-order.`, 'warn');
                 lastNotifyOrderBooksTimestamp = Date.now();
             }
             return {

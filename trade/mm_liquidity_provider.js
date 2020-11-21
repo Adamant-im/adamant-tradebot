@@ -45,7 +45,7 @@ module.exports = {
             let orderBookInfo = $u.getOrderBookInfo(await traderapi.getOrderBook(config.pair), tradeParams.mm_liquiditySpreadPercent);
             if (!orderBookInfo) {
                 if (Date.now()-lastNotifyOrderBooksTimestamp > HOUR) {
-                    notify(`${config.notifyName}: Order books are empty for ${config.pair}, or temporary API error. Unable to get spread for ${pair} while placing liq-order.`, 'warn');
+                    notify(`${config.notifyName}: Order books are empty for ${config.pair}, or temporary API error. Unable to get spread while placing liq-order.`, 'warn');
                     lastNotifyOrderBooksTimestamp = Date.now();
                 }
                 return;
