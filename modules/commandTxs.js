@@ -117,6 +117,13 @@ function start(params) {
 			notesStringMsg += ' Order book building is disabled—type */enable ob* to enable.';
 		}
 
+		if (tradeParams.mm_isPriceWatcherActive) {
+			optionsString += ' & price watching';
+		} else {
+			notesStringNotify += ' Price watching is disabled.';
+			notesStringMsg += ' Price watching is disabled—type */enable pw* to enable.';
+		}
+
 		if (tradeParams.mm_isLiquidityActive) {
 			optionsString += ' & liquidity and spread maintenance';
 		} else {
@@ -151,7 +158,7 @@ function stop(params) {
 
 	if (type === "mm") {
 
-		let optionsString = ', order book building, liquidity and spread maintenance';
+		let optionsString = ', order book building, liquidity and spread maintenance, price watching';
 
 		if (tradeParams.mm_isActive) {
 			msgNotify = `${config.notifyName} stopped Market making${optionsString} for ${config.pair} pair.`;
@@ -349,7 +356,7 @@ async function enable(params) {
 			pwSource = 'const';
 		}
 		
-		infoString = `from ${pwLowPrice} to ${pwHighPrice} ${config.coin2} (${pwDeviationPercent.toFixed(2)}% deviation)`;
+		infoString = `from ${pwLowPrice.toFixed(config.coin2Decimals)} to ${pwHighPrice.toFixed(config.coin2Decimals)} ${config.coin2} (${pwDeviationPercent.toFixed(2)}% deviation)`;
 		optionsString = `Price watching`;
 
 		let isConfirmed = params[params.length-1];
@@ -440,10 +447,10 @@ async function enable(params) {
 function disable(params) {
 
 	const type = (params[0] || '').trim();
-	if (!type || !type.length || !["ob", "liq"].includes(type)) {
+	if (!type || !type.length || !["ob", "liq", "pw"].includes(type)) {
         return {
             msgNotify: '',
-            msgSendBack: `Indicate option: _ob_ for order book building, _liq_ for liquidity and spread maintenance. Example: */disable ob*.`,
+            msgSendBack: `Indicate option: _ob_ for order book building, _liq_ for liquidity and spread maintenance, _pw_ for price watching. Example: */disable ob*.`,
             notifyType: 'log'
 		} 
 	}
@@ -456,6 +463,9 @@ function disable(params) {
 	} else if (type === "liq") {
 		tradeParams.mm_isLiquidityActive = false;
 		optionsString = `Liquidity and spread maintenance`;
+	} else if (type === "pw") {
+		tradeParams.mm_isPriceWatcherActive = false;
+		optionsString = `Price watching`;
 	}
 
 	if (tradeParams.mm_isActive) {
@@ -1429,7 +1439,14 @@ async function make(params, tx, confirmation) {
 				pendingConfirmation.command = `/make ${params.join(' ')}`;
 				pendingConfirmation.timestamp = Date.now();
 				msgNotify = '';
-				msgSendBack = `Are you sure to make ${priceString}? I am going to **${actionString}**. Confirm with **/y** command or ignore.\n\n${priceInfoString}`;
+				let pwWarning = ' ';
+				if (tradeParams.mm_isActive && tradeParams.mm_isPriceWatcherActive) {
+					pwWarning = `\n\n**Warning**: Price watcher is enabled for ${config.pair} from ${tradeParams.mm_priceWatcherLowPrice.toFixed(config.coin2Decimals)} to ${tradeParams.mm_priceWatcherHighPrice.toFixed(config.coin2Decimals)} ${config.coin2}.`;
+					if (targetPrice < tradeParams.mm_priceWatcherLowPrice || targetPrice > tradeParams.mm_priceWatcherHighPrice)
+						pwWarning += ` **Target price ${targetPrice} ${config.coin2} is out of this range.** The bot will try to restore a price.`;
+					pwWarning += `\n\n`;
+				}
+				msgSendBack = `Are you sure to make ${priceString}? I am going to **${actionString}**.${pwWarning}Confirm with **/y** command or ignore.\n\n${priceInfoString}`;
 			}	
 
 		} // if (param === "price")
