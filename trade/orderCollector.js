@@ -35,22 +35,26 @@ module.exports = async (purposes, pair) => {
         });    
     }
 
-    ordersToClear.forEach(async order => {
+    for (const order of ordersToClear) {
+
         try {
 
-            traderapi.cancelOrder(order._id, order.type, order.pair);
-            order.update({
-                isProcessed: true,
-                isCancelled: true
-            });
-            await order.save();
-
-            log.info(`Cancelling ${order.purpose}-order with params: id=${order._id}, type=${order.targetType}, pair=${order.pair}, price=${order.price}, coin1Amount=${order.coin1Amount}, coin2Amount=${order.coin2Amount}.`);
+            let cancelReq = await traderapi.cancelOrder(order._id, order.type, order.pair);
+            if (cancelReq !== undefined) {
+                log.info(`Order collector: Cancelling ${order.purpose}-order with params: id=${order._id}, type=${order.targetType}, pair=${order.pair}, price=${order.price}, coin1Amount=${order.coin1Amount}, coin2Amount=${order.coin2Amount}.`);
+                await order.update({
+                    isProcessed: true,
+                    isCancelled: true
+                }, true);
+            } else {
+                log.log(`Order collector: Request to cancel ${order.purpose}-order with id=${order._id} failed. Will try next time, keeping this order in the DB for now.`);
+            }
 
         } catch (e) {
-            log.error('Error in orderCollector module: ' + e);
+            log.error(`Error in for (const order: ${order._id} of ordersToClear) of ${$u.getModuleName(module.id)}: ${err}.`);
         }
-    });
+
+    };
     
     return ordersToClear.length;
 

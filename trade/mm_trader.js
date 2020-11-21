@@ -38,7 +38,6 @@ module.exports = {
             if (priceReq.coin1Amount) coin1Amount = priceReq.coin1Amount; // it may be changed
             const coin2Amount = coin1Amount * price;
 
-            let order1, order2;
             let output = '';
             let orderParamsString = '';
             const pairObj = $u.getPairObj(config.pair);
@@ -74,13 +73,15 @@ module.exports = {
                 return;
             }
 
+            let order1, order2;
+
             if (priceReq.mmCurrentAction === 'executeInSpread') {
 
-                order1 = (await traderapi.placeOrder(crossType(type), config.pair, price, coin1Amount, 1, null, pairObj)).orderid;
-                if (order1) {
+                order1 = await traderapi.placeOrder(crossType(type), config.pair, price, coin1Amount, 1, null, pairObj);
+                if (order1 && order1.orderid) {
                     const {ordersDb} = db;
                     const order = new ordersDb({
-                        _id: order1,
+                        _id: order1.orderid,
                         crossOrderId: null,
                         date: $u.unix(),
                         purpose: 'mm', // Market making
@@ -99,32 +100,35 @@ module.exports = {
                         isExecuted: false,
                         isCancelled: false
                     });
-                    // await order.save();
-                    order2 = (await traderapi.placeOrder(type, config.pair, price, coin1Amount, 1, null, pairObj)).orderid;
-                    if (order2) {
+
+                    order2 = await traderapi.placeOrder(type, config.pair, price, coin1Amount, 1, null, pairObj);
+                    if (order2 && order2.orderid) {
                         output = `${type} ${coin1Amount.toFixed(config.coin1Decimals)} ${config.coin1} for ${coin2Amount.toFixed(config.coin2Decimals)} ${config.coin2}`;
                         log.info(`Successfully executed mm-order to ${output}. Action: executeInSpread.`);
                         order.update({
                             isProcessed: true,
                             isExecuted: true,
-                            crossOrderId: order2
+                            crossOrderId: order2.orderid
                         });
                         await order.save();
+
                     } else {
+
                         await order.save();
-                        notify(`${config.notifyName} unable to execute cross-order for mm-order with params: id=${order1}, ${orderParamsString}. Action: executeInSpread. Check balances. Running order collector now.`, 'warn', config.silent_mode);
+                        notify(`${config.notifyName} unable to execute cross-order for mm-order with params: id=${order1.orderid}, ${orderParamsString}. Action: executeInSpread. Check balances. Running order collector now.`, 'warn', config.silent_mode);
                         orderCollector(['mm'], config.pair);
                     }         
                 } else { // if order1
-                    console.warn(`${config.notifyName} unable to execute mm-order with params: ${orderParamsString}. Action: executeInSpread. No order id returned.`);
+                    log.warn(`${config.notifyName} unable to execute mm-order with params: ${orderParamsString}. Action: executeInSpread. No order id returned.`);
                 }
+
             } else if (priceReq.mmCurrentAction === 'executeInOrderBook') {
 
-                order1 = (await traderapi.placeOrder(type, config.pair, price, coin1Amount, 1, null, pairObj)).orderid;
-                if (order1) {
+                order1 = await traderapi.placeOrder(type, config.pair, price, coin1Amount, 1, null, pairObj);
+                if (order1 && order1.orderid) {
                     const {ordersDb} = db;
                     const order = new ordersDb({
-                        _id: order1,
+                        _id: order1.orderid,
                         crossOrderId: null,
                         date: $u.unix(),
                         purpose: 'mm', // Market making
@@ -149,7 +153,7 @@ module.exports = {
                     log.info(`Successfully executed mm-order to ${output}. Action: executeInOrderBook.`);
                         
                 } else { // if order1
-                    console.warn(`${config.notifyName} unable to execute mm-order with params: ${orderParamsString}. Action: executeInOrderBook. No order id returned.`);
+                    log.warn(`${config.notifyName} unable to execute mm-order with params: ${orderParamsString}. Action: executeInOrderBook. No order id returned.`);
                 }
             }
 

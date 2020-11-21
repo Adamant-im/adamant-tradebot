@@ -635,14 +635,18 @@ async function clear(params) {
 
 		const openOrders = await traderapi.getOpenOrders(pair);
 		if (openOrders) {
+
 			if ((count + openOrders.length) > 0) {
+
 				output = `Clearing **all** ${count + openOrders.length} orders for ${pair} pair on ${config.exchangeName}..`;
 				openOrders.forEach(order => {
 					traderapi.cancelOrder(order.orderid, order.side, order.symbol);
 				});
+
 			} else {
 				output = `No open orders on ${config.exchangeName} for ${pair}.`;
 			}
+
 		} else {
 			output = `Unable to get ${config.exchangeName} orders for ${pair}.`;
 		}
@@ -846,10 +850,10 @@ async function fill(params) {
 	// Place orders
 	let total1 = 0, total2 = 0;
 	items = 0;
-	let id;
+	let order;
 	for (i=0; i < orderList.length; i++) {
-		id = (await traderapi.placeOrder(type, pair, orderList[i].price, orderList[i].amount, 1, null, pairObj)).orderid;
-		if (id) {
+		order = await traderapi.placeOrder(type, pair, orderList[i].price, orderList[i].amount, 1, null, pairObj);
+		if (order && order.orderid) {
 			items += 1;
 			total1 += +orderList[i].amount;
 			total2 += +orderList[i].altAmount;
@@ -1017,16 +1021,24 @@ async function buy_sell(params, type) {
 		params.quote = params.amount * params.price;
 	}
 
-	let result;
+	let result, msgNotify, msgSendBack;
 	if (params.price === 'market') {
 		result = await traderapi.placeOrder(type, params.pair, null, params.amount, 0, params.quote, params.pairObj);
 	} else {
 		result = await traderapi.placeOrder(type, params.pair, params.price, params.amount, 1, params.quote, params.pairObj);
 	}
 
+	if (result !== undefined) {
+		msgSendBack = result.message;
+		msgNotify = `${config.notifyName}: ${result.message}`;
+	} else {
+		msgSendBack = `Request to place an order with params ${JSON.stringify(params)} failed. It looks like an API temporary error. Try again.`;
+		msgNotify = '';
+	}
+
 	return {
-		msgNotify: `${config.notifyName}: ${result.message}`,
-		msgSendBack: result.message,
+		msgNotify,
+		msgSendBack,
 		notifyType: 'log'
 	}
 
@@ -1412,7 +1424,7 @@ async function make(params, tx, confirmation) {
 			if (confirmation) {
 				// let order = true;
 				let order = await traderapi.placeOrder(orderBookInfo.typeTargetPrice, config.pair, targetPrice, orderBookInfo.amountTargetPrice, 1, orderBookInfo.amountTargetPriceQuote, pairObj);
-				if (order) {
+				if (order && order.orderid) {
 					var showRatesAfterOrder = async function (exchangeRatesBefore, priceString, actionString) {
 						setTimeout(async () => { 
 
@@ -1433,6 +1445,12 @@ async function make(params, tx, confirmation) {
 						}, 2000);
 					}
 					await showRatesAfterOrder(exchangeRatesBefore, priceString, actionString);
+
+				} else {
+
+					msgNotify = '';
+					msgSendBack = `Unable to make ${priceString}. I was unable to ${actionString}: it looks like a temporary API error. Try again.\n\n${priceInfoString}`;
+
 				}
 	
 			} else {

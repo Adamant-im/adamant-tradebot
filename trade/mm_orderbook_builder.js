@@ -55,16 +55,22 @@ module.exports = {
         let orderBookOrdersCount = orderBookOrders.length;
         orderBookOrders.forEach(async order => {
             try {
+
                 if (order.dateTill < $u.unix()) {
+
                     orderBookOrdersCount -= 1;
-                    let req = await traderapi.cancelOrder(order._id, order.type, order.pair);
-                    // console.log('**************', req);
-                    order.update({
-                        isProcessed: true,
-                        isClosed: true,
-                        isExpired: true
-                    }, true);
-                    log.info(`Closing ob-order with params: id=${order._id}, type=${order.targetType}, pair=${order.pair}, price=${order.price}, coin1Amount=${order.coin1Amount}, coin2Amount=${order.coin2Amount}. It is expired. Open ob-orders: ~${orderBookOrdersCount}.`);
+                    let cancelReq = await traderapi.cancelOrder(order._id, order.type, order.pair);
+                    if (cancelReq !== undefined) {
+                        log.info(`Closing ob-order with params: id=${order._id}, type=${order.targetType}, pair=${order.pair}, price=${order.price}, coin1Amount=${order.coin1Amount}, coin2Amount=${order.coin2Amount}. It is expired. Open ob-orders: ~${orderBookOrdersCount}.`);
+                        await order.update({
+                            isProcessed: true,
+                            isClosed: true,
+                            isExpired: true
+                        }, true);
+                    } else {
+                        log.log(`Request to close ob-order with id=${order._id} failed. Will try next time, keeping this order in the DB for now.`);
+                    }
+        
                 }
             } catch (e) {
                 log.error(`Error in closeOrderBookOrders() of ${$u.getModuleName(module.id)} module: ` + e);
@@ -83,7 +89,6 @@ module.exports = {
             const coin2Amount = coin1Amount * price;
             const lifeTime = setLifeTime(position);
 
-            let orderId;
             let output = '';
             let orderParamsString = '';
             const pairObj = $u.getPairObj(config.pair);
@@ -114,11 +119,12 @@ module.exports = {
                 return;
             }
 
-            orderId = (await traderapi.placeOrder(type, config.pair, price, coin1Amount, 1, null, pairObj)).orderid;
-            if (orderId) {
+            let orderReq;
+            orderReq = await traderapi.placeOrder(type, config.pair, price, coin1Amount, 1, null, pairObj);
+            if (orderReq && orderReq.orderid) {
                 const {ordersDb} = db;
                 const order = new ordersDb({
-                    _id: orderId,
+                    _id: orderReq.orderid,
                     date: $u.unix(),
                     dateTill: $u.unix() + lifeTime,
                     purpose: 'ob', // ob: dynamic order book order
@@ -140,7 +146,7 @@ module.exports = {
                 output = `${type} ${coin1Amount.toFixed(config.coin1Decimals)} ${config.coin1} for ${coin2Amount.toFixed(config.coin2Decimals)} ${config.coin2}`;
                 log.info(`Successfully placed ob-order to ${output}. Open ob-orders: ~${orderBookOrdersCount+1}.`);
             } else {
-                console.warn(`${config.notifyName} unable to execute ob-order with params: ${orderParamsString}. No order id returned.`);
+                log.warn(`${config.notifyName} unable to execute ob-order with params: ${orderParamsString}. No order id returned.`);
             }
 
         } catch (e) {

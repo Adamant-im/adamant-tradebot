@@ -100,13 +100,19 @@ module.exports = {
         for (const order of pwOrders) {
             try {
                 if (order.dateTill < $u.unix()) {
-                    await traderapi.cancelOrder(order._id, order.type, order.pair);
-                    await order.update({
-                        isProcessed: true,
-                        isClosed: true,
-                        isExpired: true
-                    }, true);
-                    log.info(`Closing pw-order with params: id=${order._id}, type=${order.targetType}, pair=${order.pair}, price=${order.price}, coin1Amount=${order.coin1Amount}, coin2Amount=${order.coin2Amount}. It is expired.`);
+
+                    let cancelReq = await traderapi.cancelOrder(order._id, order.type, order.pair);
+                    if (cancelReq !== undefined) {
+                        log.info(`Closing pw-order with params: id=${order._id}, type=${order.targetType}, pair=${order.pair}, price=${order.price}, coin1Amount=${order.coin1Amount}, coin2Amount=${order.coin2Amount}. It is expired.`);
+                        await order.update({
+                            isProcessed: true,
+                            isClosed: true,
+                            isExpired: true
+                        }, true);
+                    } else {
+                        log.log(`Request to close expired pw-order with id=${order._id} failed. Will try next time, keeping this order in the DB for now.`);
+                    }
+        
                 } else {
                     updatedPwOrders.push(order);
                 }
@@ -178,16 +184,24 @@ module.exports = {
                     } // for (const exchangeOrder of exchangeOrders)
 
                     if (isOrderFound) {
+
                         if (isLifeOrder)
                         updatedPwOrders.push(dbOrder);
+                        
                     } else {
-                        await traderapi.cancelOrder(dbOrder._id, dbOrder.type, dbOrder.pair);
-                        await dbOrder.update({
-                            isProcessed: true,
-                            isClosed: true,
-                            isNotFound: true
-                        }, true);
-                        log.info(`Updating (closing) pw-order with params: id=${dbOrder._id}, type=${dbOrder.targetType}, pair=${dbOrder.pair}, price=${dbOrder.price}, coin1Amount=${dbOrder.coin1Amount}, coin2Amount=${dbOrder.coin2Amount}: unable to find it in the exchangeOrders.`);
+
+                        let cancelReq = await traderapi.cancelOrder(dbOrder._id, dbOrder.type, dbOrder.pair);
+                        if (cancelReq !== undefined) {
+                            log.info(`Updating (closing) pw-order with params: id=${dbOrder._id}, type=${dbOrder.targetType}, pair=${dbOrder.pair}, price=${dbOrder.price}, coin1Amount=${dbOrder.coin1Amount}, coin2Amount=${dbOrder.coin2Amount}: unable to find it in the exchangeOrders.`);
+                            await dbOrder.update({
+                                isProcessed: true,
+                                isClosed: true,
+                                isNotFound: true
+                            }, true);
+                        } else {
+                            log.log(`Request to update (close) not found pw-order with id=${dbOrder._id} failed. Will try next time, keeping this order in the DB for now.`);
+                        }
+
                     }
 
                 } // for (const dbOrder of liquidityOrders)
@@ -215,7 +229,6 @@ module.exports = {
             const coin2Amount = orderBookInfo.amountTargetPriceQuote;
             const lifeTime = setLifeTime();
 
-            let orderId;
             let output = '';
             let orderParamsString = '';
             const pairObj = $u.getPairObj(config.pair);
@@ -238,12 +251,12 @@ module.exports = {
                 return;
             }
 
-            orderId = (await traderapi.placeOrder(type, config.pair, price, coin1Amount, 1, null, pairObj)).orderid;
-            // orderId = true;
-            if (orderId) {
+            let orderReq;
+            orderReq = await traderapi.placeOrder(type, config.pair, price, coin1Amount, 1, null, pairObj);
+            if (orderReq && orderReq.orderid) {
                 const {ordersDb} = db;
                 const order = new ordersDb({
-                    _id: orderId,
+                    _id: orderReq.orderid,
                     date: $u.unix(),
                     dateTill: $u.unix() + lifeTime,
                     purpose: 'pw', // pw: price watcher order
@@ -267,7 +280,7 @@ module.exports = {
                 log.info(`Successfully placed pw-order to ${output}.`);
 
             } else {
-                console.warn(`${config.notifyName} unable to execute pw-order with params: ${orderParamsString}. No order id returned.`);
+                log.warn(`${config.notifyName} unable to execute pw-order with params: ${orderParamsString}. No order id returned.`);
                 return false;
             }
 
