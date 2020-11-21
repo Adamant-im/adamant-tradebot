@@ -1568,9 +1568,14 @@ async function balances() {
 		output = `All empty.`;
 	} else {
 		balances.forEach(crypto => {
-			output += `${$u.thousandSeparator(+crypto.free.toFixed(8), true)} _${crypto.code}_`;
-			if (+crypto.freezed > 0) {
-				output += ` & ${$u.thousandSeparator(+crypto.freezed.toFixed(8), true)} freezed`;
+			
+			output += `${$u.thousandSeparator(+(crypto.total).toFixed(8), true)} _${crypto.code}_`;
+			if (crypto.total != crypto.free) {
+				output += ` (${$u.thousandSeparator(+crypto.free.toFixed(8), true)} available`;
+				if (crypto.freezed > 0) {
+					output += ` & ${$u.thousandSeparator(+crypto.freezed.toFixed(8), true)} frozen`;
+				}
+				output += ")";
 			}
 			output += "\n";
 		});
@@ -1578,8 +1583,7 @@ async function balances() {
 
 	return {
 		msgNotify: ``,
-		msgSendBack: `${config.exchangeName} balances:
-${output}`,
+		msgSendBack: `${config.exchangeName} balances:\n${output}`,
 		notifyType: 'log'
 	}
 

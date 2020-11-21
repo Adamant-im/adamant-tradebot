@@ -27,7 +27,8 @@ module.exports = (apiKey, secretKey, pwd) => {
 							result.push({
 								code: crypto.currency.iso3.toUpperCase(),
 								free: +(crypto.balance_available / SAT).toFixed(8),
-								freezed: +((+crypto.balance - +crypto.balance_available) / SAT).toFixed(8)
+								freezed: +((+crypto.balance - +crypto.balance_available) / SAT).toFixed(8),
+								total: +(crypto.balance / SAT).toFixed(8)
 							});
 						})
 						if (nonzero) {

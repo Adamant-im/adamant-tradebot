@@ -25,8 +25,10 @@ module.exports = (apiKey, secretKey, pwd) => {
 								code: crypto.symbol,
 								free: +crypto.available,
 								freezed: +crypto.reserved,
+								total: +crypto.available + +crypto.reserved,
 								btc: +crypto.estimatedBalanceBtc,
-								usd: +crypto.estimatedBalanceUsd
+								usd: +crypto.estimatedBalanceUsd,
+								pending: +crypto.pending
 							});
 						})
 						if (nonzero) {

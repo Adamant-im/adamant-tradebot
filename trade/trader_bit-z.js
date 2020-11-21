@@ -29,6 +29,7 @@ module.exports = (apiKey, secretKey, pwd) => {
 								code: crypto.name.toUpperCase(),
 								free: +crypto.over,
 								freezed: +crypto.lock,
+								total: +crypto.num,
 								btc: +crypto.btc,
 								usd: +crypto.usd
 							});

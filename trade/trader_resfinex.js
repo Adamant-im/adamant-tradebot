@@ -23,8 +23,9 @@ module.exports = (apiKey, secretKey, pwd) => {
 						assets.forEach(crypto => {
 							result.push({
 								code: crypto.sym,
-								free: crypto.total - crypto.inorder,
-								freezed: +crypto.inorder
+								free: +crypto.total - +crypto.inorder,
+								freezed: +crypto.inorder,
+								total: +crypto.total
 							});
 						})
 						if (nonzero) {
