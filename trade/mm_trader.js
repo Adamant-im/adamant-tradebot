@@ -67,7 +67,7 @@ module.exports = {
                         notify(balances.message, 'warn', config.silent_mode);
                         lastNotifyBalancesTimestamp = Date.now();
                     } else {
-                        log.log(message);
+                        log.log(balances.message);
                     }
                 }
                 return;
