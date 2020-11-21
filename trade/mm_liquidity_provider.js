@@ -272,6 +272,7 @@ module.exports = {
             }
 
             // Check balances
+            const balances = await isEnoughCoins(config.coin1, config.coin2, coin1Amount, coin2Amount, type);
             if (!balances.result) {
                 if (balances.message) {
                     if (Date.now()-lastNotifyBalancesTimestamp > HOUR) {
