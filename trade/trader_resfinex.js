@@ -23,8 +23,9 @@ module.exports = (apiKey, secretKey, pwd) => {
 						assets.forEach(crypto => {
 							result.push({
 								code: crypto.sym,
-								free: crypto.total - crypto.inorder,
-								freezed: +crypto.inorder
+								free: +crypto.total - +crypto.inorder,
+								freezed: +crypto.inorder,
+								total: +crypto.total
 							});
 						})
 						if (nonzero) {
@@ -34,8 +35,11 @@ module.exports = (apiKey, secretKey, pwd) => {
 						resolve(result);
 					} catch (e) { 					
 						resolve(false);
-						log.warn('Error while making getBalances() request: ' + e);
+						log.warn('Error while processing getBalances() request: ' + e);
 					};
+				}).catch(err => {
+					log.log(`API request getBalances(nonzero: ${nonzero}) of ${$u.getModuleName(module.id)} module failed. ${err}.`);
+					resolve(undefined);
 				});
 			});
 		},
@@ -52,18 +56,45 @@ module.exports = (apiKey, secretKey, pwd) => {
 							openOrders = [];
 
 						let result = [];
+
+						// this doesn't work as Resfinex don't update orders' statuses
 						openOrders.forEach(order => {
+							let orderStatus;
+							switch (order.status) {
+								case "OPEN":
+									orderStatus = "new";
+									break;
+								case "CANCELED":
+									orderStatus = "closed";
+									break;
+								case "FILLED":
+									orderStatus = "filled";
+									break;
+								case "PARTIAL_FILED":
+									orderStatus = "part_filled";
+									break;										
+								default:
+									break;
+							}
+
+							// so we need to update orders' statuses our own way
+							if (order.amount === order.filled)
+								orderStatus = "filled"
+							else if (order.filled > 0)
+								orderStatus = "part_filled";
+
 							result.push({
-								orderid: order.orderId,
+								orderid: order.orderId.toString(),
 								symbol: order.pair,
-								price: order.price,
+								price: +order.price,
 								side: order.side, // SELL or BUY
 								type: order.type, // LIMIT or MARKET, etc.
 								timestamp: order.timestamp,
-								amount: order.amount,
-								executedamount: order.filled,
-								status: order.status, // OPEN, etc.
-								uid: order.orderId,
+								amount: +order.amount,
+								amountExecuted: +order.filled,
+								amountLeft: +order.amount - +order.filled,
+								status: orderStatus, // OPEN, etc.
+								uid: order.orderId.toString(),
 								// coin2Amount: order.total,
 								// coinFrom: order.baseCurrency,
 								// coinTo: order.quoteCurrency
@@ -76,8 +107,11 @@ module.exports = (apiKey, secretKey, pwd) => {
 						
 					} catch (e) {
 						resolve(false);
-						log.warn('Error while making getOpenOrders() request: ' + e);
+						log.warn('Error while processing getOpenOrders() request: ' + e);
 					};
+				}).catch(err => {
+					log.log(`API request getOpenOrders(pair: ${pair}) of ${$u.getModuleName(module.id)} module failed. ${err}.`);
+					resolve(undefined);
 				});
 			});
 		},
@@ -94,9 +128,12 @@ module.exports = (apiKey, secretKey, pwd) => {
 							resolve(false);
 						}
 					} catch (e) {
-						resolve(false);
-						log.warn('Error while making cancelOrder() request: ' + e);
+						resolve(undefined);
+						log.warn('Error while processing cancelOrder() request: ' + e);
 					};				
+				}).catch(err => {
+					log.log(`API request ${arguments.callee.name}(orderId: ${orderId}) of ${$u.getModuleName(module.id)} module failed. ${err}.`);
+					resolve(undefined);
 				});
 			});
 		},
@@ -128,13 +165,19 @@ module.exports = (apiKey, secretKey, pwd) => {
 								}
 							} catch (e) {
 								resolve(false);
-								log.warn('Error while making getRates() orderBook() request: ' + e);
+								log.warn('Error while processing getRates() orderBook() request: ' + e);
 							};
+						}).catch(err => {
+							log.log(`API request getRates(pair: ${pair_.pair}) of ${$u.getModuleName(module.id)} module failed. ${err}.`);
+							resolve(undefined);
 						});
 					} catch (e) {
 						resolve(false);
-						log.warn('Error while making getRates() ticker() request: ' + e);
+						log.warn('Error while processing getRates() ticker() request: ' + e);
 					};
+				}).catch(err => {
+					log.log(`API request getRates(pair: ${pair_.pair}) of ${$u.getModuleName(module.id)} module failed. ${err}.`);
+					resolve(undefined);
 				});
 			});
 		},
@@ -171,9 +214,9 @@ module.exports = (apiKey, secretKey, pwd) => {
 							// console.log(data);
 							let result = JSON.parse(data);
 							if (result.data && result.data.orderId) {
-								message = `Order placed to ${output} Order Id: ${result.data.orderId}.`; 
+								message = `Order placed to ${output} Order Id: ${result.data.orderId.toString()}.`; 
 								log.info(message);
-								order.orderid = result.data.orderId;
+								order.orderid = result.data.orderId.toString();
 								order.message = message;
                                 resolve(order);	
 							} else {
@@ -184,12 +227,15 @@ module.exports = (apiKey, secretKey, pwd) => {
 								resolve(order);	
 							}
 						} catch (e) {
-							message = 'Error while making placeOrder() request: ' + e;
+							message = 'Error while processing placeOrder() request: ' + e;
 							log.warn(message);
 							order.orderid = false;
 							order.message = message;
 							resolve(order);
 						};
+					}).catch(err => {
+						log.log(`API request RESFINEX.addEntrustSheet-limit(pair: ${pair_.pair}, coin1Amount: ${coin1Amount}, price: ${price}, side: ${side}, 'LIMIT') of ${$u.getModuleName(module.id)} module failed. ${err}.`);
+						resolve(undefined);
 					});
 				});
 	
@@ -225,9 +271,9 @@ module.exports = (apiKey, secretKey, pwd) => {
 							// console.log(data);
 							let result = JSON.parse(data);
 							if (result.data && result.data.orderId) {
-								message = `Order placed to ${output} Order Id: ${result.data.orderId}.`; 
+								message = `Order placed to ${output} Order Id: ${result.data.orderId.toString()}.`; 
 								log.info(message);
-								order.orderid = result.data.orderId;
+								order.orderid = result.data.orderId.toString();
 								order.message = message;
 								resolve(order);	
 							} else {
@@ -238,12 +284,15 @@ module.exports = (apiKey, secretKey, pwd) => {
 								resolve(order);	
 							}
 						} catch (e) {
-							message = 'Error while making placeOrder() request: ' + e;
+							message = 'Error while processing placeOrder() request: ' + e;
 							log.warn(message);
 							order.orderid = false;
 							order.message = message;
 							resolve(order);
 						};
+					}).catch(err => {
+						log.log(`API request RESFINEX.addEntrustSheet-market(pair: ${pair_.pair}, coin1Amount: ${coin1Amount}, '', side: ${side}, 'MARKET') of ${$u.getModuleName(module.id)} module failed. ${err}.`);
+						resolve(undefined);
 					});
 				});
 			}
@@ -287,8 +336,11 @@ module.exports = (apiKey, secretKey, pwd) => {
 						resolve(result);
 					} catch (e) {
 						resolve(false);
-						log.warn('Error while making orderBook() request: ' + e);
+						log.warn('Error while processing orderBook() request: ' + e);
 					};
+				}).catch(err => {
+					log.log(`API request getOrderBook(pair: ${pair}) of ${$u.getModuleName(module.id)} module failed. ${err}.`);
+					resolve(undefined);
 				});
 			});
 		},

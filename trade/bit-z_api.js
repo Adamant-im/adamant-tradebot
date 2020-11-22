@@ -1,5 +1,6 @@
 var CryptoJS = require('crypto-js');
 const request = require('request');
+const log = require('../helpers/log');
 const DEFAULT_HEADERS = {
     "Content-Type": "application/x-www-form-urlencoded",
     "User-Agent": "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.71 Safari/537.36"
@@ -42,7 +43,7 @@ function market_api(path, data) {
             var httpOptions = {
                 url: url,
                 method: 'get',
-                timeout: 3000,
+                timeout: 10000,
                 headers: DEFAULT_HEADERS,
             }
             // log('-------------httpOptions-----------');
@@ -58,11 +59,11 @@ function market_api(path, data) {
                     }
                 }
             }).on('error', function(err) {
-                console.log(`Error while executing market_api() request to ${url}: ${err}`);
+                log.log(`Request to ${url} with data ${pars} failed. ${err}.`);
                 reject(null);
             });
         } catch(err) {
-            console.log(`Exception while executing market_api() request to ${url}: ${err}`);
+            log.log(`Processing of request to ${url} with data ${pars} failed. ${err}.`);
             reject(null);    
         }
     });
@@ -77,7 +78,7 @@ function sign_api(path, data) {
                 url: url,
                 form: data,
                 method: 'post',
-                timeout: 3000,
+                timeout: 10000,
                 headers: DEFAULT_HEADERS,
             };
             // log('-------------httpOptions-----------');
@@ -101,11 +102,11 @@ function sign_api(path, data) {
                     }
                 }
             }).on('error', function(err){
-                console.log(`Error while executing sign_api() request to ${url}: ${err}`);
+                log.log(`Request to ${url} with data ${JSON.stringify(data)} failed. ${err}.`);
                 reject(null);
             });
         } catch(err) {
-            console.log(`Exception while executing sign_api() request to ${url}: ${err}`);
+            log.log(`Processing of request to ${url} with data ${JSON.stringify(data)} failed. ${err}.`);
             reject(null);    
         }
     });
@@ -167,12 +168,16 @@ var EXCHANGE_API = {
         if(coinTo) data.coinTo = coinTo;
         if(type) data.type = type;
 
-        if(page) data.page = page;
-        if(pageSize) data.pageSize = pageSize;
         if(startTime) data.startTime = startTime;
         if(endTime) data.endTime = endTime;
 
-        data.pageSize = 100;
+        // limit/site parameter is pageSize; Number of records per page Maximum 100
+        // https://apidoc.bit-z.com/market-trade-data/Get-now-trust.html
+        if(page) data.page = page;
+        if(pageSize) 
+            data.pageSize = pageSize
+        else
+            data.pageSize = 100;
 
         return sign_api("/Trade/getUserNowEntrustSheet", data);
     },
@@ -319,6 +324,8 @@ var EXCHANGE_API = {
     orderBook: function(symbol) {
         var data = {};
         data.symbol = symbol;
+        // no limit/size parameter according to docs
+        // https://apidoc.bit-z.com/market-quotation-data/Get-depth-data.html
         return market_api("/Market/depth", data);
     },
     /**

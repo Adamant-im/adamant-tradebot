@@ -139,10 +139,245 @@ module.exports = {
 			isPairFromParam
 		}
 	},
+	randomValue(low, high, doRound = false) {
+		let random = Math.random() * (high - low) + low;
+		if (doRound)
+			random = Math.round(random);
+		return random;
+	},
 	randomDeviation(number, deviation) {
 		const min = number - number * deviation;
 		const max = number + number * deviation;
 		return Math.random() * (max - min) + min;
+	},
+	getOrderBookInfo(orderBook, customSpreadPercent, targetPrice) {
+
+		if (!orderBook || !orderBook.asks[0] || !orderBook.bids[0])
+			return false;
+		
+		const highestBid = orderBook.bids[0].price;
+		const lowestAsk = orderBook.asks[0].price
+
+		let typeTargetPrice, amountTargetPrice = 0, targetPriceOrdersCount = 0, amountTargetPriceQuote = 0;
+		if (targetPrice) {
+			if (targetPrice > highestBid && targetPrice < lowestAsk) {
+				typeTargetPrice = 'inSpread';
+			} else if (targetPrice < highestBid) {
+				typeTargetPrice = 'sell';
+			} else if (targetPrice > lowestAsk) {
+				typeTargetPrice = 'buy';
+			}
+		}
+
+		const spread = lowestAsk - highestBid;
+		const averagePrice = (lowestAsk + highestBid) / 2;
+		const spreadPercent = spread / averagePrice * 100;
+
+		let downtrendAveragePrice = highestBid + this.randomValue(0, 0.15) * spread;
+		if (downtrendAveragePrice >= lowestAsk)
+			downtrendAveragePrice = highestBid;
+
+		let uptrendAveragePrice = lowestAsk - this.randomValue(0, 0.15) * spread;
+		if (uptrendAveragePrice <= highestBid)
+			uptrendAveragePrice = lowestAsk;
+
+		let middleAveragePrice = averagePrice - this.randomValue(-0.3, 0.3) * spread;
+		if (middleAveragePrice >= lowestAsk || middleAveragePrice <= highestBid)
+			middleAveragePrice = averagePrice;
+
+		let liquidity = [];
+		liquidity.percent2 = {};
+		liquidity.percent2.spreadPercent = 2;
+		liquidity.percent5 = {};
+		liquidity.percent5.spreadPercent = 5;
+		liquidity.percent10 = {};
+		liquidity.percent10.spreadPercent = 10;
+		liquidity.percentCustom = {};
+		liquidity.percentCustom.spreadPercent = customSpreadPercent;
+		liquidity.full = {};
+		liquidity.full.spreadPercent = 0;
+
+		for (const key in liquidity) {
+			liquidity[key].bidsCount = 0;
+			liquidity[key].amountBids = 0;
+			liquidity[key].amountBidsQuote = 0;
+			liquidity[key].asksCount = 0;
+			liquidity[key].amountAsks = 0;
+			liquidity[key].amountAsksQuote = 0;
+			liquidity[key].totalCount = 0;
+			liquidity[key].amountTotal = 0;
+			liquidity[key].amountTotalQuote = 0;
+			liquidity[key].lowPrice = averagePrice - averagePrice * liquidity[key].spreadPercent/100;
+			liquidity[key].highPrice = averagePrice + averagePrice * liquidity[key].spreadPercent/100;
+			liquidity[key].spread = averagePrice * liquidity[key].spreadPercent / 100;
+			// average price is the same for any spread
+			}
+
+		for (const bid of orderBook.bids) {
+			for (const key in liquidity) {
+				if (!liquidity[key].spreadPercent || bid.price > liquidity[key].lowPrice) {
+					liquidity[key].bidsCount += 1;
+					liquidity[key].amountBids += bid.amount;
+					liquidity[key].amountBidsQuote += bid.amount * bid.price;
+					liquidity[key].totalCount += 1;
+					liquidity[key].amountTotal += bid.amount;
+					liquidity[key].amountTotalQuote += bid.amount * bid.price;
+				}
+			}
+			if (typeTargetPrice === 'sell' && bid.price >= targetPrice) {
+				amountTargetPrice += bid.amount;
+				amountTargetPriceQuote += bid.amount * bid.price;
+				targetPriceOrdersCount += 1;
+			}
+		}
+
+		for (const ask of orderBook.asks) {
+			for (const key in liquidity) {
+				if (!liquidity[key].spreadPercent || ask.price < liquidity[key].highPrice) {
+					liquidity[key].asksCount += 1;
+					liquidity[key].amountAsks += ask.amount;
+					liquidity[key].amountAsksQuote += ask.amount * ask.price;
+					liquidity[key].totalCount += 1;
+					liquidity[key].amountTotal += ask.amount;
+					liquidity[key].amountTotalQuote += ask.amount * ask.price;
+				}
+			}
+			if (typeTargetPrice === 'buy' && ask.price <= targetPrice) {
+				amountTargetPrice += ask.amount;
+				amountTargetPriceQuote += ask.amount * ask.price;
+				targetPriceOrdersCount += 1;
+			}
+		}
+
+		return {
+			highestBid,
+			lowestAsk,
+			spread,
+			spreadPercent,
+			averagePrice,
+			liquidity,
+			downtrendAveragePrice,
+			uptrendAveragePrice,
+			middleAveragePrice,
+			typeTargetPrice,
+			amountTargetPrice,
+			amountTargetPriceQuote,
+			targetPriceOrdersCount
+		}
+	},
+	getOrdersStats(orders) { 
+
+		// order is an object of ordersDb
+		// type: type,
+		// price: price,
+		// coin1Amount: coin1Amount,
+		// coin2Amount: coin2Amount,
+				
+		let bidsTotalAmount = 0, asksTotalAmount = 0, 
+			bidsTotalQuoteAmount = 0, asksTotalQuoteAmount = 0, 
+			totalAmount = 0, totalQuoteAmount = 0,
+			asksCount = 0, bidsCount = 0, totalCount = 0;
+		for (const order of orders) {
+			if (order.type === 'buy') {
+				bidsTotalAmount += order.coin1Amount;
+				bidsTotalQuoteAmount += order.coin2Amount;
+				bidsCount += 1;
+			}
+			if (order.type === 'sell') {
+				asksTotalAmount += order.coin1Amount;
+				asksTotalQuoteAmount += order.coin2Amount;
+				asksCount += 1;
+			}
+			totalAmount += order.coin1Amount;
+			totalQuoteAmount += order.coin2Amount;
+			totalCount += 1;
+		}
+
+		return {
+			bidsTotalAmount, asksTotalAmount, 
+			bidsTotalQuoteAmount, asksTotalQuoteAmount, 
+			totalAmount, totalQuoteAmount,
+			asksCount, bidsCount, totalCount
+		}
+	},
+	getPrecision(decimals) {
+		return +(Math.pow(10, -decimals).toFixed(decimals))
+	},
+	isOrderOutOfSpread(order, orderBookInfo) {
+
+		// order is an object of ordersDb
+		// type: type,
+		// price: price,
+
+		const laxityPercent = 30;
+		let minPrice = orderBookInfo.liquidity.percentCustom.lowPrice - orderBookInfo.liquidity.percentCustom.spread * laxityPercent / 100;
+		let maxPrice = orderBookInfo.liquidity.percentCustom.highPrice + orderBookInfo.liquidity.percentCustom.spread * laxityPercent / 100;
+		// console.log('isOrderOutOfSpread:', order.price, orderBookInfo.liquidity.percentCustom.lowPrice, orderBookInfo.liquidity.percentCustom.highPrice);
+		// console.log('isOrderOutOfSpread with laxity:', order.price, minPrice, maxPrice);
+
+		return (order.price < minPrice) || (order.price > maxPrice);
+
+	},
+	getModuleName(id) {
+		let n = id.lastIndexOf("\\");
+		if (n === -1)
+			n = id.lastIndexOf("/");
+		if (n === -1)
+			return ''
+		else
+			return id.substring(n + 1);
+	},
+	parseRangeOrValue(str) {
+
+		if (!str) {
+			return {
+				isRange: false,
+				isValue: false
+			}
+		}
+		
+		let from, to, value;
+		if (str.indexOf('-') > -1) { // hyphen
+			[from, to] = str.split('-');
+		} else if (str.indexOf('—') > -1) { // long dash
+			[from, to] = str.split('—');
+		} else if (str.indexOf('–') > -1) { // short dash
+			[from, to] = str.split('–');
+		} else if (str.indexOf('−') > -1) { // minus
+			[from, to] = str.split('−');
+		} else {
+			value = +str;
+			if (!value || value === Infinity) {
+				return {
+					isRange: false,
+					isValue: false
+				}
+			} else {
+				return {
+					isRange: false,
+					isValue: true,
+					value
+				}
+			}
+		}
+
+		from = +from;
+		to = +to;
+
+		if (!from || from === Infinity || !to || to === Infinity) {
+			return {
+				isRange: false,
+				isValue: false
+			}
+		}
+		
+		return {
+			isRange: true,
+			isValue: false,
+			from,
+			to
+		};
+
 	},
 	ADM: adm_utils
 };

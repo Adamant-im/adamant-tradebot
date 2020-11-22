@@ -29,6 +29,7 @@ module.exports = (apiKey, secretKey, pwd) => {
 								code: crypto.name.toUpperCase(),
 								free: +crypto.over,
 								freezed: +crypto.lock,
+								total: +crypto.num,
 								btc: +crypto.btc,
 								usd: +crypto.usd
 							});
@@ -40,8 +41,11 @@ module.exports = (apiKey, secretKey, pwd) => {
 						resolve(result);
 					} catch (e) { 					
 						resolve(false);
-						log.warn('Error while making getBalances() request: ' + e);
+						log.warn('Error while processing getBalances() request: ' + e);
 					};
+				}).catch(err => {
+					log.log(`API request getBalances(nonzero: ${nonzero}) of ${$u.getModuleName(module.id)} module failed. ${err}.`);
+					resolve(undefined);
 				});
 			});
 		},
@@ -59,18 +63,36 @@ module.exports = (apiKey, secretKey, pwd) => {
 
 						let result = [];
 						openOrders.forEach(order => {
+							let orderStatus;
+							switch (order.status) {
+								case 0:
+									orderStatus = "new";
+									break;
+								case 3:
+									orderStatus = "closed";
+									break;
+								case 2:
+									orderStatus = "filled";
+									break;
+								case 1:
+									orderStatus = "part_filled";
+									break;										
+								default:
+									break;
+							}
 							result.push({
-								orderid: order.id,
+								orderid: order.id.toString(),
 								symbol: order.coinFrom + '_' + order.coinTo,
-								price: order.price,
+								price: +order.price,
 								side: order.flag,
 								type: 1, // limit
 								timestamp: order.created,
-								amount: order.number,
-								executedamount: order.numberDeal,
-								status: order.status,
-								uid: order.uid,
-								coin2Amount: order.total,
+								amount: +order.number,
+								amountExecuted: +order.numberDeal,
+								amountLeft: +order.numberOver,
+								status: orderStatus,
+								uid: order.uid.toString(),
+								coin2Amount: +order.total,
 								coinFrom: order.coinFrom,
 								coinTo: order.coinTo
 							});
@@ -82,8 +104,11 @@ module.exports = (apiKey, secretKey, pwd) => {
 						
 					} catch (e) {
 						resolve(false);
-						log.warn('Error while making getOpenOrders() request: ' + e);
+						log.warn('Error while processing getOpenOrders() request: ' + e);
 					};
+				}).catch(err => {
+					log.log(`API request getOpenOrders(pair: ${pair}) of ${$u.getModuleName(module.id)} module failed. ${err}.`);
+					resolve(undefined);
 				});
 			});
 		},
@@ -101,8 +126,11 @@ module.exports = (apiKey, secretKey, pwd) => {
 						}
 					} catch (e) {
 						resolve(false);
-						log.warn('Error while making cancelOrder() request: ' + e);
+						log.warn('Error while processing cancelOrder() request: ' + e);
 					};				
+				}).catch(err => {
+					log.log(`API request ${arguments.callee.name}(orderId: ${orderId}) of ${$u.getModuleName(module.id)} module failed. ${err}.`);
+					resolve(undefined);
 				});
 			});
 		},
@@ -134,8 +162,11 @@ module.exports = (apiKey, secretKey, pwd) => {
 						}
 					} catch (e) {
 						resolve(false);
-						log.warn('Error while making getRates() request: ' + e);
+						log.warn('Error while processing getRates() request: ' + e);
 					};
+				}).catch(err => {
+					log.log(`API request getRates(pair: ${pair_.pair}) of ${$u.getModuleName(module.id)} module failed. ${err}.`);
+					resolve(undefined);
 				});
 			});
 		},
@@ -169,9 +200,9 @@ module.exports = (apiKey, secretKey, pwd) => {
 							// console.log(data);
 							let result = JSON.parse(data).data;
 							if (result) {
-								message = `Order placed to ${output} Order Id: ${result.id}.`; 
+								message = `Order placed to ${output} Order Id: ${result.id.toString()}.`; 
 								log.info(message);
-								order.orderid = result.id;
+								order.orderid = result.id.toString();
 								order.message = message;
 								resolve(order);	
 							} else {
@@ -182,12 +213,15 @@ module.exports = (apiKey, secretKey, pwd) => {
 								resolve(order);	
 							}
 						} catch (e) {
-							message = 'Error while making placeOrder() request: ' + e;
+							message = 'Error while processing placeOrder() request: ' + e;
 							log.warn(message);
 							order.orderid = false;
 							order.message = message;
 							resolve(order);
 						};
+					}).catch(err => {
+						log.log(`API request BITZ.addEntrustSheet-limit(pair: ${pair_.pair}, coin1Amount: ${coin1Amount}, price: ${price}, type: ${type}) of ${$u.getModuleName(module.id)} module failed. ${err}.`);
+						resolve(undefined);
 					});
 				});
 	
@@ -223,9 +257,9 @@ module.exports = (apiKey, secretKey, pwd) => {
 							// console.log(data);
 							let result = JSON.parse(data).data;
 							if (result) {
-								message = `Order placed to ${output} Order Id: ${result.id}.`; 
+								message = `Order placed to ${output} Order Id: ${result.id.toString()}.`; 
 								log.info(message);
-								order.orderid = result.id;
+								order.orderid = result.id.toString();
 								order.message = message;
 								resolve(order);	
 							} else {
@@ -236,13 +270,16 @@ module.exports = (apiKey, secretKey, pwd) => {
 								resolve(order);	
 							}
 						} catch (e) {
-							message = 'Error while making placeOrder() request: ' + e;
+							message = 'Error while processing placeOrder() request: ' + e;
 							log.warn(message);
 							order.orderid = false;
 							order.message = message;
 							resolve(order);
 						};
-					});
+					}).catch(err => {
+						log.log(`API request BITZ.addEntrustSheet-market(pair: ${pair_.pair}, size: ${size}, type: ${type}) of ${$u.getModuleName(module.id)} module failed. ${err}.`);
+						resolve(undefined);
+					});;
 				});
 			}
 		}, // placeOrder()
@@ -284,8 +321,11 @@ module.exports = (apiKey, secretKey, pwd) => {
 						resolve(result);
 					} catch (e) {
 						resolve(false);
-						log.warn('Error while making orderBook() request: ' + e);
+						log.warn('Error while processing orderBook() request: ' + e);
 					};
+				}).catch(err => {
+					log.log(`API request getOrderBook(pair: ${pair}) of ${$u.getModuleName(module.id)} module failed. ${err}.`);
+					resolve(undefined);
 				});
 			});
 		},
@@ -302,8 +342,11 @@ module.exports = (apiKey, secretKey, pwd) => {
 						}
 					} catch (e) {
 						resolve(false);
-						log.warn('Error while making getDepositAddress() request: ' + e);
+						log.warn('Error while processing getDepositAddress() request: ' + e);
 					};				
+				}).catch(err => {
+					log.log(`API request ${arguments.callee.name}(coin: ${coin}) of ${$u.getModuleName(module.id)} module failed. ${err}.`);
+					resolve(undefined);
 				});
 			});
 

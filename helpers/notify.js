@@ -37,6 +37,7 @@ module.exports = (message, type, silent_mode = false) => {
 				uri: slack,
 				method: 'POST',
 				json: true,
+				timeout: 10000,
 				body: {
 					'attachments': [{
 						'fallback': message,
@@ -47,7 +48,10 @@ module.exports = (message, type, silent_mode = false) => {
 				}
 			};
 			if (slack && slack.length > 34) {
-				request(opts);
+				request(opts)
+				.on('error', function(err) {
+					log.log(`Request to Slack with message ${message} failed. ${err}.`);
+				});
 			}
 			if (adamant_notify && adamant_notify.length > 5 && adamant_notify.startsWith('U') && config.passPhrase && config.passPhrase.length > 30) {
 				api.send(config.passPhrase, adamant_notify, `${type}| ${message.replace(/\*/g, '**')}`, 'message');

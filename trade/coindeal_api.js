@@ -1,4 +1,5 @@
 const request = require('request');
+const log = require('../helpers/log');
 const DEFAULT_HEADERS = {
     "Accept": "application/json"
 }
@@ -27,7 +28,7 @@ function sign_api(path, data, type = 'get') {
             var httpOptions = {
                 url: url,
                 method: type,
-                timeout: 7000,
+                timeout: 10000,
                 headers: headersWithSign
             }
             if (type === 'post') {
@@ -43,11 +44,11 @@ function sign_api(path, data, type = 'get') {
                     resolve(data);
                 }
             }).on('error', function(err) {
-                console.log(`Error while executing sign_api() request to ${url}: ${err}`);
+                log.log(`Request to ${url} with data ${JSON.stringify(data)} failed. ${err}.`);
                 reject(null);
             });
         } catch(err) {
-            console.log(`Exception while executing sign_api() request to ${url}: ${err}`);
+            log.log(`Processing of request to ${url} with data ${JSON.stringify(data)} failed. ${err}.`);
             reject(null);
         }
     });
@@ -68,11 +69,11 @@ function public_api(url, data, type = 'get') {
                     resolve(data);
                 }
             }).on('error', function(err) {
-                console.log(`Error while executing public_api() request to ${url}: ${err}`);
+                log.log(`Request to ${url} failed. ${err}.`);
                 reject(null);
             });
         } catch(err) {
-            console.log(`Exception while executing public_api() request to ${url}: ${err}`);
+            log.log(`Processing of request to ${url} failed. ${err}.`);
             reject(null);    
         }
     });
@@ -110,6 +111,8 @@ var EXCHANGE_API = {
     getUserNowEntrustSheet: function(coinFrom, coinTo) {
         let data = {};
         data.symbol = coinFrom + coinTo;
+        // no limit/size parameter according to docs
+        // https://apigateway.coindeal.com/api/doc#operation/v1getOrder
         return sign_api("/api/v1/order", data);
     },
     /**
@@ -162,8 +165,15 @@ var EXCHANGE_API = {
      * @param symbol    ADMBTC
      * ------------------------------------------------------------------
      */
-    orderBook: function(symbol) {
+    orderBook: function(symbol, size) {
         let data = {};
+        // default limit/size is 100; 
+        // no limit according to docs; 0 - full orderbook otherwise number of levels
+        // https://apigateway.coindeal.com/api/doc#operation/v1getPublicOrderbookCurrencyPair
+        if (size) 
+            data.limit = size;
+        else
+            data.limit = 0;
         return sign_api(`/api/v1/public/orderbook/${symbol}`, data);
     },
 

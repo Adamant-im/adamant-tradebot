@@ -1,5 +1,6 @@
 const crypto = require("crypto")
 const request = require('request');
+const log = require('../helpers/log');
 
 let WEB_BASE = "https://api.resfinex.com"; // API server like https://api.resfinex.com/
 var config = {
@@ -33,7 +34,7 @@ function sign_api(path, data, type = 'get') {
             var httpOptions = {
                 url: url,
                 method: type,
-                timeout: 5000,
+                timeout: 10000,
                 headers: {
                     'Content-Type': "application/json",
                     'Token': config.apiKey,
@@ -44,20 +45,19 @@ function sign_api(path, data, type = 'get') {
                 body: type === "get" ? undefined : bodyString
             }
 
-            // console.log(httpOptions);
             request(httpOptions, function(err, res, data) {
-                // console.log(data);
                 if (err) {
                     reject(err);
                 } else {
                     resolve(data);
                 }
             }).on('error', function(err) {
-                console.log('Request err: ' + url);
+                log.log(`Request to ${url} with data ${bodyString} failed. ${err}.`);
                 reject(null);
             });
+
         } catch(err) {
-            console.log('Promise error: ' + url);
+            log.log(`Processing of request to ${url} with data ${bodyString} failed. ${err}.`);
             reject(null);    
         }
     });
@@ -91,12 +91,12 @@ function public_api(path, data, type = 'get') {
                 } else {
                     resolve(data);
                 }
-            }).on('error', function(err){
-                console.log('http get err:'+url);
+            }).on('error', function(err) {
+                log.log(`Request to ${url} with data ${queryString} failed. ${err}.`);
                 reject(null);
             });
-        }catch(err){
-            console.log('http get err:'+url);
+        } catch(err) {
+            log.log(`Request to ${url} with data ${queryString} failed. ${err}.`);
             reject(null);    
         }
     });
@@ -136,6 +136,9 @@ var EXCHANGE_API = {
     getUserNowEntrustSheet: function(coinFrom, coinTo) {
         let data = {};
         data.pair = coinFrom + "_" + coinTo;
+        // size/limit not documented, but limit fits
+        // https://docs.resfinex.com/guide/rest-auth-endpoints.html#post-get-open-orders
+        data.limit = 200;
         return sign_api("/order/open_orders", data, 'post');
     },
     /**
@@ -188,7 +191,12 @@ var EXCHANGE_API = {
     orderBook: function(symbol, size) {
         let data = {};
         data.pair = symbol;
-        if (size) data.size = size;
+        // default limit/size is 500; no limit according to docs
+        // https://docs.resfinex.com/guide/rest-public-endpoints.html#get-orderbook
+        if (size) 
+            data.size = size;
+        else 
+            data.size = 1000;
         return public_api(`/engine/depth`, data);
     }
 

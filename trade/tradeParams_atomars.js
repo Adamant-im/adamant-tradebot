@@ -5,7 +5,20 @@ module.exports = {
    "mm_isActive": false,
    "mm_minAmount": 14,
    "mm_maxAmount": 1600,
+   "mm_Policy": "optimal",
    "mm_isOrderBookActive": true,
    "mm_orderBookHeight": 25,
-   "mm_orderBookOrdersCount": 20
+   "mm_orderBookOrdersCount": 20,
+   "mm_isLiquidityActive": false,
+   "mm_liquiditySellAmount": 100,
+   "mm_liquidityBuyQuoteAmount": 50,
+   "mm_liquiditySpreadPercent": 2,
+   "mm_liquidityTrend": "middle",
+   "mm_isPriceWatcherActive": false,
+   "mm_priceWatcherLowPrice": 0.98,
+   "mm_priceWatcherMidPrice": 1,
+   "mm_priceWatcherHighPrice": 1.02,
+   "mm_priceWatcherDeviationPercent": 2,
+   "mm_priceWatcherSource": "const",
+   "mm_priceWatcherAction": "fill"
 }

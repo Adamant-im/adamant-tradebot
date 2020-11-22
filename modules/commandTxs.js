@@ -9,9 +9,15 @@ const traderapi = require('../trade/trader_' + config.exchange)(config.apikey, c
 const orderCollector = require('../trade/orderCollector');
 const getStats = require('../trade/orderStats');
 
+const timeToConfirm = 1000 * 60 * 10; // 10 minutes to confirm
+let pendingConfirmation = {
+	command: '',
+	timestamp: 0
+}
+
 module.exports = async (cmd, tx, itx) => {
 
-	if (itx.isProcessed) return;
+	if (itx && itx.isProcessed) return;
 	log.info('Got new command Tx to process: ' + cmd);
 	try {
 		let res = [];
@@ -32,7 +38,7 @@ module.exports = async (cmd, tx, itx) => {
 			return res.msgSendBack;
 		}
 		if (tx) {
-            itx.update({isProcessed: true}, true);
+            if (itx) itx.update({isProcessed: true}, true);
             if (res.msgNotify)
                 notify(res.msgNotify, res.notifyType);
             if (res.msgSendBack)
@@ -45,8 +51,39 @@ module.exports = async (cmd, tx, itx) => {
 	}
 }
 
+function y(params, tx) {
+	try {
+		if (pendingConfirmation.command) {
+			if (Date.now() - pendingConfirmation.timestamp > timeToConfirm) {
+				return {
+					msgNotify: '',
+					msgSendBack: `I will not confirm command ${pendingConfirmation.command} as it is expired. Try again.`,
+					notifyType: 'log'
+				}
+			} else {
+				module.exports(`${pendingConfirmation.command} -y`, tx);
+				return {
+					msgNotify: '',
+					msgSendBack: '',
+					notifyType: 'log'
+				}
+			}
+		} else {
+			return {
+				msgNotify: '',
+				msgSendBack: `There is no pending command to confirm.`,
+				notifyType: 'log'
+			}
+		}
+	} catch (e) {
+		log.error(`Error in y()-confirmation of ${$u.getModuleName(module.id)} module: ` + e);
+	}
+	pendingConfirmation.command = '';
+}
+
 function start(params) {
-	const type = (params[0] || '').trim();
+
+	const type = (params[0] || '').trim().toLowerCase();
 	if (!type || !type.length || !["mm"].includes(type)) {
         return {
             msgNotify: '',
@@ -54,34 +91,60 @@ function start(params) {
             notifyType: 'log'
 		} 
 	}
+
+	let policy = (params[1] || 'optimal').trim().toLowerCase();
+	if (!policy || !policy.length || !["optimal", "spread", "orderbook"].includes(policy)) {
+        return {
+            msgNotify: '',
+            msgSendBack: `Wrong market making policy. It should be _spread_, _orderbook_, or _optimal_. Example: */start mm spread*.`,
+            notifyType: 'log'
+		} 
+	}
+
 	if (type === "mm") {
-		if (!tradeParams.mm_isActive) {
-			tradeParams.mm_isActive = true;
-			if (tradeParams.mm_isOrderBookActive) {
-				msgNotify = `${config.notifyName} set to start market making & order book building for ${config.pair}.`;
-				msgSendBack = `Starting market making & order book building for ${config.pair} pair.`;
-			} else {
-				msgNotify = `${config.notifyName} set to start market making for ${config.pair}. Order book building is disabled.`;
-				msgSendBack = `Starting market making for ${config.pair} pair. Note, order book building is disabled. To enable, type */enable ob*.`;
-			}
-	
-			return {
-				msgNotify,
-				msgSendBack,
-				notifyType: 'log'
-			}
+
+		tradeParams.mm_isActive = true;
+		tradeParams.mm_Policy = policy;
+
+		let optionsString = '';
+		let notesStringNotify = '';
+		let notesStringMsg = '';
+
+		if (tradeParams.mm_isOrderBookActive) {
+			optionsString += ' & order book building';
 		} else {
-			tradeParams.mm_isActive = true;
-			return {
-				msgNotify: '',
-				msgSendBack: `Market making for ${config.pair} pair is active already.`,
-				notifyType: 'log'
-			}
+			notesStringNotify += ' Order book building is disabled.';
+			notesStringMsg += ' Order book building is disabled—type */enable ob* to enable.';
 		}
+
+		if (tradeParams.mm_isPriceWatcherActive) {
+			optionsString += ' & price watching';
+		} else {
+			notesStringNotify += ' Price watching is disabled.';
+			notesStringMsg += ' Price watching is disabled—type */enable pw* to enable.';
+		}
+
+		if (tradeParams.mm_isLiquidityActive) {
+			optionsString += ' & liquidity and spread maintenance';
+		} else {
+			notesStringNotify += ' Liquidity and spread maintenance is disabled.';
+			notesStringMsg += ' Liquidity and spread maintenance is disabled—type */enable liq* to enable.';
+		}
+
+		msgNotify = `${config.notifyName} set to start market making${optionsString} with ${policy} policy for ${config.pair}.${notesStringNotify}`;
+		msgSendBack = `Starting market making${optionsString} with ${policy} policy for ${config.pair} pair.${notesStringMsg}`;
+
+		return {
+			msgNotify,
+			msgSendBack,
+			notifyType: 'log'
+		}
+
 	}
 }
 
 function stop(params) {
+
 	const type = (params[0] || '').trim();
 	if (!type || !type.length || !["mm"].includes(type)) {
         return {
@@ -90,82 +153,335 @@ function stop(params) {
             notifyType: 'log'
 		} 
 	}
+
+	let msgNotify, msgSendBack;
+
 	if (type === "mm") {
+
+		let optionsString = ', order book building, liquidity and spread maintenance, price watching';
+
 		if (tradeParams.mm_isActive) {
-			tradeParams.mm_isActive = false;
-			return {
-				msgNotify: `${config.notifyName} stopped market making & order book building for ${config.pair} pair.`,
-				msgSendBack: `Market making & order book building for ${config.pair} pair is disabled now.`,
-				notifyType: 'log'
-			}
+			msgNotify = `${config.notifyName} stopped Market making${optionsString} for ${config.pair} pair.`;
+			msgSendBack = `Market making${optionsString} for ${config.pair} pair is disabled now.`;
 		} else {
-			tradeParams.mm_isActive = false;
-			return {
-				msgNotify: '',
-				msgSendBack: `Market making for ${config.pair} pair is disabled already.`,
-				notifyType: 'log'
-			} 
+			msgNotify = '';
+			msgSendBack = `Market making for ${config.pair} pair is disabled already.`;
 		}
+
+		tradeParams.mm_isActive = false;
+
 	}
+
+	return {
+		msgNotify,
+		msgSendBack,
+		notifyType: 'log'
+	} 
+
 }
 
-function enable(params) {
+async function enable(params) {
+
+	/*
+		enable ob 15 — enable order book building with X maximum number of orders
+		enable liq 2% 1000 ADM 50 USDT downtrend — provide liquidity with maximum of 1000 ADM asks (sell) and 50 USDT bids (buy) within 2% spread & keep average price lower
+			- downtrend, uptrend, middle
+		[unavailable] enable pw 0.1—0.15 USDT — watching for price in range 0.1-0.15 USDT
+		[unavailable] enable pw 0.15 USDT 2% — watching for price in range 0.15 USDT +-2%
+		[unavailable] enable pw ADM/USDT@Bit-Z 1% — watching for price in range of ADM/USDT@Bit-Z +-1%
+	*/
+
+
 	const type = (params[0] || '').trim();
-	if (!type || !type.length || !["ob"].includes(type)) {
+	if (!type || !type.length || !["ob", "liq", "pw"].includes(type)) {
         return {
             msgNotify: '',
-            msgSendBack: `Indicate option, _ob_ for order book building. Example: */enable ob 15*.`,
+            msgSendBack: `Indicate option: _ob_ for order book building, _liq_ for liquidity and spread maintenance, _pw_ for price watching. Example: */enable ob 15*.`,
             notifyType: 'log'
 		} 
 	}
-	const value = +params[1];
+
+	let msgNotify, msgSendBack, infoString, notesStringNotify, notesStringMsg, optionsString;
+
 	if (type === "ob") {
+
+		const orderBookOrdersCount = +params[1];
 		tradeParams.mm_isOrderBookActive = true;
-		if (value && value != Infinity)
-			tradeParams.mm_orderBookOrdersCount = value;
-		else if (!value.length && !tradeParams.mm_orderBookOrdersCount)
-			value = 15; // default for mm_orderBookOrdersCount
-		let msgNotify, msgSendBack;
-		if (tradeParams.mm_isActive) {
-			msgNotify = `${config.notifyName} enabled order book building for ${config.pair} pair with ${tradeParams.mm_orderBookOrdersCount} maximum number of orders.`;
-			msgSendBack = `Order book building is enabled for ${config.pair} pair with ${tradeParams.mm_orderBookOrdersCount} maximum number of orders.`;
-		} else {
-			msgNotify = `${config.notifyName} enabled order book building for ${config.pair} pair with ${tradeParams.mm_orderBookOrdersCount} maximum number of orders. Market making and order book building are not started yet.`;
-			msgSendBack = `Order book building is enabled for ${config.pair} pair with ${tradeParams.mm_orderBookOrdersCount} maximum number of orders. To start market making and order book building, type */start mm*.`;
+		if (orderBookOrdersCount && orderBookOrdersCount != Infinity)
+			tradeParams.mm_orderBookOrdersCount = orderBookOrdersCount;
+		else if (!orderBookOrdersCount.length && !tradeParams.mm_orderBookOrdersCount)
+			orderBookOrdersCount = 15; // default for mm_orderBookOrdersCount
+
+		infoString = `with ${tradeParams.mm_orderBookOrdersCount} maximum number of orders`;	
+		optionsString = `Order book building`;
+
+	} else if (type === "liq") {
+
+		const spreadString = params[1];
+		// console.log(spreadString);
+
+		if (!spreadString || (spreadString.slice(-1) !== '%')) {
+			return {
+				msgNotify: '',
+				msgSendBack: `Set a spread in percentage. Example: */enable liq 2% 1000 ADM 50 USDT uptrend*.`,
+				notifyType: 'log'
+			}	
 		}
-		return {
-			msgNotify,
-			msgSendBack,
-			notifyType: 'log'
+		const spreadValue = +spreadString.slice(0, -1);
+		// console.log(spreadValue);
+		if (!spreadValue || spreadValue === Infinity || spreadValue <= 0 || spreadValue > 80) {
+			return {
+				msgNotify: '',
+				msgSendBack: `Set correct spread in percentage. Example: */enable liq 2% 1000 ADM 50 USDT uptrend*.`,
+				notifyType: 'log'
+			}
+		}
+
+		const coin1 = params[3].toUpperCase();
+		const coin2 = params[5].toUpperCase();
+		// console.log(coin1, coin2);
+
+		if (!coin1 || !coin2 || coin1 === coin2 || (![config.coin1, config.coin2].includes(coin1)) || (![config.coin1, config.coin2].includes(coin2))) {
+			return {
+				msgNotify: '',
+				msgSendBack: `Incorrect liquidity coins. Config is set to trade ${config.pair} pair. Example: */enable liq 2% 100 ${config.coin1} 50 ${config.coin2} uptrend*.`,
+				notifyType: 'log'
+			}
+		}
+		// console.log(coin1, coin2, "good");
+
+		const coin1Amount = +params[2];
+		// console.log(coin1Amount);
+
+		if (!coin1Amount || coin1Amount === Infinity || coin1Amount <= 0) {
+			return {
+				msgNotify: '',
+				msgSendBack: `Incorrect ${coin1} amount: ${coin1Amount}. Example: */enable liq 2% 100 ${config.coin1} 50 ${config.coin2} uptrend*.`,
+				notifyType: 'log'
+			}
+		}
+		// console.log(coin1Amount, "good");
+
+		const coin2Amount = +params[4];
+		// console.log(coin2Amount);
+
+		if (!coin2Amount || coin2Amount === Infinity || coin2Amount <= 0) {
+			return {
+				msgNotify: '',
+				msgSendBack: `Incorrect ${coin2} amount: ${coin2Amount}. Example: */enable liq 2% 100 ${config.coin1} 50 ${config.coin2} uptrend*.`,
+				notifyType: 'log'
+			}
+		}
+		// console.log(coin2Amount, "good");
+
+		let trend = params[6];
+		// console.log(trend);
+
+		if (!trend) {
+			trend = 'middle';
+		}
+
+		trend = trend.toLowerCase();;
+
+		if ((!['middle', 'downtrend', 'uptrend'].includes(trend))) {
+			return {
+				msgNotify: '',
+				msgSendBack: `Incorrect trend. Example: */enable liq 2% 100 ${config.coin1} 50 ${config.coin2} uptrend*.`,
+				notifyType: 'log'
+			}
+		}
+		// console.log(trend, "good");
+
+		if (coin1 === config.coin1) {
+			tradeParams.mm_liquiditySellAmount = coin1Amount;
+			tradeParams.mm_liquidityBuyQuoteAmount = coin2Amount;
+		} else {
+			tradeParams.mm_liquiditySellAmount = coin2Amount;
+			tradeParams.mm_liquidityBuyQuoteAmount = coin1Amount;
+		}
+		// console.log(tradeParams.mm_liquiditySellAmount, tradeParams.mm_liquidityBuyQuoteAmount);
+
+		tradeParams.mm_liquidityTrend = trend;
+		tradeParams.mm_liquiditySpreadPercent = spreadValue;
+		tradeParams.mm_isLiquidityActive = true;
+		
+		if (trend === 'middle')
+			trend = 'middle trend';
+		infoString = `with ${tradeParams.mm_liquiditySellAmount} ${config.coin1} asks (sell) and ${tradeParams.mm_liquidityBuyQuoteAmount} ${config.coin2} bids (buy) within ${spreadValue}% spread & ${trend}`;
+		optionsString = `Liquidity and spread maintenance`;
+
+	} else if (type === "pw") {
+
+		let rangeOrValue = $u.parseRangeOrValue(params[1]);
+		if (!rangeOrValue.isRange && !rangeOrValue.isValue) {
+			return {
+				msgNotify: '',
+				msgSendBack: `Set a price range or value. Example: */enable pw 0.1—0.2* or */enable pw 0.5 1%*.`,
+				notifyType: 'log'
+			}
+		}
+
+		let pwLowPrice, pwHighPrice, pwMidPrice, pwDeviationPercent, pwSource;
+
+		if (rangeOrValue.isRange) {
+			pwLowPrice = rangeOrValue.from;
+			pwHighPrice = rangeOrValue.to;
+			pwMidPrice = (rangeOrValue.from + rangeOrValue.to) / 2;
+			pwDeviationPercent = pwLowPrice / pwMidPrice * 100;
+			pwSource = 'const';
+		}
+
+		if (rangeOrValue.isValue) {
+
+			const percentString = params[2];
+				if (!percentString || (percentString.slice(-1) !== '%')) {
+				return {
+					msgNotify: '',
+					msgSendBack: `Set a deviation in percentage. Example: */enable pw 0.5 1%*.`,
+					notifyType: 'log'
+				}	
+			}
+			const percentValue = +percentString.slice(0, -1);
+			if (!percentValue || percentValue === Infinity || percentValue <= 0 || percentValue > 80) {
+				return {
+					msgNotify: '',
+					msgSendBack: `Set correct deviation in percentage. Example: */enable pw 0.5 1%*.`,
+					notifyType: 'log'
+				}
+			}
+			pwLowPrice = rangeOrValue.value * (1 - percentValue/100);
+			pwHighPrice = rangeOrValue.value * (1 + percentValue/100);
+			pwMidPrice = rangeOrValue.isValue;
+			pwDeviationPercent = percentValue;
+			pwSource = 'const';
+		}
+		
+		infoString = `from ${pwLowPrice.toFixed(config.coin2Decimals)} to ${pwHighPrice.toFixed(config.coin2Decimals)} ${config.coin2} (${pwDeviationPercent.toFixed(2)}% deviation)`;
+		optionsString = `Price watching`;
+
+		let isConfirmed = params[params.length-1];
+		if (isConfirmed && (['-y', '-Y'].includes(isConfirmed))) {
+			isConfirmed = true;
+		} else {
+			isConfirmed = false;
+		}
+
+		if (isConfirmed) {
+			tradeParams.mm_isPriceWatcherActive = true;
+			tradeParams.mm_priceWatcherLowPrice = pwLowPrice;
+			tradeParams.mm_priceWatcherHighPrice = pwHighPrice;
+			tradeParams.mm_priceWatcherMidPrice = pwMidPrice;
+			tradeParams.mm_priceWatcherDeviationPercent = pwDeviationPercent;
+			tradeParams.mm_priceWatcherSource = pwSource;
+
+		} else {
+
+			let priceInfoString = '';
+
+			const pairObj = $u.getPairObj(config.pair, false);
+			const pair = pairObj.pair;
+			const coin1 = pairObj.coin1;
+			const coin2 = pairObj.coin2;
+			const coin1Decimals =  pairObj.coin1Decimals;
+			const coin2Decimals =  pairObj.coin2Decimals;
+
+			const currencies = Store.currencies;
+			const res = Object
+				.keys(Store.currencies)
+				.filter(t => t.startsWith(coin1 + '/'))
+				.map(t => {
+					let p = `${coin1}/**${t.replace(coin1 + '/', '')}**`;
+					return `${p}: ${currencies[t]}`;
+				})
+				.join(', ');
+
+			if (!res.length) {
+				if (!pair) {
+					priceInfoString = `I can’t get rates for *${coin1} from Infoservice*.`;
+				}
+			} else {
+				priceInfoString = `Global market rates for ${coin1}:\n${res}.`;
+			}
+
+			const exchangeRatesBefore = await traderapi.getRates(pair);
+			if (priceInfoString)
+				priceInfoString += "\n\n";
+			if (exchangeRatesBefore) {
+				priceInfoString += `${config.exchangeName} rates for ${pair} pair:\nBid: ${exchangeRatesBefore.bid.toFixed(coin2Decimals)}, ask: ${exchangeRatesBefore.ask.toFixed(coin2Decimals)}.`;
+			} else {
+				priceInfoString += `Unable to get ${config.exchangeName} rates for ${pair}.`;
+			}
+
+			pendingConfirmation.command = `/enable ${params.join(' ')}`;
+			pendingConfirmation.timestamp = Date.now();
+			msgNotify = '';
+			msgSendBack = `Are you sure to enable ${optionsString} for ${config.pair} pair ${infoString}? Confirm with **/y** command or ignore.\n\n${priceInfoString}`;
+			
+			return {
+				msgNotify,
+				msgSendBack,
+				notifyType: 'log'
+			}
+
 		}
 	}
+
+	if (tradeParams.mm_isActive) {
+		msgNotify = `${config.notifyName} enabled ${optionsString} for ${config.pair} pair ${infoString}.`;
+		msgSendBack = `${optionsString} is enabled for ${config.pair} pair ${infoString}.`;
+	} else {
+		notesStringNotify = ` Market making and ${optionsString} are not started yet.`
+		notesStringMsg = ` To start Market making and ${optionsString}, type */start mm*.`
+		msgNotify = `${config.notifyName} enabled ${optionsString} for ${config.pair} pair ${infoString}.${notesStringNotify}`;
+		msgSendBack = `${optionsString} is enabled for ${config.pair} pair ${infoString}.${notesStringMsg}`;
+	}
+
+	return {
+		msgNotify,
+		msgSendBack,
+		notifyType: 'log'
+	}
+	
 }
 
 function disable(params) {
+
 	const type = (params[0] || '').trim();
-	if (!type || !type.length || !["ob"].includes(type)) {
+	if (!type || !type.length || !["ob", "liq", "pw"].includes(type)) {
         return {
             msgNotify: '',
-            msgSendBack: `Indicate option, _ob_ for order book building. Example: */disable ob*.`,
+            msgSendBack: `Indicate option: _ob_ for order book building, _liq_ for liquidity and spread maintenance, _pw_ for price watching. Example: */disable ob*.`,
             notifyType: 'log'
 		} 
 	}
+
+	let msgNotify, msgSendBack, optionsString;
+
 	if (type === "ob") {
 		tradeParams.mm_isOrderBookActive = false;
-		let msgNotify, msgSendBack;
-		if (tradeParams.mm_isActive) {
-			msgNotify = `${config.notifyName} disable order book building for ${config.pair} pair. Market making is still active.`;
-			msgSendBack = `Order book building is disabled for ${config.pair}. Market making is still active. To stop market making, type */stop mm*. To close current ob-orders, type */clear ob*.`;
-		} else {
-			msgNotify = `${config.notifyName} disabled order book building for ${config.pair}.`;
-			msgSendBack = `Order book building is disabled for ${config.pair}.`;
-		}
-		return {
-			msgNotify,
-			msgSendBack,
-			notifyType: 'log'
-		}
+		optionsString = `Order book building`;
+	} else if (type === "liq") {
+		tradeParams.mm_isLiquidityActive = false;
+		optionsString = `Liquidity and spread maintenance`;
+	} else if (type === "pw") {
+		tradeParams.mm_isPriceWatcherActive = false;
+		optionsString = `Price watching`;
 	}
+
+	if (tradeParams.mm_isActive) {
+		msgNotify = `${config.notifyName} disabled ${optionsString} for ${config.pair} pair. Market making is still active.`;
+		msgSendBack = `${optionsString} is disabled for ${config.pair} pair. Market making is still active. To stop market making, type */stop mm*. To close current ob-orders, type */clear ob*. To close current liq-orders, type */clear liq*.`;
+	} else {
+		msgNotify = `${config.notifyName} disabled ${optionsString} for ${config.pair}.`;
+		msgSendBack = `${optionsString} is disabled for ${config.pair}.`;
+	}
+
+	return {
+		msgNotify,
+		msgSendBack,
+		notifyType: 'log'
+	}
+
 }
 
 function buypercent(param) {
@@ -278,9 +594,12 @@ async function clear(params) {
 
 	let purposes;
 	let purposeString;
+
 	params.forEach(param => {
+
 		if (['all'].includes(param)) {
-			purposes = ['mm', 'tb', 'ob'];
+			// purposes = ['mm', 'tb', 'ob', 'liq', 'pw'];
+			purposes = 'all';
 		}
 		if (['tb'].includes(param)) {
 			purposes = ['tb'];
@@ -289,6 +608,14 @@ async function clear(params) {
 		if (['ob'].includes(param)) {
 			purposes = ['ob'];
 			purposeString = `order book`;
+		}
+		if (['liq'].includes(param)) {
+			purposes = ['liq'];
+			purposeString = `liquidity`;
+		}
+		if (['pw'].includes(param)) {
+			purposes = ['pw'];
+			purposeString = `price watcher`;
 		}
 	});
 	if (!purposes) {
@@ -303,34 +630,35 @@ async function clear(params) {
 	// First, close orders which are in bot's database
 	count = await orderCollector(purposes, pair);
 
-	if (purposeString) {
+	// Next, if need to clear all orders, close orders which are not closed yet
+	if (purposes === 'all') {
+
+		const openOrders = await traderapi.getOpenOrders(pair);
+		if (openOrders) {
+
+			if ((count + openOrders.length) > 0) {
+
+				output = `Clearing **all** ${count + openOrders.length} orders for ${pair} pair on ${config.exchangeName}..`;
+				openOrders.forEach(order => {
+					traderapi.cancelOrder(order.orderid, order.side, order.symbol);
+				});
+
+			} else {
+				output = `No open orders on ${config.exchangeName} for ${pair}.`;
+			}
+
+		} else {
+			output = `Unable to get ${config.exchangeName} orders for ${pair}.`;
+		}
+
+	} else {
+
 		if (count > 0) {
 			output = `Clearing ${count} **${purposeString}** orders for ${pair} pair on ${config.exchangeName}..`;
 		} else {
 			output = `No open **${purposeString}** orders on ${config.exchangeName} for ${pair}.`;
 		}	
-		return {
-			msgNotify: ``,
-			msgSendBack: `${output}`,
-			notifyType: 'log'
-		}	
-	}
-	
-	// Next, if need to clear all orders, close orders which are not closed yet
-	if (!purposeString) { // Need to clear all orders
-		const openOrders = await traderapi.getOpenOrders(pair);
-		if (openOrders) {
-			if ((count + openOrders.length) > 0) {
-				output = `Clearing **all** ${count + openOrders.length} orders for ${pair} pair on ${config.exchangeName}..`;
-				openOrders.forEach(order => {
-					traderapi.cancelOrder(order.orderid, order.side, order.symbol);
-				});
-			} else {
-				output = `No open orders on ${config.exchangeName} for ${pair}.`;
-			}
-		} else {
-			output = `Unable to get ${config.exchangeName} orders for ${pair}.`;
-		}
+
 	}
 
 	return {
@@ -522,10 +850,10 @@ async function fill(params) {
 	// Place orders
 	let total1 = 0, total2 = 0;
 	items = 0;
-	let id;
+	let order;
 	for (i=0; i < orderList.length; i++) {
-		id = (await traderapi.placeOrder(type, pair, orderList[i].price, orderList[i].amount, 1, null, pairObj)).orderid;
-		if (id) {
+		order = await traderapi.placeOrder(type, pair, orderList[i].price, orderList[i].amount, 1, null, pairObj);
+		if (order && order.orderid) {
 			items += 1;
 			total1 += +orderList[i].amount;
 			total2 += +orderList[i].altAmount;
@@ -693,16 +1021,24 @@ async function buy_sell(params, type) {
 		params.quote = params.amount * params.price;
 	}
 
-	let result;
+	let result, msgNotify, msgSendBack;
 	if (params.price === 'market') {
 		result = await traderapi.placeOrder(type, params.pair, null, params.amount, 0, params.quote, params.pairObj);
 	} else {
 		result = await traderapi.placeOrder(type, params.pair, params.price, params.amount, 1, params.quote, params.pairObj);
 	}
 
+	if (result !== undefined) {
+		msgSendBack = result.message;
+		msgNotify = `${config.notifyName}: ${result.message}`;
+	} else {
+		msgSendBack = `Request to place an order with params ${JSON.stringify(params)} failed. It looks like an API temporary error. Try again.`;
+		msgNotify = '';
+	}
+
 	return {
-		msgNotify: `${config.notifyName}: ${result.message}`,
-		msgSendBack: result.message,
+		msgNotify,
+		msgSendBack,
 		notifyType: 'log'
 	}
 
@@ -714,11 +1050,11 @@ function params() {
 	let output = `I am set to work with ${config.pair} pair on ${config.exchangeName}. Current trading settings:`;
 	output += "\n\n" + JSON.stringify(tradeParams, null, 3);;
 
-return {
-	msgNotify: ``,
-	msgSendBack: `${output}`,
-	notifyType: 'log'
-}
+	return {
+		msgNotify: ``,
+		msgSendBack: `${output}`,
+		notifyType: 'log'
+	}
 
 }
 
@@ -744,7 +1080,7 @@ Commands:
 
 **/stop**: Stop trading (td) or market making (mm). F. e., /*stop mm*.
 
-**/enable**: Enable option. F. e., /*enable ob 10* to enable order book building with 10 maximum number of orders.
+**/enable**: Enable option, *ob* or *liq*. F. e., /*enable ob 10* to enable order book building with 10 maximum number of orders.
 
 **/disable**: Disable option. F. e., /*disable ob* to disable order book building.
 
@@ -769,11 +1105,11 @@ Commands:
 Happy trading!
 `;
 
-return {
-	msgNotify: ``,
-	msgSendBack: `${output}`,
-	notifyType: 'log'
-}
+	return {
+		msgNotify: ``,
+		msgSendBack: `${output}`,
+		notifyType: 'log'
+	}
 
 }
 
@@ -781,7 +1117,11 @@ async function rates(params) {
 
 	let output = '';
 
-	const pairObj = $u.getPairObj(params[0], true);
+	// if coin1 only, treat it as pair set in config
+	if (params[0].toUpperCase().trim() === config.coin1)
+		params[0] = config.pair;
+
+	const pairObj = $u.getPairObj(params[0], false);
 	const pair = pairObj.pair;
 	const coin1 = pairObj.coin1;
 	const coin2 = pairObj.coin2;
@@ -808,7 +1148,7 @@ async function rates(params) {
 
 	if (!res.length) {
 		if (!pair) {
-			output = `I can’t get rates for *${coin1}*. Made a typo? Try */rates ADM*.`;
+			output = `I can’t get rates for *${coin1} from Infoservice*. Try */rates ADM*.`;
 			return {
 				msgNotify: ``,
 				msgSendBack: `${output}`,
@@ -825,8 +1165,7 @@ ${res}.`;
 		if (output)
 			output += "\n\n";
 		if (exchangeRates) {
-			output += `${config.exchangeName} rates for ${pair} pair:
-Ask: ${exchangeRates.ask.toFixed(coin2Decimals)}, bid: ${exchangeRates.bid.toFixed(coin2Decimals)}.`;
+			output += `${config.exchangeName} rates for ${pair} pair:\nBid: ${exchangeRates.bid.toFixed(coin2Decimals)}, ask: ${exchangeRates.ask.toFixed(coin2Decimals)}.`;
 		} else {
 			output += `Unable to get ${config.exchangeName} rates for ${pair}.`;
 		}
@@ -903,9 +1242,9 @@ async function stats(params) {
 			if (exchangeRates.volume_Coin2) {
 				volume_Coin2 = ` & ${$u.thousandSeparator(+exchangeRates.volume_Coin2.toFixed(coin2Decimals), true)} ${coin2}`;
 			}
-			output += `${config.exchangeName} 24h stats for ${pair} pair:
-Vol: ${$u.thousandSeparator(+exchangeRates.volume.toFixed(coin1Decimals), true)} ${coin1}${volume_Coin2}. High: ${exchangeRates.high.toFixed(coin2Decimals)}, low: ${exchangeRates.low.toFixed(coin2Decimals)}, delta: _${(exchangeRates.high-exchangeRates.low).toFixed(coin2Decimals)}_ ${coin2}.
-Ask: ${exchangeRates.ask.toFixed(coin2Decimals)}, bid: ${exchangeRates.bid.toFixed(coin2Decimals)}, spread: _${(exchangeRates.ask-exchangeRates.bid).toFixed(coin2Decimals)}_ ${coin2}.`;
+			output += `${config.exchangeName} 24h stats for ${pair} pair:`;
+			output += `\nVol: ${$u.thousandSeparator(+exchangeRates.volume.toFixed(coin1Decimals), true)} ${coin1}${volume_Coin2}. High: ${exchangeRates.high.toFixed(coin2Decimals)}, low: ${exchangeRates.low.toFixed(coin2Decimals)}, delta: _${(exchangeRates.high-exchangeRates.low).toFixed(coin2Decimals)}_ ${coin2}.`;
+			output += `\nBid: ${exchangeRates.bid.toFixed(coin2Decimals)}, ask: ${exchangeRates.ask.toFixed(coin2Decimals)}, spread: _${(exchangeRates.ask-exchangeRates.bid).toFixed(coin2Decimals)}_ ${coin2}.`;
 		} else {
 			output += `Unable to get ${config.exchangeName} stats for ${pair}.`;
 		}
@@ -978,12 +1317,168 @@ async function orders(params) {
 		}
 	}
 
+	// console.log($u.getOrderBookInfo(await traderapi.getOrderBook(pair), 30));
+
+
 	return {
 		msgNotify: ``,
 		msgSendBack: `${output}`,
 		notifyType: 'log'
 	}
 
+}
+
+async function make(params, tx, confirmation) {
+
+	// make price 1.1 — buy/sell to achieve target price of 1.1 COIN2
+
+	try {
+
+		const param = (params[0] || '').trim();
+		if (!param || !param.length || !["price"].includes(param)) {
+			return {
+				msgNotify: '',
+				msgSendBack: `Indicate option: _price_ to buy/sell to achieve target price. Example: */make price 1.1*.`,
+				notifyType: 'log'
+			} 
+		}
+
+		let msgNotify, msgSendBack, actionString, priceString;
+
+		if (param === "price") {
+
+			let priceInfoString = '';
+
+			const pairObj = $u.getPairObj(config.pair, false);
+			const pair = pairObj.pair;
+			const coin1 = pairObj.coin1;
+			const coin2 = pairObj.coin2;
+			const coin1Decimals =  pairObj.coin1Decimals;
+			const coin2Decimals =  pairObj.coin2Decimals;
+
+			const currencies = Store.currencies;
+			const res = Object
+				.keys(Store.currencies)
+				.filter(t => t.startsWith(coin1 + '/'))
+				.map(t => {
+					let p = `${coin1}/**${t.replace(coin1 + '/', '')}**`;
+					return `${p}: ${currencies[t]}`;
+				})
+				.join(', ');
+
+			if (!res.length) {
+				if (!pair) {
+					priceInfoString = `I can’t get rates for *${coin1} from Infoservice*.`;
+				}
+			} else {
+				priceInfoString = `Global market rates for ${coin1}:\n${res}.`;
+			}
+
+			const exchangeRatesBefore = await traderapi.getRates(pair);
+			if (priceInfoString)
+				priceInfoString += "\n\n";
+			if (exchangeRatesBefore) {
+				priceInfoString += `${config.exchangeName} rates for ${pair} pair:\nBid: ${exchangeRatesBefore.bid.toFixed(coin2Decimals)}, ask: ${exchangeRatesBefore.ask.toFixed(coin2Decimals)}.`;
+			} else {
+				priceInfoString += `Unable to get ${config.exchangeName} rates for ${pair}.`;
+			}
+
+			let targetPrice = +params[1];
+			if (!targetPrice || targetPrice === Infinity || targetPrice <= 0) {
+				return {
+					msgNotify: '',
+					msgSendBack: `Incorrect ${config.coin2} target price: ${targetPrice}. Example: */make price 1.1*.\n\n${priceInfoString}`,
+					notifyType: 'log'
+				}
+			}
+
+			isConfirmed = params[2];
+			if (isConfirmed && (['-y', '-Y'].includes(isConfirmed))) {
+				confirmation = true;
+			} else {
+				confirmation = false;
+			}
+
+			// get amount from orderBook to but or sell
+
+			/* reliabilityKoef: we must be sure that we'll fill all orders in the order book,
+			   and users/bot can add more orders while filling these orders
+			   Moreover, we should place counter-order to set new spread
+			*/
+			const reliabilityKoef = $u.randomValue(1.05, 1.1);
+			let orderBookInfo = $u.getOrderBookInfo(await traderapi.getOrderBook(config.pair), tradeParams.mm_liquiditySpreadPercent, targetPrice);
+			orderBookInfo.amountTargetPrice *= reliabilityKoef;
+			orderBookInfo.amountTargetPriceQuote *= reliabilityKoef;
+
+			priceString = `${config.pair} price of ${targetPrice} ${config.coin2}`;
+			if (orderBookInfo.typeTargetPrice === 'inSpread') {
+				return {
+					msgNotify: '',
+					msgSendBack: `${priceString} is already in spread. **No action needed**.\n\n${priceInfoString}`,
+					notifyType: 'log'
+				}
+			} else {
+				actionString = `${orderBookInfo.typeTargetPrice} ${orderBookInfo.amountTargetPrice.toFixed(config.coin1Decimals)} ${config.coin1} ${orderBookInfo.typeTargetPrice === 'buy' ? 'with' : 'for'} ${orderBookInfo.amountTargetPriceQuote.toFixed(config.coin2Decimals)} ${config.coin2}`;
+			}
+	
+			if (confirmation) {
+				// let order = true;
+				let order = await traderapi.placeOrder(orderBookInfo.typeTargetPrice, config.pair, targetPrice, orderBookInfo.amountTargetPrice, 1, orderBookInfo.amountTargetPriceQuote, pairObj);
+				if (order && order.orderid) {
+					var showRatesAfterOrder = async function (exchangeRatesBefore, priceString, actionString) {
+						setTimeout(async () => { 
+
+							priceInfoString = '';
+							const exchangeRatesAfter = await traderapi.getRates(pair);
+							if (exchangeRatesAfter) {
+								priceInfoString += `${config.exchangeName} rates for ${pair} pair:\nBefore action — bid: ${exchangeRatesBefore.bid.toFixed(coin2Decimals)}, ask: ${exchangeRatesBefore.ask.toFixed(coin2Decimals)}.\nAfter action — bid: ${exchangeRatesAfter.bid.toFixed(coin2Decimals)}, ask: ${exchangeRatesAfter.ask.toFixed(coin2Decimals)}.`;
+							} else {
+								priceInfoString += `Unable to get ${config.exchangeName} rates for ${pair}.`;
+							}
+
+							msgNotify = `Making ${priceString}: Successfully placed an order to *${actionString}*.\n\n${priceInfoString}`;
+							msgSendBack = `Making ${priceString}: Successfully placed an order to **${actionString}**.\n\n${priceInfoString}`;
+							notifyType = 'log';
+							notify(msgNotify, notifyType);
+							$u.sendAdmMsg(tx.senderId, msgSendBack);
+
+						}, 2000);
+					}
+					await showRatesAfterOrder(exchangeRatesBefore, priceString, actionString);
+
+				} else {
+
+					msgNotify = '';
+					msgSendBack = `Unable to make ${priceString}. I was unable to ${actionString}: it looks like a temporary API error. Try again.\n\n${priceInfoString}`;
+
+				}
+	
+			} else {
+				pendingConfirmation.command = `/make ${params.join(' ')}`;
+				pendingConfirmation.timestamp = Date.now();
+				msgNotify = '';
+				let pwWarning = ' ';
+				if (tradeParams.mm_isActive && tradeParams.mm_isPriceWatcherActive) {
+					pwWarning = `\n\n**Warning**: Price watcher is enabled for ${config.pair} from ${tradeParams.mm_priceWatcherLowPrice.toFixed(config.coin2Decimals)} to ${tradeParams.mm_priceWatcherHighPrice.toFixed(config.coin2Decimals)} ${config.coin2}.`;
+					if (targetPrice < tradeParams.mm_priceWatcherLowPrice || targetPrice > tradeParams.mm_priceWatcherHighPrice)
+						pwWarning += ` **Target price ${targetPrice} ${config.coin2} is out of this range.** The bot will try to restore a price.`;
+					pwWarning += `\n\n`;
+				}
+				msgSendBack = `Are you sure to make ${priceString}? I am going to **${actionString}**.${pwWarning}Confirm with **/y** command or ignore.\n\n${priceInfoString}`;
+			}	
+
+		} // if (param === "price")
+
+		return {
+			msgNotify,
+			msgSendBack,
+			notifyType: 'log'
+		}
+
+	} catch (e) {
+		log.error(`Error in make() of ${$u.getModuleName(module.id)} module: ` + e);
+	}
+	
 }
 
 async function calc(arr) {
@@ -1045,15 +1540,13 @@ async function calc(arr) {
 	if (exchangeRates) {
 		askValue = exchangeRates.ask * amount;
 		bidValue = exchangeRates.bid * amount;
-		output += `${config.exchangeName} value of ${$u.thousandSeparator(amount)} ${inCurrency}:
-Ask: **${$u.thousandSeparator(askValue.toFixed(8))} ${outCurrency}**, bid: **${$u.thousandSeparator(bidValue.toFixed(8))} ${outCurrency}**.`;
+		output += `${config.exchangeName} value of ${$u.thousandSeparator(amount)} ${inCurrency}:\nBid: **${$u.thousandSeparator(bidValue.toFixed(8))} ${outCurrency}**, ask: **${$u.thousandSeparator(askValue.toFixed(8))} ${outCurrency}**.`;
 	} else {
 		exchangeRates = await traderapi.getRates(pair2);
 		if (exchangeRates) {
 			askValue = amount / exchangeRates.ask;
 			bidValue = amount / exchangeRates.bid;
-			output += `${config.exchangeName} value of ${$u.thousandSeparator(amount)} ${inCurrency}:
-	Ask: **${$u.thousandSeparator(askValue.toFixed(8))} ${outCurrency}**, bid: **${$u.thousandSeparator(bidValue.toFixed(8))} ${outCurrency}**.`;
+			output += `${config.exchangeName} value of ${$u.thousandSeparator(amount)} ${inCurrency}:\nBid: **${$u.thousandSeparator(bidValue.toFixed(8))} ${outCurrency}**, ask: **${$u.thousandSeparator(askValue.toFixed(8))} ${outCurrency}**.`;
 		} else {
 			output += `Unable to get ${config.exchangeName} rates for ${pair}.`;
 		}
@@ -1075,9 +1568,14 @@ async function balances() {
 		output = `All empty.`;
 	} else {
 		balances.forEach(crypto => {
-			output += `${$u.thousandSeparator(+crypto.free.toFixed(8), true)} _${crypto.code}_`;
-			if (+crypto.freezed > 0) {
-				output += ` & ${$u.thousandSeparator(+crypto.freezed.toFixed(8), true)} freezed`;
+			
+			output += `${$u.thousandSeparator(+(crypto.total).toFixed(8), true)} _${crypto.code}_`;
+			if (crypto.total != crypto.free) {
+				output += ` (${$u.thousandSeparator(+crypto.free.toFixed(8), true)} available`;
+				if (crypto.freezed > 0) {
+					output += ` & ${$u.thousandSeparator(+crypto.freezed.toFixed(8), true)} frozen`;
+				}
+				output += ")";
 			}
 			output += "\n";
 		});
@@ -1085,8 +1583,7 @@ async function balances() {
 
 	return {
 		msgNotify: ``,
-		msgSendBack: `${config.exchangeName} balances:
-${output}`,
+		msgSendBack: `${config.exchangeName} balances:\n${output}`,
 		notifyType: 'log'
 	}
 
@@ -1125,5 +1622,7 @@ const commands = {
 	sell,
 	enable,
 	disable,
-	deposit
+	deposit,
+	make,
+	y
 }

@@ -14,26 +14,26 @@ _________________${fullTime()}_________________
 module.exports = {
 	error(str) {
 		infoStr.write(`
-		` + 'Bot error|' + time() + '|' + str);
-		console.log('\x1b[31m', 'error|' + time(), '\x1b[0m', str);
+		` + 'Bot error|' + fullTime() + '|' + str);
+		console.log('\x1b[31m', 'error|' + fullTime(), '\x1b[0m', str);
 	},
 	info(str) {
-		console.log('\x1b[32m', 'info|' + time(), '\x1b[0m', str);
+		console.log('\x1b[32m', 'info|' + fullTime(), '\x1b[0m', str);
 
 		infoStr.write(`
-		` + 'Bot info|' + time() + '|' + str);
+		` + 'Bot info|' + fullTime() + '|' + str);
 	},
 	warn(str) {
-		console.log('\x1b[33m', 'warn|' + time(), '\x1b[0m', str);
+		console.log('\x1b[33m', 'warn|' + fullTime(), '\x1b[0m', str);
 
 		infoStr.write(`
-		` + 'Bot warn|' + time() + '|' + str);
+		` + 'Bot warn|' + fullTime() + '|' + str);
 	},
 	log(str) {
-		console.log('\x1b[34m', 'log|' + time(), '\x1b[0m', str);
+		console.log('\x1b[34m', 'log|' + fullTime(), '\x1b[0m', str);
 
 		infoStr.write(`
-		` + 'Bot log|[' + time() + '|' + str);
+		` + 'Bot log|[' + fullTime() + '|' + str);
 	}
 };
 
@@ -44,16 +44,16 @@ function time() {
 		second: 'numeric'
 	};
 
-	return new Date().toLocaleString('en', options);
+	return new Date().toLocaleString('en-GB', options);
 }
 
 function date() {
 	var options = {
-		day: 'numeric',
+		year: 'numeric',
 		month: 'numeric',
-		year: 'numeric'
+		day: 'numeric'
 	};
-	return (new Date().toLocaleString('en', options)).replace(/\//g, '-');
+	return (new Date().toLocaleString('fr-CA', options)).replace(/\//g, '-');
 }
 
 function fullTime() {
