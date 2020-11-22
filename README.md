@@ -1,4 +1,4 @@
-ADAMANT Trading & Market making bot is a software that allows to run trades on crypto exchanges, make trade volume, maintain spread and liquidity, and build live-like dynamic order book.
+ADAMANT Trading & Market making bot is a software that allows to run trades on crypto exchanges, make trade volume, maintain spread and liquidity, set price range, and build live-like dynamic order book.
 
 # Market making
 
@@ -9,6 +9,8 @@ In Market making mode, the bot places orders and execute them by himself, making
 
 See [marketmaking.app](https://marketmaking.app) to have a look at the bot possibilities.
 
+![Trading chart](./assets/Making-chart.png)
+
 ![Market Making & OrderBook Building](./assets/OrderBook-Builder.gif)
 
 # Profit trading
@@ -17,15 +19,16 @@ Trading is a mode when bot run orders according to some strategy. It can be prof
 
 # Features
 
-* Managed with your commands using ADAMANT Messenger
 * Easy to install and configure
 * Free and open source
 * Fill order books
 * Place buy and sell limit or market orders
 * Market making
-* Dynamic order book
+* Dynamic order book building
+* Spread & liquidity maintenance
+* Price range setting
 * Stores and displays statistics
-* 88888888!!!!!!
+* Managed with your commands using ADAMANT Messenger
 
 # Supported exchanges
 
