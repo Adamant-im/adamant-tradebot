@@ -78,8 +78,13 @@ var EXCHANGE_API = {
                 log.log(`Login API request (apiServer: ${apiServer}, username: ${username}) failed. ${err}. Exiting. Try to restart the bot.`);
                 process.exit(0);
             });
-            
+
             var res = JSON.parse(loginReq);
+            if (res.status === false) {
+                log.log(`API auth (apiServer: ${apiServer}, username: ${username}) failed: ${res}. Exiting. Check login credentials in the config-file.`);
+                process.exit(0);
+            }
+
             config = {
                 'auth-token': res.token,
                 'auth-secret': res.data.secret

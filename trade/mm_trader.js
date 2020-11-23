@@ -56,8 +56,8 @@ module.exports = {
                 return;
             }
 
-            // console.log(orderParamsString);
-            // console.log(type, price.toFixed(8), coin1Amount.toFixed(0), coin2Amount.toFixed(0));
+            console.log(orderParamsString);
+            console.log(type, price.toFixed(8), coin1Amount.toFixed(0), coin2Amount.toFixed(0));
 
             // Check balances
             const balances = await isEnoughCoins(config.coin1, config.coin2, coin1Amount, coin2Amount, type, priceReq.mmCurrentAction);
@@ -196,16 +196,16 @@ async function isEnoughCoins(coin1, coin2, amount1, amount2, type, mmCurrentActi
 
                 if (mmCurrentAction === 'executeInSpread') {
                     if (type === 'sell') {
-                        output = `${config.notifyName}: Not enough balance to place ${amount1.toFixed(config.coin1Decimals)} ${coin1} ${type} direct mm-order (in spread). Free: ${balance1.toFixed(config.coin1Decimals)} ${coin1}, freezed: ${balance1freezed.toFixed(config.coin1Decimals)} ${coin1}.`;
+                        output = `${config.notifyName}: Not enough balance to place ${amount1.toFixed(config.coin1Decimals)} ${coin1} ${type} direct mm-order (in spread). Free: ${balance1free.toFixed(config.coin1Decimals)} ${coin1}, frozen: ${balance1freezed.toFixed(config.coin1Decimals)} ${coin1}.`;
                     } else {
-                        output = `${config.notifyName}: Not enough balance to place ${amount1.toFixed(config.coin1Decimals)} ${coin1} ${type} cross-type mm-order (in spread). Free: ${balance1.toFixed(config.coin1Decimals)} ${coin1}, freezed: ${balance1freezed.toFixed(config.coin1Decimals)} ${coin1}.`;
+                        output = `${config.notifyName}: Not enough balance to place ${amount1.toFixed(config.coin1Decimals)} ${coin1} ${type} cross-type mm-order (in spread). Free: ${balance1free.toFixed(config.coin1Decimals)} ${coin1}, frozen: ${balance1freezed.toFixed(config.coin1Decimals)} ${coin1}.`;
                     }
                     isBalanceEnough = false;
                 }
 
                 if (mmCurrentAction === 'executeInOrderBook') {
                     if (type === 'sell') {
-                        output = `${config.notifyName}: Not enough balance to place ${amount1.toFixed(config.coin1Decimals)} ${coin1} ${type} mm-order (in order book). Free: ${balance1.toFixed(config.coin1Decimals)} ${coin1}, freezed: ${balance1freezed.toFixed(config.coin1Decimals)} ${coin1}.`;
+                        output = `${config.notifyName}: Not enough balance to place ${amount1.toFixed(config.coin1Decimals)} ${coin1} ${type} mm-order (in order book). Free: ${balance1free.toFixed(config.coin1Decimals)} ${coin1}, frozen: ${balance1freezed.toFixed(config.coin1Decimals)} ${coin1}.`;
                         isBalanceEnough = false;
                     }                    
                 }
@@ -357,13 +357,30 @@ async function setPrice(type, pair, coin1Amount) {
                 } else {
                     mmCurrentAction = 'doNotExecute';
                 }
-            } else {
+
+            } else { // there is a spread
 
                 if (mmPolicy === 'spread') {
                     mmCurrentAction = 'executeInSpread';            
                 } else if (mmPolicy === 'optimal') {
-                    // 80% in order book and 20% in spread
-                    mmCurrentAction = Math.random > 0.8 ? 'executeInSpread' : 'executeInOrderBook';
+                    if (tradeParams.mm_isLiquidityActive) {
+                        // 80% in order book and 20% in spread
+                        mmCurrentAction = Math.random() > 0.8 ? 'executeInSpread' : 'executeInOrderBook';
+                        console.log(`Mm-order with spread+ and mm_isLiquidityActive on: mmCurrentAction ${mmCurrentAction}`)
+                    } else {
+                        let obSpread = orderBookInfo.spreadPercent;
+                        if (obSpread < 2) { // small spread
+                            // 90% in spread and 10% in order book
+                            mmCurrentAction = Math.random() > 0.1 ? 'executeInSpread' : 'executeInOrderBook';
+                        } else if (obSpread < 5) {
+                            mmCurrentAction = Math.random() > 0.05 ? 'executeInSpread' : 'executeInOrderBook';
+                        } else if (obSpread < 10) {
+                            mmCurrentAction = Math.random() > 0.01 ? 'executeInSpread' : 'executeInOrderBook';
+                        } else {
+                            mmCurrentAction = Math.random() > 0.001 ? 'executeInSpread' : 'executeInOrderBook';
+                        }
+                        console.log(`Mm-order with spread+ and mm_isLiquidityActive off: obSpread ${obSpread}, mmCurrentAction ${mmCurrentAction}`)
+                    }
                 } else {
                     mmCurrentAction = 'executeInOrderBook';
                 }
@@ -388,7 +405,8 @@ async function setPrice(type, pair, coin1Amount) {
 
             let amountInSpread, amountInConfig, amountMaxAllowed, firstOrderAmount;
             // fill not more, than liquidity amount * allowedAmountKoef
-            let allowedAmountKoef = tradeParams.mm_isLiquidityActive ? 0.9 : 0.5;
+            let allowedAmountKoef;
+            allowedAmountKoef = tradeParams.mm_isLiquidityActive ? $u.randomValue(0.5, 0.8) : $u.randomValue(0.2, 0.5);
 
             if (type === 'sell') {
 
@@ -396,16 +414,19 @@ async function setPrice(type, pair, coin1Amount) {
                 amountInConfig = tradeParams.mm_liquidityBuyQuoteAmount / bid_low;
                 amountMaxAllowed = amountInSpread > amountInConfig ? amountInConfig : amountInSpread;
                 amountMaxAllowed *= allowedAmountKoef;
+                console.log(`Selling; coin1Amount: ${coin1Amount}, amountInSpread: ${amountInSpread}, amountInConfig: ${amountInConfig}, amountMaxAllowed: ${amountMaxAllowed}.`)
 
-                // console.log(`Selling; coin1Amount: ${coin1Amount}, amountInSpread: ${amountInSpread}, amountInConfig: ${amountInConfig}, amountMaxAllowed: ${amountMaxAllowed}.`)
-                if (amountMaxAllowed) {
+                if (amountMaxAllowed && tradeParams.mm_isLiquidityActive) {
+
                     price = orderBookInfo.liquidity.percentCustom.lowPrice;
                     if (coin1Amount > amountMaxAllowed) {
                         coin1Amount = amountMaxAllowed;
                     } else {
                         coin1Amount = coin1Amount;
                     }
+
                 } else {
+
                     firstOrderAmount = orderBook.bids[0].amount * allowedAmountKoef;
                     price = bid_low;
                     if (coin1Amount > firstOrderAmount) {
@@ -413,6 +434,7 @@ async function setPrice(type, pair, coin1Amount) {
                     } else {
                         coin1Amount = coin1Amount;
                     }
+
                 }
 
             }
@@ -423,16 +445,19 @@ async function setPrice(type, pair, coin1Amount) {
                 amountInConfig = tradeParams.mm_liquiditySellAmount;
                 amountMaxAllowed = amountInSpread > amountInConfig ? amountInConfig : amountInSpread;
                 amountMaxAllowed *= allowedAmountKoef;
+                console.log(`Buying; coin1Amount: ${coin1Amount}, amountInSpread: ${amountInSpread}, amountInConfig: ${amountInConfig}, amountMaxAllowed: ${amountMaxAllowed}.`)
 
-                // console.log(`Buying; coin1Amount: ${coin1Amount}, amountInSpread: ${amountInSpread}, amountInConfig: ${amountInConfig}, amountMaxAllowed: ${amountMaxAllowed}.`)
-                if (amountMaxAllowed) {
+                if (amountMaxAllowed && tradeParams.mm_isLiquidityActive) {
+
                     price = orderBookInfo.liquidity.percentCustom.highPrice;
                     if (coin1Amount > amountMaxAllowed) {
                         coin1Amount = amountMaxAllowed;
                     } else {
                         coin1Amount = coin1Amount;
                     }
+
                 } else {
+
                     firstOrderAmount = orderBook.asks[0].amount * allowedAmountKoef;
                     price = ask_high;
                     if (coin1Amount > firstOrderAmount) {
@@ -440,6 +465,7 @@ async function setPrice(type, pair, coin1Amount) {
                     } else {
                         coin1Amount = coin1Amount;
                     }
+
                 }
 
             }

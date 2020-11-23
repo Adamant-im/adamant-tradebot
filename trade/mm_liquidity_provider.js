@@ -346,11 +346,11 @@ async function isEnoughCoins(coin1, coin2, amount1, amount2, type) {
             balance2freezed = balances.filter(crypto => crypto.code === coin2)[0].freezed;
 
             if ((!balance1free || balance1free < amount1) && type === 'sell') {
-                output = `${config.notifyName}: Not enough balance to place ${amount1.toFixed(config.coin1Decimals)} ${coin1} ${type} liq-order. Free: ${balance1free.toFixed(config.coin1Decimals)} ${coin1}, freezed: ${balance1freezed.toFixed(config.coin1Decimals)} ${coin1}.`;
+                output = `${config.notifyName}: Not enough balance to place ${amount1.toFixed(config.coin1Decimals)} ${coin1} ${type} liq-order. Free: ${balance1free.toFixed(config.coin1Decimals)} ${coin1}, frozen: ${balance1freezed.toFixed(config.coin1Decimals)} ${coin1}.`;
                 isBalanceEnough = false;
             }
             if ((!balance2free || balance2free < amount2) && type === 'buy') {
-                output = `${config.notifyName}: Not enough balance to place ${amount2.toFixed(config.coin2Decimals)} ${coin2} ${type} liq-order. Free: ${balance2free.toFixed(config.coin2Decimals)} ${coin2}, freezed: ${balance2freezed.toFixed(config.coin2Decimals)} ${coin2}.`;
+                output = `${config.notifyName}: Not enough balance to place ${amount2.toFixed(config.coin2Decimals)} ${coin2} ${type} liq-order. Free: ${balance2free.toFixed(config.coin2Decimals)} ${coin2}, frozen: ${balance2freezed.toFixed(config.coin2Decimals)} ${coin2}.`;
                 isBalanceEnough = false;
             }
 
