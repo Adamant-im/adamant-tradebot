@@ -41,8 +41,20 @@ function api(path, r_data, do_sign, type, do_stringify) {
                 if (err) {
                     reject(err);
                 } else {
-                    // console.log(`api() request result: ${data}`)
-                    resolve(data);
+                    let response = JSON.parse(data);
+                    if (response) {
+                        // console.log(`response.status: ${response.status}`);
+                        if (response.status === 401) { // 401 Unauthorized
+                            // console.log(response);
+                            log.log(`Request to ${url} with data ${pars} failed. Got error message: ${response.message}.`);
+                            reject(`Got error message: ${response.message}`);
+                        } else {
+                            resolve(data);
+                        }
+                    } else {
+                        log.log(`Request to ${url} with data ${pars} failed. Unable to parse data: ${data}.`);
+                        reject(`Unable to parse data: ${data}`);
+                    }
                 }
             }).on('error', function(err) {
                 log.log(`Request to ${url} with data ${pars} failed. ${err}.`);
