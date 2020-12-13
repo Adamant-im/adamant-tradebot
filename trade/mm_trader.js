@@ -116,7 +116,7 @@ module.exports = {
 
                         await order.save();
                         notify(`${config.notifyName} unable to execute cross-order for mm-order with params: id=${order1.orderid}, ${orderParamsString}. Action: executeInSpread. Check balances. Running order collector now.`, 'warn', config.silent_mode);
-                        orderCollector(['mm'], config.pair);
+                        orderCollector.clearOrders(['mm'], config.pair);
                     }         
                 } else { // if order1
                     log.warn(`${config.notifyName} unable to execute mm-order with params: ${orderParamsString}. Action: executeInSpread. No order id returned.`);

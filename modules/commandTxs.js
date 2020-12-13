@@ -592,6 +592,9 @@ async function clear(params) {
 		}	
 	}
 
+	let doForce = params[1];
+	doForce = doForce && doForce.toLowerCase() === 'force';
+	
 	let purposes;
 	let purposeString;
 
@@ -624,40 +627,41 @@ async function clear(params) {
 	}
 
 	let output = '';
-	let count = 0;
-	// console.log(purposes, count, output);
+	let clearedInfo = {};
 
-	// First, close orders which are in bot's database
-	count = await orderCollector(purposes, pair);
-
-	// Next, if need to clear all orders, close orders which are not closed yet
 	if (purposes === 'all') {
 
-		const openOrders = await traderapi.getOpenOrders(pair);
-		if (openOrders) {
+		clearedInfo = await orderCollector.clearAllOrders(pair, doForce);
+		if (clearedInfo.totalOrders) {
 
-			if ((count + openOrders.length) > 0) {
-
-				output = `Clearing **all** ${count + openOrders.length} orders for ${pair} pair on ${config.exchangeName}..`;
-				openOrders.forEach(order => {
-					traderapi.cancelOrder(order.orderid, order.side, order.symbol);
-				});
-
+			if (clearedInfo.includesGeneralOrders) {
+				output = `Closed ${clearedInfo.clearedOrders} of ${clearedInfo.totalOrders} orders on ${config.exchangeName} for ${pair}.`;
 			} else {
-				output = `No open orders on ${config.exchangeName} for ${pair}.`;
+				output = `Closed ${clearedInfo.clearedOrders} of ${clearedInfo.totalOrders} orders on ${config.exchangeName} for ${pair}. Unable to get all of open orders because of API error. Try again.`;
 			}
 
 		} else {
-			output = `Unable to get ${config.exchangeName} orders for ${pair}.`;
+
+			if (clearedInfo.includesGeneralOrders) {
+				output = `No open orders on ${config.exchangeName} for ${pair}.`;
+			} else {
+				output = `Unable to get all of open orders because of API error. Try again.`;
+			}
+
 		}
 
 	} else {
 
-		if (count > 0) {
-			output = `Clearing ${count} **${purposeString}** orders for ${pair} pair on ${config.exchangeName}..`;
+		clearedInfo = await orderCollector.clearOrders(purposes, pair, doForce);
+		if (clearedInfo.totalOrders) {
+
+			output = `Closed ${clearedInfo.clearedOrders} of ${clearedInfo.totalOrders} **${purposeString}** orders on ${config.exchangeName} for ${pair}.`;
+
 		} else {
+
 			output = `No open **${purposeString}** orders on ${config.exchangeName} for ${pair}.`;
-		}	
+
+		}		
 
 	}
 

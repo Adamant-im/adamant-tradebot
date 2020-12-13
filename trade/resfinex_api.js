@@ -49,7 +49,20 @@ function sign_api(path, data, type = 'get') {
                 if (err) {
                     reject(err);
                 } else {
-                    resolve(data);
+                    let response = JSON.parse(data);
+                    if (response) {
+                        if (response.status === 'error' && response.code === 429) { // 'API Call limit rate, please try again later
+                            // console.log(response);
+                            log.log(`Request to ${url} with data ${bodyString} failed. Got error message: ${response.msg}.`);
+                            reject(`Got error message: ${response.msg}`);
+                        } else {
+                            resolve(data);
+                        }
+                    } else {
+                        log.log(`Request to ${url} with data ${bodyString} failed. Unable to parse data: ${data}.`);
+                        reject(`Unable to parse data: ${data}`);
+                    }
+                    
                 }
             }).on('error', function(err) {
                 log.log(`Request to ${url} with data ${bodyString} failed. ${err}.`);
@@ -89,7 +102,19 @@ function public_api(path, data, type = 'get') {
                 if (err) {
                     reject(err);
                 } else {
-                    resolve(data);
+                    let response = JSON.parse(data);
+                    if (response) {
+                        if (response.status === 'error' && response.code === 429) { // 'API Call limit rate, please try again later
+                            // console.log(response);
+                            log.log(`Request to ${url} with data ${queryString} failed. Got error message: ${response.msg}.`);
+                            reject(`Got error message: ${response.msg}`);
+                        } else {
+                            resolve(data);
+                        }
+                    } else {
+                        log.log(`Request to ${url} with data ${queryString} failed. Unable to parse data: ${data}.`);
+                        reject(`Unable to parse data: ${data}`);
+                    }
                 }
             }).on('error', function(err) {
                 log.log(`Request to ${url} with data ${queryString} failed. ${err}.`);

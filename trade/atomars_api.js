@@ -81,7 +81,7 @@ var EXCHANGE_API = {
 
             var res = JSON.parse(loginReq);
             if (res.status === false) {
-                log.log(`API auth (apiServer: ${apiServer}, username: ${username}) failed: ${res}. Exiting. Check login credentials in the config-file.`);
+                log.log(`API auth (apiServer: ${apiServer}, username: ${username}) failed: ${JSON.stringify(res)}. Exiting. Check login credentials in the config-file.`);
                 process.exit(0);
             }
 

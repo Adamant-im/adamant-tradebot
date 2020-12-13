@@ -124,6 +124,7 @@ module.exports = (apiKey, secretKey, pwd) => {
 							log.info(`Cancelling order ${orderId}..`);
 							resolve(true);
 						} else {
+							// console.log(JSON.parse(data));
 							log.info(`Order ${orderId} not found. Unable to cancel it.`);
 							resolve(false);
 						}
