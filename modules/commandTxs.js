@@ -14,6 +14,7 @@ let pendingConfirmation = {
 	command: '',
 	timestamp: 0
 }
+let previousBalances = {};
 
 module.exports = async (cmd, tx, itx) => {
 
@@ -1565,12 +1566,15 @@ async function calc(arr) {
 }
 
 async function balances() {
+
 	const balances = await traderapi.getBalances();
 	let output = '';
+	let totalBTC = 0, totalUSD = 0;
 
 	if (balances.length === 0) {
 		output = `All empty.`;
 	} else {
+		output = `${config.exchangeName} balances:\n`;
 		balances.forEach(crypto => {
 			
 			output += `${$u.thousandSeparator(+(crypto.total).toFixed(8), true)} _${crypto.code}_`;
@@ -1582,12 +1586,94 @@ async function balances() {
 				output += ")";
 			}
 			output += "\n";
+
+			let value;
+			if (crypto.usd) {
+				totalUSD += crypto.usd;
+			} else {
+				value = Store.mathEqual(crypto.code, 'USD', crypto.total, true).outAmount;
+				if (value) {
+					totalUSD += value;
+				} else {
+					unknownCryptos.push(crypto.code);
+				}
+			}
+			if (crypto.btc) {
+				totalBTC += crypto.btc;
+			} else {
+				value = Store.mathEqual(crypto.code, 'BTC', crypto.total, true).outAmount;
+				if (value) {
+					totalBTC += value;
+				}
+			}
 		});
+
+		let unknownCryptos = [];
+		output += `Total holdings ~ ${$u.thousandSeparator(+totalUSD.toFixed(2), true)} _USD_ or ${$u.thousandSeparator(totalBTC.toFixed(8), true)} _BTC_`;
+		if (unknownCryptos.length) {
+			output += `. Note: I didn't count unknown cryptos ${unknownCryptos.join(', ')}.`;
+		}
+		output += "\n";
+
+		balances.push({
+			code: 'totalUSD',
+			total: totalUSD
+		});
+		balances.push({
+			code: 'totalBTC',
+			total: totalBTC
+		});
+
 	}
+
+
+	let diff = $u.difference(balances, previousBalances);
+	if (diff) {
+		if (diff[0]) {
+			output += "\nChanges:\n";
+			let delta, deltaUSD = 0, deltaBTC = 0, deltaCoin1 = 0, deltaCoin2 = 0;
+			let sign, signUSD = '', signBTC = '', signCoin1 = '', signCoin2 = '';
+			diff.forEach(crypto => {
+				delta = Math.abs(crypto.now - crypto.prev);
+				sign = crypto.now > crypto.prev ? '+' : '−';
+				if (crypto.code === 'totalUSD') {
+					deltaUSD = delta;
+					signUSD = sign;
+					return;
+				}
+				if (crypto.code === 'totalBTC') {
+					deltaBTC = delta;
+					signBTC = sign;
+					return;
+				}
+				if (crypto.code === config.coin1) {
+					deltaCoin1 = delta;
+					signCoin1 = sign;
+				}
+				if (crypto.code === config.coin2) {
+					deltaCoin2 = delta;
+					signCoin2 = sign;
+				}
+				output += `_${crypto.code}_: ${sign}${$u.thousandSeparator(+(delta).toFixed(8), true)}`;
+				output += "\n";
+			});
+
+			output += `Total holdings ${signUSD}${$u.thousandSeparator(+deltaUSD.toFixed(2), true)} _USD_ or ${signBTC}${$u.thousandSeparator(deltaBTC.toFixed(8), true)} _BTC_`;
+			if (deltaCoin1 && deltaCoin2) {
+				let price = deltaCoin2 / deltaCoin1;				
+				output += `\n${signCoin1 === '+' ? "I've bought" : "I've sold"} ${$u.thousandSeparator(+deltaCoin1.toFixed(config.coin1Decimals), true)} _${config.coin1}_ at ${$u.thousandSeparator(+price.toFixed(config.coin2Decimals), true)} _${config.coin2}_ price.`;
+			}
+
+		} else {
+			output += "\nNo changes.\n";
+		}
+	}
+
+	previousBalances = balances;
 
 	return {
 		msgNotify: ``,
-		msgSendBack: `${config.exchangeName} balances:\n${output}`,
+		msgSendBack: `${output}`,
 		notifyType: 'log'
 	}
 
