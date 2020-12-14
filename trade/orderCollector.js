@@ -149,10 +149,10 @@ module.exports = {
     }
 };
 
-// Clear Market-making orders every 20 sec — In case if API errors
+// Clear Market-making orders every 120 sec — In case if API errors
 setInterval(() => {
     module.exports.clearOrders(['mm'], config.pair);
-}, 20 * 1000);
+}, 120 * 1000);
 
 // Clear all orders, if clearAllOrdersInterval set in config
 if (config.clearAllOrdersInterval) {
