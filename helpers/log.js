@@ -7,28 +7,24 @@ let infoStr = fs.createWriteStream('./logs/' + date() + '.log', {
 	flags: 'a'
 });
 
-infoStr.write(`
-
-[The bot started] _________________${fullTime()}_________________
-
-`);
+infoStr.write(`\n\n[The bot started] _________________${fullTime()}_________________\n`);
 
 module.exports = {
 	error(str) {
-		infoStr.write(`` + 'error|' + fullTime() + '|' + str);
+		infoStr.write(`\n ` + 'error|' + fullTime() + '|' + str);
 		console.log('\x1b[31m', 'error|' + fullTime(), '\x1b[0m', str);
 	},
 	info(str) {
 		console.log('\x1b[32m', 'info|' + fullTime(), '\x1b[0m', str);
-		infoStr.write(`` + 'info|' + fullTime() + '|' + str);
+		infoStr.write(`\n ` + 'info|' + fullTime() + '|' + str);
 	},
 	warn(str) {
 		console.log('\x1b[33m', 'warn|' + fullTime(), '\x1b[0m', str);
-		infoStr.write(`` + 'warn|' + fullTime() + '|' + str);
+		infoStr.write(`\n ` + 'warn|' + fullTime() + '|' + str);
 	},
 	log(str) {
 		console.log('\x1b[34m', 'log|' + fullTime(), '\x1b[0m', str);
-		infoStr.write(`` + 'log|[' + fullTime() + '|' + str);
+		infoStr.write(`\n ` + 'log|[' + fullTime() + '|' + str);
 	}
 };
 

@@ -28,6 +28,7 @@ module.exports = {
         this.iteration();
     },
     iteration() {
+
         let interval = setPause();
         // console.log(interval);
         if (interval && tradeParams.mm_isActive && tradeParams.mm_isOrderBookActive) {
@@ -36,8 +37,10 @@ module.exports = {
         } else {
             setTimeout(() => {this.iteration()}, 3000); // Check for config.mm_isActive every 3 seconds
         }
+
     },
 	async buildOrderBook() {
+
         const {ordersDb} = db;
         const orderBookOrders = await ordersDb.find({
             isProcessed: false,
@@ -52,8 +55,9 @@ module.exports = {
         this.closeOrderBookOrders(orderBookOrders);
     },
 	async closeOrderBookOrders(orderBookOrders) {
+
         let orderBookOrdersCount = orderBookOrders.length;
-        orderBookOrders.forEach(async order => {
+        for (const order of orderBookOrders) {
             try {
 
                 if (order.dateTill < $u.unix()) {
@@ -75,7 +79,8 @@ module.exports = {
             } catch (e) {
                 log.error(`Error in closeOrderBookOrders() of ${$u.getModuleName(module.id)} module: ` + e);
             }
-        });
+        };
+
     },
 	async placeOrderBookOrder(orderBookOrdersCount) {
 
@@ -161,6 +166,7 @@ module.exports = {
 };
 
 function setType() {
+
     if (!tradeParams || !tradeParams.mm_buyPercent) {
         log.warn(`Param mm_buyPercent is not set. Check ${config.exchangeName} config.`);
         return false;
@@ -168,7 +174,8 @@ function setType() {
     let type = 'sell';
     if (Math.random() > tradeParams.mm_buyPercent) // 1 minus tradeParams.mm_buyPercent
         type = 'buy';
-	return type;
+    return type;
+    
 }
 
 async function isEnoughCoins(coin1, coin2, amount1, amount2, type) {
@@ -297,11 +304,13 @@ async function setPrice(type, pair, position) {
 }
 
 function setAmount() {
+
     if (!tradeParams || !tradeParams.mm_maxAmount || !tradeParams.mm_minAmount) {
         log.warn(`Params mm_maxAmount or mm_minAmount are not set. Check ${config.exchangeName} config.`);
         return false;
     }
     return Math.random() * (tradeParams.mm_maxAmount - tradeParams.mm_minAmount) + tradeParams.mm_minAmount;
+    
 }
 
 function setPosition() {
