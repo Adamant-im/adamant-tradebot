@@ -50,9 +50,10 @@ module.exports = {
         });
 
         if (orderBookOrders.length < tradeParams.mm_orderBookOrdersCount)
-            this.placeOrderBookOrder(orderBookOrders.length);
+            await this.placeOrderBookOrder(orderBookOrders.length);
     
-        this.closeOrderBookOrders(orderBookOrders);
+        await this.closeOrderBookOrders(orderBookOrders);
+        
     },
 	async closeOrderBookOrders(orderBookOrders) {
 
@@ -310,7 +311,7 @@ function setAmount() {
         return false;
     }
     return Math.random() * (tradeParams.mm_maxAmount - tradeParams.mm_minAmount) + tradeParams.mm_minAmount;
-    
+
 }
 
 function setPosition() {
