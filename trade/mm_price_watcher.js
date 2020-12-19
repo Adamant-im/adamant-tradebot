@@ -5,6 +5,7 @@ const notify = require('../helpers/notify');
 const tradeParams = require('./tradeParams_' + config.exchange);
 const traderapi = require('./trader_' + config.exchange)(config.apikey, config.apisecret, config.apipassword, log);
 const db = require('../modules/DB');
+const orderUtils = require('./orderUtils');
 
 let lastNotifyBalancesTimestamp = 0;
 let lastNotifyPriceTimestamp = 0;
@@ -43,7 +44,8 @@ module.exports = {
             });
 
             console.log('pwOrders-Untouched', pwOrders.length);
-            pwOrders = await this.updatePriceWatcherOrders(pwOrders); // update orders which partially filled or not found
+            // pwOrders = await this.updatePriceWatcherOrders(pwOrders); // update orders which partially filled or not found
+            pwOrders = await orderUtils.updateOrders(pwOrders, config.pair); // update orders which partially filled or not found
             console.log('pwOrders-AfterUpdate', pwOrders.length);
             pwOrders = await this.closePriceWatcherOrders(pwOrders); // close orders which expired
             console.log('pwOrders-AfterClose', pwOrders.length);

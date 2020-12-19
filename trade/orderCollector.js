@@ -11,6 +11,7 @@ const traderapi = require('./trader_' + config.exchange)(config.apikey, config.a
  * tb: trade bot order
  * liq: liquidity order
  * pw: price watcher order
+ * man: manually placed order with /fill, /buy, /sell, /make price commands
 */
 
 module.exports = {
@@ -64,7 +65,7 @@ module.exports = {
                     }
         
                 } catch (e) {
-                    log.error(`Error in for (const order: ${order._id} of ordersToClear) of ${$u.getModuleName(module.id)}: ${err}.`);
+                    log.error(`Error in for (const order: ${order._id} of ordersToClear) of ${$u.getModuleName(module.id)}: ${e}.`);
                 }
         
             };
@@ -121,7 +122,7 @@ module.exports = {
                         }
             
                     } catch (e) {
-                        log.error(`Error in for (const order: ${order.orderid} of openOrders) of ${$u.getModuleName(module.id)}: ${err}.`);
+                        log.error(`Error in for (const order: ${order.orderid} of openOrders) of ${$u.getModuleName(module.id)}: ${e}.`);
                     }
             
                 };

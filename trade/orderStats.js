@@ -1,6 +1,8 @@
 const db = require('../modules/DB');
 const $u = require('../helpers/utils');
 const config = require('../modules/configReader');
+const orderUtils = require('./orderUtils');
+const log = require('../helpers/log');
 
 module.exports = {
 
@@ -116,25 +118,33 @@ module.exports = {
     },
     async ordersByType(pair) {
 
-        const {ordersDb} = db;
-        let orders = await ordersDb.find({
-            isProcessed: false,
-            pair: pair || config.pair,
-            exchange: config.exchange
-        });
-
         let ordersByType = {};
+
         try {
 
-            ordersByType.all = orders;
-            ordersByType.mm = orders.filter(order => order.purpose === 'mm');
-            ordersByType.ob = orders.filter(order => order.purpose === 'ob');
-            ordersByType.tb = orders.filter(order => order.purpose === 'tb');
-            ordersByType.liq = orders.filter(order => order.purpose === 'liq');
-            ordersByType.pw = orders.filter(order => order.purpose === 'pw');
+            const {ordersDb} = db;
+            let dbOrders = await ordersDb.find({
+                isProcessed: false,
+                pair: pair || config.pair,
+                exchange: config.exchange
+            });
+
+            dbOrders = await orderUtils.updateOrders(dbOrders, pair);
+
+            if (dbOrders && dbOrders[0]) {
+
+                ordersByType.all = dbOrders;
+                ordersByType.mm = dbOrders.filter(order => order.purpose === 'mm');
+                ordersByType.ob = dbOrders.filter(order => order.purpose === 'ob');
+                ordersByType.tb = dbOrders.filter(order => order.purpose === 'tb');
+                ordersByType.liq = dbOrders.filter(order => order.purpose === 'liq');
+                ordersByType.pw = dbOrders.filter(order => order.purpose === 'pw');
+                ordersByType.man = dbOrders.filter(order => order.purpose === 'man');
+
+            }
 
         } catch (e) {
-            log.error(`Error in ordersByType(${pair}) of ${$u.getModuleName(module.id)}: ${err}.`);
+            log.error(`Error in ordersByType(${pair}) of ${$u.getModuleName(module.id)}: ${e}.`);
         }
         
         return ordersByType;

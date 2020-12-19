@@ -8,6 +8,7 @@ const tradeParams = require('../trade/tradeParams_' + config.exchange);
 const traderapi = require('../trade/trader_' + config.exchange)(config.apikey, config.apisecret, config.apipassword, log);
 const orderCollector = require('../trade/orderCollector');
 const orderStats = require('../trade/orderStats');
+const orderUtils = require('../trade/orderUtils');
 
 const timeToConfirm = 1000 * 60 * 10; // 10 minutes to confirm
 let pendingConfirmation = {
@@ -855,25 +856,33 @@ async function fill(params) {
 
 	// Place orders
 	let total1 = 0, total2 = 0;
-	items = 0;
+	let placedOrders = 0, notPlacedOrders = 0;
 	let order;
 	for (i=0; i < orderList.length; i++) {
-		order = await traderapi.placeOrder(type, pair, orderList[i].price, orderList[i].amount, 1, null, pairObj);
+		order = await orderStats.addOrder(type, pair, orderList[i].price, orderList[i].amount, 1, null, pairObj);
 		if (order && order.orderid) {
-			items += 1;
+			placedOrders += 1;
 			total1 += +orderList[i].amount;
 			total2 += +orderList[i].altAmount;
+		} else {
+			notPlacedOrders += 1;
 		}
 	}
 
-	if (items > 0)
-		output = `${items} orders to ${type} ${$u.thousandSeparator(+total1.toFixed(coin1Decimals), false)} ${coin1} for ${$u.thousandSeparator(+total2.toFixed(coin2Decimals), false)} ${coin2}.`;
-	else
+	let notPlacedString = '';
+	if (placedOrders > 0) {
+		if (notPlacedOrders) notPlacedString = ` ${notPlacedOrders} orders missed because of errors, check log file for details.`;
+		output = `${placedOrders} orders to ${type} ${$u.thousandSeparator(+total1.toFixed(coin1Decimals), false)} ${coin1} for ${$u.thousandSeparator(+total2.toFixed(coin2Decimals), false)} ${coin2}.${notPlacedString}`;
+	} else {
 		output = `No orders were placed. Check log file for details.`;
+	}
+
+	let msgNotify = placedOrders > 0 ? `${config.notifyName} placed ${output}` : '';
+	let msgSendBack = placedOrders > 0 ? `Placed ${output}` : output; 
 
 	return {
-		msgNotify: items > 0 ? `${config.notifyName} placed ${output}` : '',
-		msgSendBack: items > 0 ? `Placed ${output}` : output,
+		msgNotify,
+		msgSendBack,
 		notifyType: 'log'
 	}
 
@@ -1029,9 +1038,9 @@ async function buy_sell(params, type) {
 
 	let result, msgNotify, msgSendBack;
 	if (params.price === 'market') {
-		result = await traderapi.placeOrder(type, params.pair, null, params.amount, 0, params.quote, params.pairObj);
+		result = await orderUtils.addOrder(type, params.pair, null, params.amount, 0, params.quote, params.pairObj);
 	} else {
-		result = await traderapi.placeOrder(type, params.pair, params.price, params.amount, 1, params.quote, params.pairObj);
+		result = await orderUtils.addOrder(type, params.pair, params.price, params.amount, 1, params.quote, params.pairObj);
 	}
 
 	if (result !== undefined) {
@@ -1254,7 +1263,8 @@ async function stats(params) {
 		let delta = exchangeRates.high-exchangeRates.low;
 		let average = (exchangeRates.high+exchangeRates.low)/2;
 		let deltaPercent = delta/average * 100;
-		output += `\nVol: ${$u.thousandSeparator(+exchangeRates.volume.toFixed(coin1Decimals), true)} ${coin1}${volume_Coin2}. Low: ${exchangeRates.low.toFixed(coin2Decimals)}, high: ${exchangeRates.high.toFixed(coin2Decimals)}, delta: _${(delta).toFixed(coin2Decimals)}_ ${coin2} (${(deltaPercent).toFixed(2)}%).`;
+		output += `\nVol: ${$u.thousandSeparator(+exchangeRates.volume.toFixed(coin1Decimals), true)} ${coin1}${volume_Coin2}.`
+		output += `\nLow: ${exchangeRates.low.toFixed(coin2Decimals)}, high: ${exchangeRates.high.toFixed(coin2Decimals)}, delta: _${(delta).toFixed(coin2Decimals)}_ ${coin2} (${(deltaPercent).toFixed(2)}%).`;
 		delta = exchangeRates.ask-exchangeRates.bid;
 		average = (exchangeRates.ask+exchangeRates.bid)/2;
 		deltaPercent = delta/average * 100;
@@ -1357,13 +1367,14 @@ async function orders(params) {
 
 	if (ordersByType.all && ordersByType.all.length > 0) {
 
-		output += `\n\nOrders by type:`;
+		output += `\n\nOrders in my database:`;
 
 		output += `\nMarket making: ${ordersByType.mm.length}${getDiffString('mm')},`;
 		output += `\nDynamic order book: ${ordersByType.ob.length}${getDiffString('ob')},`;
 		output += `\nTradebot: ${ordersByType.tb.length}${getDiffString('tb')},`;
 		output += `\nLiqudity: ${ordersByType.liq.length}${getDiffString('liq')},`;
 		output += `\nPrice watching: ${ordersByType.pw.length}${getDiffString('pw')},`;
+		output += `\nManual orders: ${ordersByType.man.length}${getDiffString('man')},`;
 
 		output += `\nTotal — ${ordersByType.all.length}${getDiffString('all')}`;
 		output += '.';
@@ -1478,7 +1489,7 @@ async function make(params, tx, confirmation) {
 	
 			if (confirmation) {
 				// let order = true;
-				let order = await traderapi.placeOrder(orderBookInfo.typeTargetPrice, config.pair, targetPrice, orderBookInfo.amountTargetPrice, 1, orderBookInfo.amountTargetPriceQuote, pairObj);
+				let order = await orderUtils.addOrder(orderBookInfo.typeTargetPrice, config.pair, targetPrice, orderBookInfo.amountTargetPrice, 1, orderBookInfo.amountTargetPriceQuote, pairObj);
 				if (order && order.orderid) {
 					var showRatesAfterOrder = async function (exchangeRatesBefore, priceString, actionString) {
 						setTimeout(async () => { 

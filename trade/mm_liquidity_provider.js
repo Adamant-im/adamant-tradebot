@@ -5,6 +5,7 @@ const notify = require('../helpers/notify');
 const tradeParams = require('./tradeParams_' + config.exchange);
 const traderapi = require('./trader_' + config.exchange)(config.apikey, config.apisecret, config.apipassword, log);
 const db = require('../modules/DB');
+const orderUtils = require('./orderUtils');
 
 let lastNotifyBalancesTimestamp = 0;
 let lastNotifyPriceTimestamp = 0;
@@ -53,7 +54,8 @@ module.exports = {
             // console.log(orderBookInfo);
 
             console.log('liquidityOrders-Untouched', liquidityOrders.length);
-            liquidityOrders = await this.updateLiquidityOrders(liquidityOrders); // update orders which partially filled or not found
+//            liquidityOrders = await this.updateLiquidityOrders(liquidityOrders); // update orders which partially filled or not found
+            liquidityOrders = await orderUtils.updateOrders(liquidityOrders, config.pair); // update orders which partially filled or not found
             console.log('liquidityOrders-AfterUpdate', liquidityOrders.length);
             liquidityOrders = await this.closeLiquidityOrders(liquidityOrders, orderBookInfo); // close orders which expired or out of spread
             console.log('liquidityOrders-AfterClose', liquidityOrders.length);
