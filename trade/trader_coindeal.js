@@ -114,6 +114,10 @@ module.exports = (apiKey, secretKey, pwd) => {
 			});
 		},
 		cancelOrder(orderId) {
+			/*
+				Watch this: sometimes cancelled orders on Coindeal switched to "CANCELLING" state
+				Balances stay frozen. To fix them, you need to contact Coindeal support
+			*/
 			return new Promise((resolve, reject) => {
 				COINDEAL.cancelEntrustSheet(orderId).then(function (data) {
 					try {

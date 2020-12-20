@@ -13,6 +13,8 @@ var config = {
     'tradePwd': ''
 };
 
+// https://apidocv2.bitz.ai/en/
+
 const wrongAccountErrors = [ // https://apidoc.bit-z.com/en/Error-code/Error-code-comparison-table.html
     -109, // Invalid secretKey
     -111, // Current IP is not in the range of trusted IP
@@ -174,7 +176,7 @@ var EXCHANGE_API = {
         // limit/site parameter is pageSize; Number of records per page Maximum 100
         // https://apidoc.bit-z.com/market-trade-data/Get-now-trust.html
         if(page) data.page = page;
-        if(pageSize) 
+        if(pageSize)
             data.pageSize = pageSize
         else
             data.pageSize = 100;

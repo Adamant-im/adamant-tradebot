@@ -73,7 +73,11 @@ module.exports = (apiKey, secretKey, pwd) => {
 								case "PARTIAL_FILED":
 									orderStatus = "part_filled";
 									break;										
+								case "SUBMITTING":
+									orderStatus = order.status;
+									break;
 								default:
+									orderStatus = order.status;
 									break;
 							}
 
@@ -116,6 +120,10 @@ module.exports = (apiKey, secretKey, pwd) => {
 			});
 		},
 		cancelOrder(orderId) {
+			/*
+				Watch this: some orders on Resfinex are impossible to cancel, even on Resfinex UI
+				API returns "ok", but order persists
+			*/
 			return new Promise((resolve, reject) => {
 				RESFINEX.cancelEntrustSheet(orderId).then(function (data) {
 					try {
