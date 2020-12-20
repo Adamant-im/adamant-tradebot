@@ -9,7 +9,7 @@ const orderUtils = require('./orderUtils');
 
 let lastNotifyBalancesTimestamp = 0;
 let lastNotifyPriceTimestamp = 0;
-let lastNotifyOrderBooksTimestamp = 0;
+
 const HOUR = 1000 * 60 * 60;
 const INTERVAL_MIN = 30000;
 const INTERVAL_MAX = 90000;
@@ -45,10 +45,7 @@ module.exports = {
 
             let orderBookInfo = $u.getOrderBookInfo(await traderapi.getOrderBook(config.pair), tradeParams.mm_liquiditySpreadPercent);
             if (!orderBookInfo) {
-                if (Date.now()-lastNotifyOrderBooksTimestamp > HOUR) {
-                    notify(`${config.notifyName}: Order books are empty for ${config.pair}, or temporary API error. Unable to get spread while placing liq-order.`, 'warn');
-                    lastNotifyOrderBooksTimestamp = Date.now();
-                }
+                log.warn(`${config.notifyName}: Order books are empty for ${config.pair}, or temporary API error. Unable to get spread while placing liq-order.`);
                 return;
             }
             // console.log(orderBookInfo);
@@ -252,7 +249,7 @@ module.exports = {
 
             orderParamsString = `type=${type}, pair=${config.pair}, price=${price}, coin1Amount=${coin1Amount}, coin2Amount=${coin2Amount}`;
             if (!type || !price || !coin1Amount || !coin2Amount) {
-                notify(`${config.notifyName} unable to run liq-order with params: ${orderParamsString}.`, 'warn');
+                log.warn(`${config.notifyName} unable to run liq-order with params: ${orderParamsString}.`);
                 return;
             }
 

@@ -8,6 +8,7 @@ const db = require('../modules/DB');
 
 let lastNotifyBalancesTimestamp = 0;
 let lastNotifyPriceTimestamp = 0;
+
 const HOUR = 1000 * 60 * 60;
 const INTERVAL_MIN = 2000;
 const INTERVAL_MAX = 3000;
@@ -109,7 +110,7 @@ module.exports = {
 
             orderParamsString = `type=${type}, pair=${config.pair}, price=${price}, coin1Amount=${coin1Amount}, coin2Amount=${coin2Amount}`;
             if (!type || !price || !coin1Amount || !coin2Amount) {
-                notify(`${config.notifyName} unable to run ob-order with params: ${orderParamsString}.`, 'warn');
+                log.warn(`${config.notifyName} unable to run ob-order with params: ${orderParamsString}.`);
                 return;
             }
 

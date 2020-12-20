@@ -9,7 +9,6 @@ const orderCollector = require('./orderCollector');
 
 let lastNotifyBalancesTimestamp = 0;
 let lastNotifyPriceTimestamp = 0;
-let lastNotifyOrderBooksTimestamp = 0;
 
 const HOUR = 1000 * 60 * 60;
 
@@ -52,12 +51,12 @@ module.exports = {
 
             orderParamsString = `type=${type}, pair=${config.pair}, price=${price}, mmCurrentAction=${priceReq.mmCurrentAction}, coin1Amount=${coin1Amount}, coin2Amount=${coin2Amount}`;
             if (!type || !price || !coin1Amount || !coin2Amount) {
-                notify(`${config.notifyName} unable to run mm-order with params: ${orderParamsString}.`, 'warn');
+                log.warn(`${config.notifyName} unable to run mm-order with params: ${orderParamsString}.`);
                 return;
             }
 
-            console.log(orderParamsString);
-            console.log(type, price.toFixed(8), coin1Amount.toFixed(0), coin2Amount.toFixed(0));
+            // console.log(orderParamsString);
+            // console.log(type, price.toFixed(8), coin1Amount.toFixed(0), coin2Amount.toFixed(0));
 
             // Check balances
             const balances = await isEnoughCoins(config.coin1, config.coin2, coin1Amount, coin2Amount, type, priceReq.mmCurrentAction);
@@ -115,7 +114,7 @@ module.exports = {
                     } else {
 
                         await order.save();
-                        notify(`${config.notifyName} unable to execute cross-order for mm-order with params: id=${order1.orderid}, ${orderParamsString}. Action: executeInSpread. Check balances. Running order collector now.`, 'warn', config.silent_mode);
+                        log.warn(`${config.notifyName} unable to execute cross-order for mm-order with params: id=${order1.orderid}, ${orderParamsString}. Action: executeInSpread. Check balances. Running order collector now.`);
                         orderCollector.clearOrders(['mm'], config.pair);
                     }         
                 } else { // if order1
@@ -265,10 +264,7 @@ async function setPrice(type, pair, coin1Amount) {
         const orderBook = await traderapi.getOrderBook(config.pair);
         let orderBookInfo = $u.getOrderBookInfo(orderBook, tradeParams.mm_liquiditySpreadPercent);
         if (!orderBookInfo) {
-            if (Date.now()-lastNotifyOrderBooksTimestamp > HOUR) {
-                notify(`${config.notifyName}: Order books are empty for ${config.pair}, or temporary API error. Unable to set a price while placing mm-order.`, 'warn');
-                lastNotifyOrderBooksTimestamp = Date.now();
-            }
+            log.warn(`${config.notifyName}: Order books are empty for ${config.pair}, or temporary API error. Unable to set a price while placing mm-order.`);
             return {
                 price: false
             }
