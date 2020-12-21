@@ -116,7 +116,8 @@ module.exports = (apiKey, secretKey, pwd) => {
 		cancelOrder(orderId) {
 			/*
 				Watch this: sometimes cancelled orders on Coindeal switched to "CANCELLING" state
-				Balances stay frozen. To fix them, you need to contact Coindeal support
+				Balances stay frozen. To fix them, you need to contact Coindeal support.
+				Also often you'll get <h2>The server returned a "404 Not Found".</h2> instead of JSON.
 			*/
 			return new Promise((resolve, reject) => {
 				COINDEAL.cancelEntrustSheet(orderId).then(function (data) {

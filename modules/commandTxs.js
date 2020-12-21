@@ -859,7 +859,7 @@ async function fill(params) {
 	let placedOrders = 0, notPlacedOrders = 0;
 	let order;
 	for (i=0; i < orderList.length; i++) {
-		order = await orderStats.addOrder(type, pair, orderList[i].price, orderList[i].amount, 1, null, pairObj);
+		order = await orderUtils.addOrder(type, pair, orderList[i].price, orderList[i].amount, 1, null, pairObj);
 		if (order && order.orderid) {
 			placedOrders += 1;
 			total1 += +orderList[i].amount;
