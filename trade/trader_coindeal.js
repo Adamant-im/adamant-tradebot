@@ -117,7 +117,6 @@ module.exports = (apiKey, secretKey, pwd) => {
 			/*
 				Watch this: sometimes cancelled orders on Coindeal switched to "CANCELLING" state
 				Balances stay frozen. To fix them, you need to contact Coindeal support.
-				Also often you'll get <h2>The server returned a "404 Not Found".</h2> instead of JSON.
 			*/
 			return new Promise((resolve, reject) => {
 				COINDEAL.cancelEntrustSheet(orderId).then(function (data) {
@@ -131,8 +130,16 @@ module.exports = (apiKey, secretKey, pwd) => {
 							resolve(false);
 						}
 					} catch (e) {
-						resolve(false);
-						log.warn('Error while processing cancelOrder() request: ' + e);
+						console.log(e);
+						/*
+							Watch this: Sometimes you'll get <h2>The server returned a "404 Not Found".</h2> instead of JSON.
+						*/
+						if (e instanceof SyntaxError) {
+							resolve(undefined);
+						} else {
+							resolve(false);
+						}						
+						log.warn(`Error while processing cancelOrder() request: ${e}. Data object I've got: ${data}.`);
 					};				
 				}).catch(err => {
 					log.log(`API request ${arguments.callee.name}(orderId: ${orderId}) of ${$u.getModuleName(module.id)} module failed. ${err}.`);
