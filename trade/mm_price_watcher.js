@@ -15,7 +15,8 @@ const INTERVAL_MIN = 10000;
 const INTERVAL_MAX = 20000;
 const LIFETIME_MIN = 1000 * 60 * 30; // 30 minutes
 const LIFETIME_MAX = HOUR * 2; // 2 hours
-const MAX_ORDERS = 6; // each side
+
+let isPreviousIterationFinished = true;
 
 module.exports = {
 	run() {
@@ -25,7 +26,11 @@ module.exports = {
         let interval = setPause();
         // console.log(interval);
         if (interval && tradeParams.mm_isActive && tradeParams.mm_isPriceWatcherActive) {
-            this.reviewPrices();
+            if (isPreviousIterationFinished) {
+                this.reviewPrices();
+            } else {
+                log.log(`Postponing iteration of the price watcher for ${interval} ms. Previous iteration is in progress yet.`);
+            }
             setTimeout(() => {this.iteration()}, interval);
         } else {
             setTimeout(() => {this.iteration()}, 3000); // Check for config.mm_isActive every 3 seconds
@@ -34,6 +39,8 @@ module.exports = {
 	async reviewPrices() {
 
         try {
+
+            isPreviousIterationFinished = false;
 
             const {ordersDb} = db;
             let pwOrders = await ordersDb.find({
@@ -89,9 +96,12 @@ module.exports = {
                 await this.placePriceWatcherOrder(targetPrice, orderBookInfo);    
             }
 
+            isPreviousIterationFinished = true;
+
         } catch (e) {
             log.error(`Error in reviewPrices() of ${$u.getModuleName(module.id)} module: ` + e);
         }
+
     },
 	async closePriceWatcherOrders(pwOrders) {
 

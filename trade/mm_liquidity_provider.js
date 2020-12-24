@@ -17,23 +17,33 @@ const LIFETIME_MIN = 1000 * 60 * 7; // 7 minutes
 const LIFETIME_MAX = HOUR * 7; // 7 hours
 const MAX_ORDERS = 6; // each side
 
+let isPreviousIterationFinished = true;
+
 module.exports = {
 	run() {
         this.iteration();
     },
     iteration() {
+
         let interval = setPause();
         // console.log(interval);
         if (interval && tradeParams.mm_isActive && tradeParams.mm_isLiquidityActive) {
-            this.updateLiquidity();
+            if (isPreviousIterationFinished) {
+                this.updateLiquidity();
+            } else {
+                log.log(`Postponing iteration of the liquidity provider for ${interval} ms. Previous iteration is in progress yet.`);
+            }
             setTimeout(() => {this.iteration()}, interval);
         } else {
             setTimeout(() => {this.iteration()}, 3000); // Check for config.mm_isActive every 3 seconds
         }
+
     },
 	async updateLiquidity() {
 
         try {
+
+            isPreviousIterationFinished = false;
 
             const {ordersDb} = db;
             let liquidityOrders = await ordersDb.find({
@@ -80,9 +90,12 @@ module.exports = {
     
             log.info(`Liquidity stats: opened ${liquidityStats.bidsCount} bids-buy orders for ${liquidityStats.bidsTotalQuoteAmount.toFixed(config.coin2Decimals)} of ${tradeParams.mm_liquidityBuyQuoteAmount} ${config.coin2} and ${liquidityStats.asksCount} asks-sell orders with ${liquidityStats.asksTotalAmount.toFixed(config.coin1Decimals)} of ${tradeParams.mm_liquiditySellAmount} ${config.coin1}.`);
 
+            isPreviousIterationFinished = true;
+
         } catch (e) {
             log.error(`Error in updateLiquidity() of ${$u.getModuleName(module.id)} module: ` + e);
         }
+
     },
 	async closeLiquidityOrders(liquidityOrders, orderBookInfo) {
 

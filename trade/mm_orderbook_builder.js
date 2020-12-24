@@ -35,7 +35,11 @@ module.exports = {
         let interval = setPause();
         // console.log(interval);
         if (interval && tradeParams.mm_isActive && tradeParams.mm_isOrderBookActive) {
-            if (isPreviousIterationFinished) this.buildOrderBook();
+            if (isPreviousIterationFinished) {
+                this.buildOrderBook();
+            } else {
+                log.log(`Postponing iteration of the order book builder for ${interval} ms. Previous iteration is in progress yet.`);
+            }
             setTimeout(() => {this.iteration()}, interval);
         } else {
             setTimeout(() => {this.iteration()}, 3000); // Check for config.mm_isActive every 3 seconds
