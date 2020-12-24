@@ -1,6 +1,6 @@
 {
   "name": "adamant-tradebot",
-  "version": "2.7.0",
+  "version": "2.10.6",
   "description": "ADAMANT Trading and Market Making bot",
   "main": "index.js",
   "scripts": {
@@ -39,14 +39,12 @@
   "author": "Aleksei Lebedev <devs@adamant.im> (https://adamant.im)",
   "license": "GPL-3.0",
   "dependencies": {
-    "socket.io-client": "^2.2.0",
-    "adamant-api": "^0.5.2",
+    "socket.io-client": "^3.0.4",
+    "adamant-api": "^0.5.3",
     "express": "^4.17.1",
     "jsonminify": "^0.4.1",
-    "mongodb": "^3.2.6",
+    "mongodb": "^3.6.3",
     "request": "^2.88.0",
-    "sync-request": "^6.0.0",
-    "underscore": "^1.9.1",
     "crypto-js": "^4.0.0"
   },
   "publishConfig": {

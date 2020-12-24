@@ -379,5 +379,38 @@ module.exports = {
 		};
 
 	},
+	difference(a, b) {
+		if (!a || !b || !a[0] || !b[0]) return false;
+		let obj2;
+		let diff = [];
+		b.forEach(obj2 => {
+			obj1 = a.filter(crypto => crypto.code === obj2.code)[0];
+			if (!obj1) {
+				a.push({
+					code: obj2.code,
+					total: 0
+				})
+			}
+		});
+		a.forEach(obj1 => {
+			obj2 = b.filter(crypto => crypto.code === obj1.code)[0];
+			if (obj2) {
+				if (obj1.total != obj2.total) {
+					diff.push({
+						code: obj1.code,
+						prev: obj2.total,
+						now: obj1.total
+					})
+				}
+			} else {
+				diff.push({
+					code: obj1.code,
+					prev: 0,
+					now: obj1.total
+				})
+			}
+		});
+		return diff;
+	},
 	ADM: adm_utils
 };

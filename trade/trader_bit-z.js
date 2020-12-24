@@ -49,15 +49,35 @@ module.exports = (apiKey, secretKey, pwd) => {
 				});
 			});
 		},
-		getOpenOrders(pair) {
+		async getOpenOrders(pair) {
+
+			let allOrders = [];
+			let ordersInfo;
+			let page = 1;
+
+			do {
+
+				ordersInfo = await this.getOpenOrdersPage(pair, page);
+				allOrders = allOrders.concat(ordersInfo.result);
+				page += 1;
+				
+			} while (ordersInfo.pageInfo.current_page < ordersInfo.pageInfo.page_count);
+
+			return allOrders;
+
+		},
+		getOpenOrdersPage(pair, page = 1) {
 			pair_ = formatPairName(pair);
 			return new Promise((resolve, reject) => {
-				BITZ.getUserNowEntrustSheet(pair_.coin1, pair_.coin2).then(function (data) {
+				BITZ.getUserNowEntrustSheet(pair_.coin1, pair_.coin2, null, page).then(function (data) {
 						try {
 						// console.log(data);
 						// console.log(2);
 
 						let openOrders = JSON.parse(data).data.data;
+						let pageInfo = JSON.parse(data).data.pageInfo;
+						// console.log(pageInfo);
+
 						if (!openOrders)
 							openOrders = [];
 
@@ -99,8 +119,8 @@ module.exports = (apiKey, secretKey, pwd) => {
 						})
 						// console.log(result[0]);
 						// console.log(3);
-							
-						resolve(result);
+
+						resolve({result, pageInfo});
 						
 					} catch (e) {
 						resolve(false);

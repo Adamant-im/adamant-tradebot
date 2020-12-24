@@ -7,13 +7,16 @@ const notify = require('../helpers/notify');
 const tradeParams = require('../trade/tradeParams_' + config.exchange);
 const traderapi = require('../trade/trader_' + config.exchange)(config.apikey, config.apisecret, config.apipassword, log);
 const orderCollector = require('../trade/orderCollector');
-const getStats = require('../trade/orderStats');
+const orderStats = require('../trade/orderStats');
+const orderUtils = require('../trade/orderUtils');
 
 const timeToConfirm = 1000 * 60 * 10; // 10 minutes to confirm
 let pendingConfirmation = {
 	command: '',
 	timestamp: 0
 }
+let previousBalances = {};
+let previousOrders = {};
 
 module.exports = async (cmd, tx, itx) => {
 
@@ -592,6 +595,9 @@ async function clear(params) {
 		}	
 	}
 
+	let doForce = params[1];
+	doForce = doForce && doForce.toLowerCase() === 'force';
+	
 	let purposes;
 	let purposeString;
 
@@ -624,40 +630,41 @@ async function clear(params) {
 	}
 
 	let output = '';
-	let count = 0;
-	// console.log(purposes, count, output);
+	let clearedInfo = {};
 
-	// First, close orders which are in bot's database
-	count = await orderCollector(purposes, pair);
-
-	// Next, if need to clear all orders, close orders which are not closed yet
 	if (purposes === 'all') {
 
-		const openOrders = await traderapi.getOpenOrders(pair);
-		if (openOrders) {
+		clearedInfo = await orderCollector.clearAllOrders(pair, doForce);
+		if (clearedInfo.totalOrders) {
 
-			if ((count + openOrders.length) > 0) {
-
-				output = `Clearing **all** ${count + openOrders.length} orders for ${pair} pair on ${config.exchangeName}..`;
-				openOrders.forEach(order => {
-					traderapi.cancelOrder(order.orderid, order.side, order.symbol);
-				});
-
+			if (clearedInfo.includesGeneralOrders) {
+				output = `Closed ${clearedInfo.clearedOrders} of ${clearedInfo.totalOrders} orders on ${config.exchangeName} for ${pair}.`;
 			} else {
-				output = `No open orders on ${config.exchangeName} for ${pair}.`;
+				output = `Closed ${clearedInfo.clearedOrders} of ${clearedInfo.totalOrders} orders on ${config.exchangeName} for ${pair}. Unable to get all of open orders because of API error. Try again.`;
 			}
 
 		} else {
-			output = `Unable to get ${config.exchangeName} orders for ${pair}.`;
+
+			if (clearedInfo.includesGeneralOrders) {
+				output = `No open orders on ${config.exchangeName} for ${pair}.`;
+			} else {
+				output = `Unable to get all of open orders because of API error. Try again.`;
+			}
+
 		}
 
 	} else {
 
-		if (count > 0) {
-			output = `Clearing ${count} **${purposeString}** orders for ${pair} pair on ${config.exchangeName}..`;
+		clearedInfo = await orderCollector.clearOrders(purposes, pair, doForce);
+		if (clearedInfo.totalOrders) {
+
+			output = `Closed ${clearedInfo.clearedOrders} of ${clearedInfo.totalOrders} **${purposeString}** orders on ${config.exchangeName} for ${pair}.`;
+
 		} else {
+
 			output = `No open **${purposeString}** orders on ${config.exchangeName} for ${pair}.`;
-		}	
+
+		}		
 
 	}
 
@@ -849,25 +856,33 @@ async function fill(params) {
 
 	// Place orders
 	let total1 = 0, total2 = 0;
-	items = 0;
+	let placedOrders = 0, notPlacedOrders = 0;
 	let order;
 	for (i=0; i < orderList.length; i++) {
-		order = await traderapi.placeOrder(type, pair, orderList[i].price, orderList[i].amount, 1, null, pairObj);
+		order = await orderUtils.addOrder(type, pair, orderList[i].price, orderList[i].amount, 1, null, pairObj);
 		if (order && order.orderid) {
-			items += 1;
+			placedOrders += 1;
 			total1 += +orderList[i].amount;
 			total2 += +orderList[i].altAmount;
+		} else {
+			notPlacedOrders += 1;
 		}
 	}
 
-	if (items > 0)
-		output = `${items} orders to ${type} ${$u.thousandSeparator(+total1.toFixed(coin1Decimals), false)} ${coin1} for ${$u.thousandSeparator(+total2.toFixed(coin2Decimals), false)} ${coin2}.`;
-	else
+	let notPlacedString = '';
+	if (placedOrders > 0) {
+		if (notPlacedOrders) notPlacedString = ` ${notPlacedOrders} orders missed because of errors, check log file for details.`;
+		output = `${placedOrders} orders to ${type} ${$u.thousandSeparator(+total1.toFixed(coin1Decimals), false)} ${coin1} for ${$u.thousandSeparator(+total2.toFixed(coin2Decimals), false)} ${coin2}.${notPlacedString}`;
+	} else {
 		output = `No orders were placed. Check log file for details.`;
+	}
+
+	let msgNotify = placedOrders > 0 ? `${config.notifyName} placed ${output}` : '';
+	let msgSendBack = placedOrders > 0 ? `Placed ${output}` : output; 
 
 	return {
-		msgNotify: items > 0 ? `${config.notifyName} placed ${output}` : '',
-		msgSendBack: items > 0 ? `Placed ${output}` : output,
+		msgNotify,
+		msgSendBack,
 		notifyType: 'log'
 	}
 
@@ -1023,9 +1038,9 @@ async function buy_sell(params, type) {
 
 	let result, msgNotify, msgSendBack;
 	if (params.price === 'market') {
-		result = await traderapi.placeOrder(type, params.pair, null, params.amount, 0, params.quote, params.pairObj);
+		result = await orderUtils.addOrder(type, params.pair, null, params.amount, 0, params.quote, params.pairObj);
 	} else {
-		result = await traderapi.placeOrder(type, params.pair, params.price, params.amount, 1, params.quote, params.pairObj);
+		result = await orderUtils.addOrder(type, params.pair, params.price, params.amount, 1, params.quote, params.pairObj);
 	}
 
 	if (result !== undefined) {
@@ -1156,8 +1171,7 @@ async function rates(params) {
 			}
 		}
 	} else {
-		output = `Global market rates for ${coin1}:
-${res}.`;
+		output = `Global market rates for ${coin1}:\n${res}.`;
 	}
 
 	if (pair) {
@@ -1165,7 +1179,10 @@ ${res}.`;
 		if (output)
 			output += "\n\n";
 		if (exchangeRates) {
-			output += `${config.exchangeName} rates for ${pair} pair:\nBid: ${exchangeRates.bid.toFixed(coin2Decimals)}, ask: ${exchangeRates.ask.toFixed(coin2Decimals)}.`;
+			let delta = exchangeRates.ask-exchangeRates.bid;
+			let average = (exchangeRates.ask+exchangeRates.ask)/2;
+			let deltaPercent = delta/average * 100;
+			output += `${config.exchangeName} rates for ${pair} pair:\nBid: ${exchangeRates.bid.toFixed(coin2Decimals)}, ask: ${exchangeRates.ask.toFixed(coin2Decimals)}, spread: _${(delta).toFixed(coin2Decimals)}_ ${coin2} (${(deltaPercent).toFixed(2)}%).`;
 		} else {
 			output += `Unable to get ${config.exchangeName} rates for ${pair}.`;
 		}
@@ -1235,40 +1252,47 @@ async function stats(params) {
 		}	
 	}
 
-	if (pair) {
-		const exchangeRates = await traderapi.getRates(pair);
-		if (exchangeRates) {
-			let volume_Coin2 = '';
-			if (exchangeRates.volume_Coin2) {
-				volume_Coin2 = ` & ${$u.thousandSeparator(+exchangeRates.volume_Coin2.toFixed(coin2Decimals), true)} ${coin2}`;
-			}
-			output += `${config.exchangeName} 24h stats for ${pair} pair:`;
-			output += `\nVol: ${$u.thousandSeparator(+exchangeRates.volume.toFixed(coin1Decimals), true)} ${coin1}${volume_Coin2}. High: ${exchangeRates.high.toFixed(coin2Decimals)}, low: ${exchangeRates.low.toFixed(coin2Decimals)}, delta: _${(exchangeRates.high-exchangeRates.low).toFixed(coin2Decimals)}_ ${coin2}.`;
-			output += `\nBid: ${exchangeRates.bid.toFixed(coin2Decimals)}, ask: ${exchangeRates.ask.toFixed(coin2Decimals)}, spread: _${(exchangeRates.ask-exchangeRates.bid).toFixed(coin2Decimals)}_ ${coin2}.`;
-		} else {
-			output += `Unable to get ${config.exchangeName} stats for ${pair}.`;
+	const exchangeRates = await traderapi.getRates(pair);
+	if (exchangeRates) {
+
+		let volume_Coin2 = '';
+		if (exchangeRates.volume_Coin2) {
+			volume_Coin2 = ` & ${$u.thousandSeparator(+exchangeRates.volume_Coin2.toFixed(coin2Decimals), true)} ${coin2}`;
 		}
+		output += `${config.exchangeName} 24h stats for ${pair} pair:`;
+		let delta = exchangeRates.high-exchangeRates.low;
+		let average = (exchangeRates.high+exchangeRates.low)/2;
+		let deltaPercent = delta/average * 100;
+		output += `\nVol: ${$u.thousandSeparator(+exchangeRates.volume.toFixed(coin1Decimals), true)} ${coin1}${volume_Coin2}.`
+		output += `\nLow: ${exchangeRates.low.toFixed(coin2Decimals)}, high: ${exchangeRates.high.toFixed(coin2Decimals)}, delta: _${(delta).toFixed(coin2Decimals)}_ ${coin2} (${(deltaPercent).toFixed(2)}%).`;
+		delta = exchangeRates.ask-exchangeRates.bid;
+		average = (exchangeRates.ask+exchangeRates.bid)/2;
+		deltaPercent = delta/average * 100;
+		output += `\nBid: ${exchangeRates.bid.toFixed(coin2Decimals)}, ask: ${exchangeRates.ask.toFixed(coin2Decimals)}, spread: _${(delta).toFixed(coin2Decimals)}_ ${coin2} (${(deltaPercent).toFixed(2)}%).`;
+
+	} else {
+		output += `Unable to get ${config.exchangeName} stats for ${pair}.`;
 	}
 
-	let orderStats = await getStats(true, true, false, "mm", pair);
+	let ordersByType = await orderStats.aggregate(true, true, false, "mm", pair);
 
-	if (orderStats) {
-		if (orderStats === 'Empty' || orderStats.coin1AmountTotalAllCount === 0) {
+	if (ordersByType) {
+		if (ordersByType === 'Empty' || ordersByType.coin1AmountTotalAllCount === 0) {
 			output += "\n\n" + `There were no Market making orders for ${pair} all time.`
 		} else {
 			output += "\n\n" + `Market making stats for ${pair} pair:` + "\n";
-			if (orderStats.coin1AmountTotalDayCount != 0) {
-				output += `24h: ${orderStats.coin1AmountTotalDayCount} orders with ${$u.thousandSeparator(+orderStats.coin1AmountTotalDay.toFixed(coin1Decimals), true)} ${coin1} and ${$u.thousandSeparator(+orderStats.coin2AmountTotalDay.toFixed(coin2Decimals), true)} ${coin2}`
+			if (ordersByType.coin1AmountTotalDayCount != 0) {
+				output += `24h: ${ordersByType.coin1AmountTotalDayCount} orders with ${$u.thousandSeparator(+ordersByType.coin1AmountTotalDay.toFixed(coin1Decimals), true)} ${coin1} and ${$u.thousandSeparator(+ordersByType.coin2AmountTotalDay.toFixed(coin2Decimals), true)} ${coin2}`
 			} else {
 				output += `24h: no orders`;
 			}
-			if (orderStats.coin1AmountTotalMonthCount > orderStats.coin1AmountTotalDayCount) {
-				output += `, 30d: ${orderStats.coin1AmountTotalMonthCount} orders with ${$u.thousandSeparator(+orderStats.coin1AmountTotalMonth.toFixed(coin1Decimals), true)} ${coin1} and ${$u.thousandSeparator(+orderStats.coin2AmountTotalMonth.toFixed(coin2Decimals), true)} ${coin2}`
-			} else if (orderStats.coin1AmountTotalMonthCount === 0) {
+			if (ordersByType.coin1AmountTotalMonthCount > ordersByType.coin1AmountTotalDayCount) {
+				output += `, 30d: ${ordersByType.coin1AmountTotalMonthCount} orders with ${$u.thousandSeparator(+ordersByType.coin1AmountTotalMonth.toFixed(coin1Decimals), true)} ${coin1} and ${$u.thousandSeparator(+ordersByType.coin2AmountTotalMonth.toFixed(coin2Decimals), true)} ${coin2}`
+			} else if (ordersByType.coin1AmountTotalMonthCount === 0) {
 				output += `30d: no orders`;
 			}
-			if (orderStats.coin1AmountTotalAllCount > orderStats.coin1AmountTotalMonthCount) {
-				output += `, all time: ${orderStats.coin1AmountTotalAllCount} orders with ${$u.thousandSeparator(+orderStats.coin1AmountTotalAll.toFixed(coin1Decimals), true)} ${coin1} and ${$u.thousandSeparator(+orderStats.coin2AmountTotalAll.toFixed(coin2Decimals), true)} ${coin2}`
+			if (ordersByType.coin1AmountTotalAllCount > ordersByType.coin1AmountTotalMonthCount) {
+				output += `, all time: ${ordersByType.coin1AmountTotalAllCount} orders with ${$u.thousandSeparator(+ordersByType.coin1AmountTotalAll.toFixed(coin1Decimals), true)} ${coin1} and ${$u.thousandSeparator(+ordersByType.coin2AmountTotalAll.toFixed(coin2Decimals), true)} ${coin2}`
 			}
 			output += '.';
 		}
@@ -1304,21 +1328,63 @@ async function orders(params) {
 		}	
 	}
 
-	if (pair) {
-		const openOrders = await traderapi.getOpenOrders(pair);
-		// console.log(openOrders);
-		if (openOrders) {
-			if (openOrders.length > 0)
-				output = `${config.exchangeName} open orders for ${pair} pair: ${openOrders.length}.`;
-			else 
-				output = `No open orders on ${config.exchangeName} for ${pair}.`;
-		} else {
-			output = `Unable to get ${config.exchangeName} orders for ${pair}.`;
+	let ordersByType = await orderStats.ordersByType(pair);
+
+	const openOrders = await traderapi.getOpenOrders(pair);
+	if (openOrders) {
+
+		let diff, sign;
+		let diffString = '';
+		if (previousOrders.openOrdersCount) {
+			diff = openOrders.length - previousOrders.openOrdersCount;
+			sign = diff > 0 ? '+' : '−';
+			diff = Math.abs(diff);
+			if (diff) diffString = ` (${sign}${diff})`;
 		}
+
+		if (openOrders.length > 0)
+			output = `${config.exchangeName} open orders for ${pair} pair: ${openOrders.length}${diffString}.`;
+		else 
+			output = `No open orders on ${config.exchangeName} for ${pair}.`;
+
+		ordersByType.openOrdersCount = openOrders.length;
+
+	} else {
+		output = `Unable to get ${config.exchangeName} orders for ${pair}.`;
 	}
 
-	// console.log($u.getOrderBookInfo(await traderapi.getOrderBook(pair), 30));
+	let getDiffString = function (orderType) {
+		let diff, sign;
+		let diffString = '';
+		if (previousOrders[orderType] && previousOrders[orderType].length >= 0) {
+			diff = ordersByType[orderType].length - previousOrders[orderType].length;
+			sign = diff > 0 ? '+' : '−';
+			diff = Math.abs(diff);
+			if (diff) diffString = ` (${sign}${diff})`;
+		}
+		return diffString;
+	}
 
+	if (ordersByType.all && ordersByType.all.length > 0) {
+
+		output += `\n\nOrders in my database:`;
+
+		output += `\nMarket making: ${ordersByType.mm.length}${getDiffString('mm')},`;
+		output += `\nDynamic order book: ${ordersByType.ob.length}${getDiffString('ob')},`;
+		output += `\nTradebot: ${ordersByType.tb.length}${getDiffString('tb')},`;
+		output += `\nLiqudity: ${ordersByType.liq.length}${getDiffString('liq')},`;
+		output += `\nPrice watching: ${ordersByType.pw.length}${getDiffString('pw')},`;
+		output += `\nManual orders: ${ordersByType.man.length}${getDiffString('man')},`;
+
+		output += `\nTotal — ${ordersByType.all.length}${getDiffString('all')}`;
+		output += '.';
+		
+
+	} else {
+		output += "\n\n" + `No open orders in my database.`;
+	}
+
+	previousOrders = ordersByType;
 
 	return {
 		msgNotify: ``,
@@ -1423,7 +1489,7 @@ async function make(params, tx, confirmation) {
 	
 			if (confirmation) {
 				// let order = true;
-				let order = await traderapi.placeOrder(orderBookInfo.typeTargetPrice, config.pair, targetPrice, orderBookInfo.amountTargetPrice, 1, orderBookInfo.amountTargetPriceQuote, pairObj);
+				let order = await orderUtils.addOrder(orderBookInfo.typeTargetPrice, config.pair, targetPrice, orderBookInfo.amountTargetPrice, 1, orderBookInfo.amountTargetPriceQuote, pairObj);
 				if (order && order.orderid) {
 					var showRatesAfterOrder = async function (exchangeRatesBefore, priceString, actionString) {
 						setTimeout(async () => { 
@@ -1561,12 +1627,15 @@ async function calc(arr) {
 }
 
 async function balances() {
+
 	const balances = await traderapi.getBalances();
 	let output = '';
+	let totalBTC = 0, totalUSD = 0;
 
 	if (balances.length === 0) {
 		output = `All empty.`;
 	} else {
+		output = `${config.exchangeName} balances:\n`;
 		balances.forEach(crypto => {
 			
 			output += `${$u.thousandSeparator(+(crypto.total).toFixed(8), true)} _${crypto.code}_`;
@@ -1578,12 +1647,94 @@ async function balances() {
 				output += ")";
 			}
 			output += "\n";
+
+			let value;
+			if (crypto.usd) {
+				totalUSD += crypto.usd;
+			} else {
+				value = Store.mathEqual(crypto.code, 'USD', crypto.total, true).outAmount;
+				if (value) {
+					totalUSD += value;
+				} else {
+					unknownCryptos.push(crypto.code);
+				}
+			}
+			if (crypto.btc) {
+				totalBTC += crypto.btc;
+			} else {
+				value = Store.mathEqual(crypto.code, 'BTC', crypto.total, true).outAmount;
+				if (value) {
+					totalBTC += value;
+				}
+			}
 		});
+
+		let unknownCryptos = [];
+		output += `Total holdings ~ ${$u.thousandSeparator(+totalUSD.toFixed(2), true)} _USD_ or ${$u.thousandSeparator(totalBTC.toFixed(8), true)} _BTC_`;
+		if (unknownCryptos.length) {
+			output += `. Note: I didn't count unknown cryptos ${unknownCryptos.join(', ')}.`;
+		}
+		output += "\n";
+
+		balances.push({
+			code: 'totalUSD',
+			total: totalUSD
+		});
+		balances.push({
+			code: 'totalBTC',
+			total: totalBTC
+		});
+
 	}
+
+
+	let diff = $u.difference(balances, previousBalances);
+	if (diff) {
+		if (diff[0]) {
+			output += "\nChanges:\n";
+			let delta, deltaUSD = 0, deltaBTC = 0, deltaCoin1 = 0, deltaCoin2 = 0;
+			let sign, signUSD = '', signBTC = '', signCoin1 = '', signCoin2 = '';
+			diff.forEach(crypto => {
+				delta = Math.abs(crypto.now - crypto.prev);
+				sign = crypto.now > crypto.prev ? '+' : '−';
+				if (crypto.code === 'totalUSD') {
+					deltaUSD = delta;
+					signUSD = sign;
+					return;
+				}
+				if (crypto.code === 'totalBTC') {
+					deltaBTC = delta;
+					signBTC = sign;
+					return;
+				}
+				if (crypto.code === config.coin1) {
+					deltaCoin1 = delta;
+					signCoin1 = sign;
+				}
+				if (crypto.code === config.coin2) {
+					deltaCoin2 = delta;
+					signCoin2 = sign;
+				}
+				output += `_${crypto.code}_: ${sign}${$u.thousandSeparator(+(delta).toFixed(8), true)}`;
+				output += "\n";
+			});
+
+			output += `Total holdings ${signUSD}${$u.thousandSeparator(+deltaUSD.toFixed(2), true)} _USD_ or ${signBTC}${$u.thousandSeparator(deltaBTC.toFixed(8), true)} _BTC_`;
+			if (deltaCoin1 && deltaCoin2 && (signCoin1 !== signCoin2)) {
+				let price = deltaCoin2 / deltaCoin1;
+				output += `\n${signCoin1 === '+' ? "I've bought" : "I've sold"} ${$u.thousandSeparator(+deltaCoin1.toFixed(config.coin1Decimals), true)} _${config.coin1}_ at ${$u.thousandSeparator(price.toFixed(config.coin2Decimals), true)} _${config.coin2}_ price.`;
+			}
+
+		} else {
+			output += "\nNo changes.\n";
+		}
+	}
+
+	previousBalances = balances;
 
 	return {
 		msgNotify: ``,
-		msgSendBack: `${config.exchangeName} balances:\n${output}`,
+		msgSendBack: `${output}`,
 		notifyType: 'log'
 	}
 

@@ -8,12 +8,15 @@ const db = require('../modules/DB');
 
 let lastNotifyBalancesTimestamp = 0;
 let lastNotifyPriceTimestamp = 0;
+
 const HOUR = 1000 * 60 * 60;
 const INTERVAL_MIN = 2000;
 const INTERVAL_MAX = 3000;
 const LIFETIME_MIN = 1000;
 // const LIFETIME_MAX = 40000; — depends on mm_orderBookOrdersCount
 const LIFETIME_KOEF = 1.5;
+
+let isPreviousIterationFinished = true;
 
 module.exports = {
     async test() {
@@ -28,16 +31,25 @@ module.exports = {
         this.iteration();
     },
     iteration() {
+
         let interval = setPause();
         // console.log(interval);
         if (interval && tradeParams.mm_isActive && tradeParams.mm_isOrderBookActive) {
-            this.buildOrderBook();
+            if (isPreviousIterationFinished) {
+                this.buildOrderBook();
+            } else {
+                log.log(`Postponing iteration of the order book builder for ${interval} ms. Previous iteration is in progress yet.`);
+            }
             setTimeout(() => {this.iteration()}, interval);
         } else {
             setTimeout(() => {this.iteration()}, 3000); // Check for config.mm_isActive every 3 seconds
         }
+
     },
 	async buildOrderBook() {
+
+        isPreviousIterationFinished = false;
+
         const {ordersDb} = db;
         const orderBookOrders = await ordersDb.find({
             isProcessed: false,
@@ -46,14 +58,18 @@ module.exports = {
             exchange: config.exchange
         });
 
-        if (orderBookOrders.length < tradeParams.mm_orderBookOrdersCount)
-            this.placeOrderBookOrder(orderBookOrders.length);
-    
-        this.closeOrderBookOrders(orderBookOrders);
+        if (orderBookOrders.length < tradeParams.mm_orderBookOrdersCount) {
+            await this.placeOrderBookOrder(orderBookOrders.length);
+        }
+        await this.closeOrderBookOrders(orderBookOrders);
+
+        isPreviousIterationFinished = true;
+        
     },
 	async closeOrderBookOrders(orderBookOrders) {
+
         let orderBookOrdersCount = orderBookOrders.length;
-        orderBookOrders.forEach(async order => {
+        for (const order of orderBookOrders) {
             try {
 
                 if (order.dateTill < $u.unix()) {
@@ -75,7 +91,8 @@ module.exports = {
             } catch (e) {
                 log.error(`Error in closeOrderBookOrders() of ${$u.getModuleName(module.id)} module: ` + e);
             }
-        });
+        };
+
     },
 	async placeOrderBookOrder(orderBookOrdersCount) {
 
@@ -103,7 +120,7 @@ module.exports = {
 
             orderParamsString = `type=${type}, pair=${config.pair}, price=${price}, coin1Amount=${coin1Amount}, coin2Amount=${coin2Amount}`;
             if (!type || !price || !coin1Amount || !coin2Amount) {
-                notify(`${config.notifyName} unable to run ob-order with params: ${orderParamsString}.`, 'warn');
+                log.warn(`${config.notifyName} unable to run ob-order with params: ${orderParamsString}.`);
                 return;
             }
 
@@ -161,6 +178,7 @@ module.exports = {
 };
 
 function setType() {
+
     if (!tradeParams || !tradeParams.mm_buyPercent) {
         log.warn(`Param mm_buyPercent is not set. Check ${config.exchangeName} config.`);
         return false;
@@ -168,7 +186,8 @@ function setType() {
     let type = 'sell';
     if (Math.random() > tradeParams.mm_buyPercent) // 1 minus tradeParams.mm_buyPercent
         type = 'buy';
-	return type;
+    return type;
+    
 }
 
 async function isEnoughCoins(coin1, coin2, amount1, amount2, type) {
@@ -187,11 +206,11 @@ async function isEnoughCoins(coin1, coin2, amount1, amount2, type) {
             balance2freezed = balances.filter(crypto => crypto.code === coin2)[0].freezed;
 
             if ((!balance1free || balance1free < amount1) && type === 'sell') {
-                output = `${config.notifyName}: Not enough balance to place ${amount1.toFixed(config.coin1Decimals)} ${coin1} ${type} ob-order. Free: ${balance1free.toFixed(config.coin1Decimals)} ${coin1}, freezed: ${balance1freezed.toFixed(config.coin1Decimals)} ${coin1}.`;
+                output = `${config.notifyName}: Not enough balance to place ${amount1.toFixed(config.coin1Decimals)} ${coin1} ${type} ob-order. Free: ${balance1free.toFixed(config.coin1Decimals)} ${coin1}, frozen: ${balance1freezed.toFixed(config.coin1Decimals)} ${coin1}.`;
                 isBalanceEnough = false;
             }
             if ((!balance2free || balance2free < amount2) && type === 'buy') {
-                output = `${config.notifyName}: Not enough balance to place ${amount2.toFixed(config.coin2Decimals)} ${coin2} ${type} ob-order. Free: ${balance2free.toFixed(config.coin2Decimals)} ${coin2}, freezed: ${balance2freezed.toFixed(config.coin2Decimals)} ${coin2}.`;
+                output = `${config.notifyName}: Not enough balance to place ${amount2.toFixed(config.coin2Decimals)} ${coin2} ${type} ob-order. Free: ${balance2free.toFixed(config.coin2Decimals)} ${coin2}, frozen: ${balance2freezed.toFixed(config.coin2Decimals)} ${coin2}.`;
                 isBalanceEnough = false;
             }
 
@@ -297,11 +316,13 @@ async function setPrice(type, pair, position) {
 }
 
 function setAmount() {
+
     if (!tradeParams || !tradeParams.mm_maxAmount || !tradeParams.mm_minAmount) {
         log.warn(`Params mm_maxAmount or mm_minAmount are not set. Check ${config.exchangeName} config.`);
         return false;
     }
     return Math.random() * (tradeParams.mm_maxAmount - tradeParams.mm_minAmount) + tradeParams.mm_minAmount;
+
 }
 
 function setPosition() {
