@@ -16,6 +16,8 @@ const LIFETIME_MIN = 1000;
 // const LIFETIME_MAX = 40000; — depends on mm_orderBookOrdersCount
 const LIFETIME_KOEF = 1.5;
 
+let isPreviousIterationFinished = true;
+
 module.exports = {
     async test() {
         console.log('==========================');
@@ -33,7 +35,7 @@ module.exports = {
         let interval = setPause();
         // console.log(interval);
         if (interval && tradeParams.mm_isActive && tradeParams.mm_isOrderBookActive) {
-            this.buildOrderBook();
+            if (isPreviousIterationFinished) this.buildOrderBook();
             setTimeout(() => {this.iteration()}, interval);
         } else {
             setTimeout(() => {this.iteration()}, 3000); // Check for config.mm_isActive every 3 seconds
@@ -41,6 +43,8 @@ module.exports = {
 
     },
 	async buildOrderBook() {
+
+        isPreviousIterationFinished = false;
 
         const {ordersDb} = db;
         const orderBookOrders = await ordersDb.find({
@@ -50,10 +54,12 @@ module.exports = {
             exchange: config.exchange
         });
 
-        if (orderBookOrders.length < tradeParams.mm_orderBookOrdersCount)
+        if (orderBookOrders.length < tradeParams.mm_orderBookOrdersCount) {
             await this.placeOrderBookOrder(orderBookOrders.length);
-    
+        }
         await this.closeOrderBookOrders(orderBookOrders);
+
+        isPreviousIterationFinished = true;
         
     },
 	async closeOrderBookOrders(orderBookOrders) {
