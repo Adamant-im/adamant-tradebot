@@ -49,7 +49,7 @@ We can run market making for you, see [marketmaking.app/services](https://market
 
 ## Requirements
 
-* Ubuntu 16 / Ubuntu 18 (we didn't test others)
+* Ubuntu 16, 18 or 20 (we didn't test others)
 * NodeJS v 10+
 * MongoDB ([installation instructions](https://docs.mongodb.com/manual/tutorial/install-mongodb-on-ubuntu/))
 
