@@ -130,16 +130,17 @@ module.exports = (apiKey, secretKey, pwd) => {
 							resolve(false);
 						}
 					} catch (e) {
-						console.log(e);
-						/*
-							Watch this: Sometimes you'll get <h2>The server returned a "404 Not Found".</h2> instead of JSON.
-						*/
 						if (e instanceof SyntaxError) {
-							resolve(undefined);
+							/*
+								Watch this: Sometimes you'll get <h2>The server returned a "404 Not Found".</h2> instead of JSON.
+								This means this order does not exist.
+							*/
+							resolve(false);
+							log.warn(`Error while processing cancelOrder() request: ${e}. It seems the order ${orderId} does not exist.`);
 						} else {
 							resolve(false);
+							log.warn(`Error while processing cancelOrder() request: ${e}. Data object I've got: ${data}.`);
 						}						
-						log.warn(`Error while processing cancelOrder() request: ${e}. Data object I've got: ${data}.`);
 					};				
 				}).catch(err => {
 					log.log(`API request ${arguments.callee.name}(orderId: ${orderId}) of ${$u.getModuleName(module.id)} module failed. ${err}.`);
