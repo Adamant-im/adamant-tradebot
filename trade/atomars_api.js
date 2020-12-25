@@ -41,20 +41,34 @@ function api(path, r_data, do_sign, type, do_stringify) {
                 if (err) {
                     reject(err);
                 } else {
-                    let response = JSON.parse(data);
-                    if (response) {
-                        // console.log(`response.status: ${response.status}`);
-                        if (response.status === 401) { // 401 Unauthorized
-                            // console.log(response);
-                            log.log(`Request to ${url} with data ${pars} failed. Got error message: ${response.message}.`);
-                            reject(`Got error message: ${response.message}`);
+
+                    try {
+                        
+                        let response = JSON.parse(data);
+                        if (response) {
+                            // console.log(`response.status: ${response.status}`);
+                            if (response.status === 401) { // 401 Unauthorized
+                                // console.log(response);
+                                log.log(`Request to ${url} with data ${pars} failed. Got error message: ${response.message}.`);
+                                reject(`Got error message: ${response.message}`);
+                            } else {
+                                resolve(data);
+                            }
                         } else {
-                            resolve(data);
+                            log.log(`Request to ${url} with data ${pars} failed. Unable to parse data: ${data}.`);
+                            reject(`Unable to parse data: ${data}`);
                         }
-                    } else {
-                        log.log(`Request to ${url} with data ${pars} failed. Unable to parse data: ${data}.`);
-                        reject(`Unable to parse data: ${data}`);
-                    }
+
+                    } catch (e) {
+                        if (e instanceof SyntaxError) {
+                            log.log(`Request to ${url} with data ${pars} failed. Unable to parse data: ${data}. Exception: ${e}`);
+                            reject(`Unable to parse data: ${data}`);
+                        } else {
+                            log.warn(`Error while processing response of request to ${url} with data ${pars}: ${e}. Data object I've got: ${data}.`);
+                            reject(`Unable to process data: ${data}`);
+                        }
+                    };
+
                 }
             }).on('error', function(err) {
                 log.log(`Request to ${url} with data ${pars} failed. ${err}.`);
