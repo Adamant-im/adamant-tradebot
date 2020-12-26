@@ -49,19 +49,32 @@ function sign_api(path, data, type = 'get') {
                 if (err) {
                     reject(err);
                 } else {
-                    let response = JSON.parse(data);
-                    if (response) {
-                        if (response.status === 'error' && response.code === 429) { // 'API Call limit rate, please try again later
-                            // console.log(response);
-                            log.log(`Request to ${url} with data ${bodyString} failed. Got error message: ${response.msg}.`);
-                            reject(`Got error message: ${response.msg}`);
+
+                    try {
+
+                        let response = JSON.parse(data);
+                        if (response) {
+                            if (response.status === 'error' && response.code === 429) { // 'API Call limit rate, please try again later
+                                // console.log(response);
+                                log.log(`Request to ${url} with data ${bodyString} failed. Got error message: ${response.msg}.`);
+                                reject(`Got error message: ${response.msg}`);
+                            } else {
+                                resolve(data);
+                            }
                         } else {
-                            resolve(data);
+                            log.log(`Request to ${url} with data ${bodyString} failed. Unable to parse data: ${data}.`);
+                            reject(`Unable to parse data: ${data}`);
                         }
-                    } else {
-                        log.log(`Request to ${url} with data ${bodyString} failed. Unable to parse data: ${data}.`);
-                        reject(`Unable to parse data: ${data}`);
-                    }
+
+                    } catch (e) {
+                        if (e instanceof SyntaxError) {
+                            log.log(`Request to ${url} with data ${bodyString} failed. Unable to parse data: ${data}. Exception: ${e}`);
+                            reject(`Unable to parse data: ${data}`);
+                        } else {
+                            log.warn(`Error while processing response of request to ${url} with data ${bodyString}: ${e}. Data object I've got: ${data}.`);
+                            reject(`Unable to process data: ${data}`);
+                        }
+                    };
                     
                 }
             }).on('error', function(err) {
@@ -102,19 +115,33 @@ function public_api(path, data, type = 'get') {
                 if (err) {
                     reject(err);
                 } else {
-                    let response = JSON.parse(data);
-                    if (response) {
-                        if (response.status === 'error' && response.code === 429) { // 'API Call limit rate, please try again later
-                            // console.log(response);
-                            log.log(`Request to ${url} with data ${queryString} failed. Got error message: ${response.msg}.`);
-                            reject(`Got error message: ${response.msg}`);
+
+                    try {
+
+                        let response = JSON.parse(data);
+                        if (response) {
+                            if (response.status === 'error' && response.code === 429) { // 'API Call limit rate, please try again later
+                                // console.log(response);
+                                log.log(`Request to ${url} with data ${queryString} failed. Got error message: ${response.msg}.`);
+                                reject(`Got error message: ${response.msg}`);
+                            } else {
+                                resolve(data);
+                            }
                         } else {
-                            resolve(data);
+                            log.log(`Request to ${url} with data ${queryString} failed. Unable to parse data: ${data}.`);
+                            reject(`Unable to parse data: ${data}`);
                         }
-                    } else {
-                        log.log(`Request to ${url} with data ${queryString} failed. Unable to parse data: ${data}.`);
-                        reject(`Unable to parse data: ${data}`);
-                    }
+
+                    } catch (e) {
+                        if (e instanceof SyntaxError) {
+                            log.log(`Request to ${url} with data ${queryString} failed. Unable to parse data: ${data}. Exception: ${e}`);
+                            reject(`Unable to parse data: ${data}`);
+                        } else {
+                            log.warn(`Error while processing response of request to ${url} with data ${queryString}: ${e}. Data object I've got: ${data}.`);
+                            reject(`Unable to process data: ${data}`);
+                        }
+                    };
+
                 }
             }).on('error', function(err) {
                 log.log(`Request to ${url} with data ${queryString} failed. ${err}.`);
