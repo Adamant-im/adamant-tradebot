@@ -292,13 +292,13 @@ async function setPrice(type, pair, position) {
             if (type === 'sell') {
                 if (price < lowPrice) {
                     price = lowPrice * $u.randomValue(1, 1.21);
-                    output = `${config.notifyName}: Corrected price to sell not lower than ${lowPrice.toFixed(config.coin2Decimals)} while placing ob-order. Low: ${low.toFixed(config.coin2Decimals)}, high: ${high.toFixed(config.coin2Decimals)} ${config.coin2}.`;
+                    output = `${config.notifyName}: Price watcher corrected price to sell not lower than ${lowPrice.toFixed(config.coin2Decimals)} while placing ob-order. Low: ${low.toFixed(config.coin2Decimals)}, high: ${high.toFixed(config.coin2Decimals)} ${config.coin2}.`;
                     log.log(output);
                 }
             } else {
                 if (price > highPrice) {
                     price = highPrice * $u.randomValue(0.79, 1);
-                    output = `${config.notifyName}: Corrected price to buy not higher than ${highPrice.toFixed(config.coin2Decimals)} while placing ob-order. Low: ${low.toFixed(config.coin2Decimals)}, high: ${high.toFixed(config.coin2Decimals)} ${config.coin2}.`;
+                    output = `${config.notifyName}: Price watcher corrected price to buy not higher than ${highPrice.toFixed(config.coin2Decimals)} while placing ob-order. Low: ${low.toFixed(config.coin2Decimals)}, high: ${high.toFixed(config.coin2Decimals)} ${config.coin2}.`;
                     log.log(output);
                 }
             }        

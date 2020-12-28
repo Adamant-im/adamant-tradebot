@@ -165,7 +165,7 @@ function stop(params) {
 
 		if (tradeParams.mm_isActive) {
 			msgNotify = `${config.notifyName} stopped Market making${optionsString} for ${config.pair} pair.`;
-			msgSendBack = `Market making${optionsString} for ${config.pair} pair is disabled now.`;
+			msgSendBack = `Market making${optionsString} for ${config.pair} pair are disabled now.`;
 		} else {
 			msgNotify = '';
 			msgSendBack = `Market making for ${config.pair} pair is disabled already.`;
@@ -1372,7 +1372,7 @@ async function orders(params) {
 		output += `\nMarket making: ${ordersByType.mm.length}${getDiffString('mm')},`;
 		output += `\nDynamic order book: ${ordersByType.ob.length}${getDiffString('ob')},`;
 		output += `\nTradebot: ${ordersByType.tb.length}${getDiffString('tb')},`;
-		output += `\nLiqudity: ${ordersByType.liq.length}${getDiffString('liq')},`;
+		output += `\nLiquidity: ${ordersByType.liq.length}${getDiffString('liq')},`;
 		output += `\nPrice watching: ${ordersByType.pw.length}${getDiffString('pw')},`;
 		output += `\nManual orders: ${ordersByType.man.length}${getDiffString('man')},`;
 
