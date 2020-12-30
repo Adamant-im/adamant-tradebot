@@ -678,13 +678,7 @@ async function clear(params) {
 
 async function fill(params) {
 
-	// default: low=bid, count=5, pair=ADM/BTC
-	// fill ADM/BTC buy amount=0.00002000 low=0.00000102 high=0.00000132 count=7 
-
-	// default: high=ask, count=5, ADM/BTC
-	// fill ADM/BTC sell amount=300 low=0.00000224 high=0.00000380 count=7
-
-	let count, amount, low, high;
+	let count, amount, low, high, amountName;
 	params.forEach(param => {
 		try {
 			if (param.startsWith('count')) {
@@ -692,6 +686,11 @@ async function fill(params) {
 			}
 			if (param.startsWith('amount')) {
 				amount = +param.split('=')[1].trim();
+				amountName = 'amount';
+			}
+			if (param.startsWith('quote')) {
+				amount = +param.split('=')[1].trim();
+				amountName = 'quote';
 			}
 			if (param.startsWith('low')) {
 				low = +param.split('=')[1].trim();
@@ -702,7 +701,7 @@ async function fill(params) {
 		} catch (e) {
 			return {
 				msgNotify: ``,
-				msgSendBack: 'Wrong arguments. Command works like this: */fill ADM/BTC buy amount=0.00002000 low=0.00000100 high=0.00000132 count=7*.',
+				msgSendBack: 'Wrong arguments. It works like this: */fill ADM/BTC buy quote=0.00002000 low=0.00000100 high=0.00000132 count=7*.',
 				notifyType: 'log'
 			}	
 		}
@@ -711,7 +710,7 @@ async function fill(params) {
 	if (params.length < 3) {
 		return {
 			msgNotify: ``,
-			msgSendBack: 'Wrong arguments. Command works like this: */fill ADM/BTC buy amount=0.00002000 low=0.00000100 high=0.00000132 count=7*.',
+			msgSendBack: 'Wrong arguments. It works like this: */fill ADM/BTC buy quote=0.00002000 low=0.00000100 high=0.00000132 count=7*.',
 			notifyType: 'log'
 		}
 	}
@@ -724,23 +723,39 @@ async function fill(params) {
 	const coin2 = pairObj.coin2;
 	const coin1Decimals =  pairObj.coin1Decimals;
 	const coin2Decimals =  pairObj.coin2Decimals;
+
 	if (pairObj.isPairFromParam) {
 		type = params[1].trim();
 	} else {
 		type = params[0].trim();
 	}
 
+	if ( (type === 'buy' && amountName === 'amount') || (type === 'sell' && amountName === 'quote') ) {
+		output = 'Buy should follow with _quote_, sell with _amount_.';
+		return {
+			msgNotify: ``,
+			msgSendBack: `${output}`,
+			notifyType: 'log'
+		}
+	}
+
 	if (!pair || !pair.length) {
-		output = 'Please specify market to fill orders in.';
+		output = 'Specify a market to fill orders in.';
+		return {
+			msgNotify: ``,
+			msgSendBack: `${output}`,
+			notifyType: 'log'
+		}
+	}
+
+	if (!count || count === Infinity || count < 1) {
+		output = 'Specify order count.';
 		return {
 			msgNotify: ``,
 			msgSendBack: `${output}`,
 			notifyType: 'log'
 		}	
 	}
-
-	if (!count || count === Infinity || count < 1)
-		count = 5; // default
 
 	if (!high || high === Infinity || !low || low === Infinity) {
 		const exchangeRates = await traderapi.getRates(pair);
