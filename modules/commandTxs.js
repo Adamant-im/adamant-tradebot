@@ -1090,50 +1090,9 @@ function params() {
 
 function help() {
 
-	let output = `I am **online** and ready to trade. I can do trading and market making, and also can give you market info.`;
-
-	output += `
-
-Commands:
-
-**/rates**: Find out the market price of the coin and/or the ask and bid prices on the exchange for the trading pair. F. e., */rates ADM* or */rates ADM/BTC*.
-
-**/stats**: Show information on the trading pair on the exchange. Prices, trading volumes and market making stats. Like */stats* or */stats ETH/BTC*.
-
-**/orders**: Display the number of active orders for the trading pair. Example: */orders ADM/BTC*.
-
-**/calc**: Calculate the price of one cryptocurrency in another at the market price and at the exchange prices. Works like this: */calc 2.05 BTC in USDT*.
-
-**/balances**: Display your balances on the exchange
-
-**/start**: Start trading (td) or market making (mm). F. e., /*start mm*.
-
-**/stop**: Stop trading (td) or market making (mm). F. e., /*stop mm*.
-
-**/enable**: Enable option, *ob* or *liq*. F. e., /*enable ob 10* to enable order book building with 10 maximum number of orders.
-
-**/disable**: Disable option. F. e., /*disable ob* to disable order book building.
-
-**/amount**: Set the amount range for market making orders. Example: */amount 0.1-20*.
-
-**/interval**: Set the frequency in [sec, *min*, hour] of transactions for market making. Example: */interval 1-5 min*.
-
-**/buyPercent**: Set the percentage of buy orders for market making, and 100-percentage of buy orders for order book building. Try */buyPercent 75*.
-
-**/fill**: Fill sell or buy order book. Works like this: */fill ADM/BTC buy amount=0.00200000 low=0.00000050 high=0.00000182 count=7*.
-
-**/buy** and **/sell**: Place a limit or market order. If _price_ is not specified, market order placed. Examples: */buy ADM/BTC amount=200 price=0.00000224* — buy 200 ADM at 0.00000224 BTC. */sell ADM/BTC quote=0.01 price=0.00000224* — sell ADM to get 0.01 BTC at 0.00000224 BTC. */sell ADM/BTC amount=200* — sell 200 ADM at market price.
-
-**/clear**: Cancel [*mm*, td, all] active orders. F. e., */clear ETH/BTC all* or just */clear* for mm-orders of default pair.
-
-**/deposit**: Show a deposit address for a coin. Try */deposit ADM*.
-
-**/params**: Show current trading settings
-
-**/version**: Show bot’s software version
-
-Happy trading!
-`;
+	let output = `I am **online** and ready to trade. I do trading and market-making, and provide market info and stats.`;
+	output += ` See command reference on https://marketmaking.app/commands/`;
+	output += `\nHappy trading!`;
 
 	return {
 		msgNotify: ``,

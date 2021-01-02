@@ -60,12 +60,12 @@ module.exports = {
             }
             // console.log(orderBookInfo);
 
-            console.log('liquidityOrders-Untouched', liquidityOrders.length);
+            // console.log('liquidityOrders-Untouched', liquidityOrders.length);
 //            liquidityOrders = await this.updateLiquidityOrders(liquidityOrders); // update orders which partially filled or not found
             liquidityOrders = await orderUtils.updateOrders(liquidityOrders, config.pair); // update orders which partially filled or not found
-            console.log('liquidityOrders-AfterUpdate', liquidityOrders.length);
+            // console.log('liquidityOrders-AfterUpdate', liquidityOrders.length);
             liquidityOrders = await this.closeLiquidityOrders(liquidityOrders, orderBookInfo); // close orders which expired or out of spread
-            console.log('liquidityOrders-AfterClose', liquidityOrders.length);
+            // console.log('liquidityOrders-AfterClose', liquidityOrders.length);
 
             let liquidityStats = $u.getOrdersStats(liquidityOrders);
             // console.log(liquidityStats);

@@ -94,10 +94,10 @@ function sign_api(path, data) {
                         try {
                             let status = JSON.parse(data).status;
                             if (wrongAccountErrors.includes(status)) {
-                                console.log(`Bit-Z declined a request to ${url} because of wrong account data. Make sure API keys are correct, not expired, bot's IP set as trusted, trade password is set. Reply data: ${data}.`);
+                                log.warn(`Bit-Z declined a request to ${url} because of wrong account data. Make sure API keys are correct, not expired, bot's IP set as trusted, trade password is set. Reply data: ${data}.`);
                             }
                         } catch (err) {
-                            console.log(`Exception while processing data in sign_api() request to ${url}: ${err}`);
+                            log.log(`Exception while processing data in sign_api() request to ${url}: ${err}`);
                         }
                     } else {
                         reject(res.statusCode);
