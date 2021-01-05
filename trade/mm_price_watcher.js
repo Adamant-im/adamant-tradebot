@@ -6,20 +6,38 @@ const tradeParams = require('./tradeParams_' + config.exchange);
 const traderapi = require('./trader_' + config.exchange)(config.apikey, config.apisecret, config.apipassword, log);
 const db = require('../modules/DB');
 const orderUtils = require('./orderUtils');
+const Store = require('../modules/Store');
 
 let lastNotifyBalancesTimestamp = 0;
 let lastNotifyPriceTimestamp = 0;
 
 const HOUR = 1000 * 60 * 60;
 const INTERVAL_MIN = 10000;
-const INTERVAL_MAX = 20000;
+const INTERVAL_MAX = 30000;
 const LIFETIME_MIN = 1000 * 60 * 30; // 30 minutes
 const LIFETIME_MAX = HOUR * 2; // 2 hours
 
 let isPreviousIterationFinished = true;
 
+let lowPrice, highPrice;
+let isPriceActual = false;
+let setPriceRangeCount = 0;
+
+console.log(`Module ${$u.getModuleName(module.id)} is loaded.`);
+
 module.exports = {
+    getLowPrice() {
+        return lowPrice;
+    },
+    getHighPrice() {
+        return highPrice;
+    },
+    getIsPriceActual() {
+        return isPriceActual;
+    },
 	run() {
+        // isPriceActual = true;
+        // console.log(`isPriceActual: ${this.getIsPriceActual()}`);
         this.iteration();
     },
     iteration() {
@@ -57,43 +75,42 @@ module.exports = {
             pwOrders = await this.closePriceWatcherOrders(pwOrders); // close orders which expired
             console.log('pwOrders-AfterClose', pwOrders.length);
 
-            let lowPrice = tradeParams.mm_priceWatcherLowPrice * $u.randomValue(0.98, 1.01);
-            let highPrice = tradeParams.mm_priceWatcherHighPrice * $u.randomValue(0.99, 1.02);
-            if (lowPrice >= highPrice) {
-                lowPrice = tradeParams.mm_priceWatcherLowPrice;
-                highPrice = tradeParams.mm_priceWatcherHighPrice;
-            }
+            setPriceRange();
 
-            let orderBook = await traderapi.getOrderBook(config.pair);
-            if (!orderBook || !orderBook.asks[0] || !orderBook.bids[0]) {
-                log.warn(`${config.notifyName}: Order books are empty for ${config.pair}, or temporary API error. Unable to check if I need to place pw-order.`);
-                return;
-            }
+            if (isPriceActual) {
 
-            let orderBookInfo;
-            const reliabilityKoef = $u.randomValue(1.05, 1.1);
-            let targetPrice = 0;
+                let orderBook = await traderapi.getOrderBook(config.pair);
+                if (!orderBook || !orderBook.asks[0] || !orderBook.bids[0]) {
+                    log.warn(`${config.notifyName}: Order books are empty for ${config.pair}, or temporary API error. Unable to check if I need to place pw-order.`);
+                    return;
+                }
 
-            if (orderBook.asks[0].price < lowPrice) {
-                targetPrice = lowPrice;
-            } else if (orderBook.bids[0].price > highPrice) {
-                targetPrice = highPrice;
-            }
+                let targetPrice = 0;
+                if (orderBook.asks[0].price < lowPrice) {
+                    targetPrice = lowPrice;
+                } else if (orderBook.bids[0].price > highPrice) {
+                    targetPrice = highPrice;
+                }
 
-            // console.log('highestBid:', orderBook.bids[0].price, 'lowestAsk:', orderBook.asks[0].price);
-            // console.log('targetPrice:', targetPrice, 'lowPrice:', lowPrice, 'highPrice:', highPrice);
+                // console.log('highestBid:', orderBook.bids[0].price, 'lowestAsk:', orderBook.asks[0].price);
+                // console.log('targetPrice:', targetPrice, 'lowPrice:', lowPrice, 'highPrice:', highPrice);
 
-            if (targetPrice) {
-                orderBookInfo = $u.getOrderBookInfo(orderBook, tradeParams.mm_liquiditySpreadPercent, targetPrice);
-                orderBookInfo.amountTargetPrice *= reliabilityKoef;
-                orderBookInfo.amountTargetPriceQuote *= reliabilityKoef;
+                if (targetPrice) {
 
-                // console.log(orderBookInfo);
-                let priceString = `${config.pair} price of ${targetPrice.toFixed(config.coin2Decimals)} ${config.coin2}`;
-                let actionString = `${orderBookInfo.typeTargetPrice} ${orderBookInfo.amountTargetPrice.toFixed(config.coin1Decimals)} ${config.coin1} ${orderBookInfo.typeTargetPrice === 'buy' ? 'with' : 'for'} ${orderBookInfo.amountTargetPriceQuote.toFixed(config.coin2Decimals)} ${config.coin2}`;
-                let logMessage = `To make ${priceString}, the bot is going to ${actionString}.`;
-                log.info(logMessage);
-                await this.placePriceWatcherOrder(targetPrice, orderBookInfo);    
+                    let orderBookInfo = $u.getOrderBookInfo(orderBook, tradeParams.mm_liquiditySpreadPercent, targetPrice);
+                    const reliabilityKoef = $u.randomValue(1.05, 1.1);
+                    orderBookInfo.amountTargetPrice *= reliabilityKoef;
+                    orderBookInfo.amountTargetPriceQuote *= reliabilityKoef;
+
+                    // console.log(orderBookInfo);
+                    let priceString = `${config.pair} price of ${targetPrice.toFixed(config.coin2Decimals)} ${config.coin2}`;
+                    let actionString = `${orderBookInfo.typeTargetPrice} ${orderBookInfo.amountTargetPrice.toFixed(config.coin1Decimals)} ${config.coin1} ${orderBookInfo.typeTargetPrice === 'buy' ? 'with' : 'for'} ${orderBookInfo.amountTargetPriceQuote.toFixed(config.coin2Decimals)} ${config.coin2}`;
+                    let logMessage = `To make ${priceString}, the bot is going to ${actionString}.`;
+                    log.info(logMessage);
+                    await this.placePriceWatcherOrder(targetPrice, orderBookInfo);    
+
+                }
+
             }
 
             isPreviousIterationFinished = true;
@@ -144,7 +161,7 @@ module.exports = {
 
             let output = '';
             let orderParamsString = '';
-            const pairObj = $u.getPairObj(config.pair);
+            const pairObj = $u.getPairObject(config.pair);
 
             orderParamsString = `type=${type}, pair=${config.pair}, price=${price}, coin1Amount=${coin1Amount}, coin2Amount=${coin2Amount}`;
             if (!type || !price || !coin1Amount || !coin2Amount) {
@@ -258,4 +275,158 @@ function setLifeTime() {
 
 function setPause() {
     return $u.randomValue(INTERVAL_MIN, INTERVAL_MAX, true);
+}
+
+async function setPriceRange() {
+
+    try {
+
+        let previousLowPrice = lowPrice;
+        let previousHighPrice = highPrice;
+
+        setPriceRangeCount += 1;
+        let l, h;
+
+        if (tradeParams.mm_priceWatcherSource.indexOf('@') > -1) {
+
+            let exchange, pair;
+            [pair, exchange] = tradeParams.mm_priceWatcherSource.split('@');
+
+            let exchangeapi = require('./trader_' + exchange.toLowerCase())(null, null, null, log, true);
+            let orderBook = await exchangeapi.getOrderBook(pair);
+            if (!orderBook || !orderBook.asks[0] || !orderBook.bids[0]) {
+                errorSettingPriceRange(`Unable to get the order book for ${pair} at ${exchange} exchange. It may be a temporary API error.`);
+                return false;
+            }
+
+            if (tradeParams.mm_priceWatcherSourcePolicy === 'strict') {
+
+                l = orderBook.bids[0].price;
+                h = orderBook.asks[0].price;
+
+                log.log(`Got a reference price range for ${pair} at ${exchange} exchange (strict): from ${l} to ${h}.`);
+
+            } else {
+
+                let orderBookInfo = $u.getOrderBookInfo(orderBook, 0, false);
+                // console.log(orderBookInfo);
+                if (!orderBookInfo || !orderBookInfo.smartAsk || !orderBookInfo.smartBid) {
+                    errorSettingPriceRange(`Unable to calculate the orderBookInfo for ${pair} at ${exchange} exchange.`);
+                    return false;
+                }
+
+                l = orderBookInfo.smartBid;
+                h = orderBookInfo.smartAsk;
+
+                log.log(`Got a reference price range for ${pair} at ${exchange} exchange: smart from ${l} to ${h}, strict from ${orderBook.bids[0].price} to ${orderBook.asks[0].price}.`);
+
+            }
+
+            lowPrice = l * $u.randomValue(1 - tradeParams.mm_priceWatcherDeviationPercent/100, 1) * $u.randomValue(0.99, 1.005);
+            highPrice = h * $u.randomValue(1, 1 + tradeParams.mm_priceWatcherDeviationPercent/100) * $u.randomValue(0.995, 1.01);    
+            // log.log(`Modified price range for ${pair} at ${exchange} exchange: from ${lowPrice.toFixed(config.coin2Decimals)} to ${highPrice.toFixed(config.coin2Decimals)}.`);
+            if (lowPrice >= highPrice) {
+                lowPrice = l;
+                highPrice = h;
+            }
+            isPriceActual = true;
+            setPriceRangeCount = 0;
+
+        } else {
+
+            // Price range is set in some coin
+
+            l = Store.mathEqual(tradeParams.mm_priceWatcherSource, config.coin2, tradeParams.mm_priceWatcherLowPriceInSourceCoin, true).outAmount;
+            h = Store.mathEqual(tradeParams.mm_priceWatcherSource, config.coin2, tradeParams.mm_priceWatcherHighPriceInSourceCoin, true).outAmount;
+            
+            if (!l || l <= 0 || !h || h <= 0) {
+
+                errorSettingPriceRange(`Wrong results of Store.mathEqual function: lowPrice=${lowPrice}, highPrice=${highPrice}.`);
+                return false;
+
+            } else {
+
+                lowPrice = l * $u.randomValue(0.98, 1.01);
+                highPrice = h * $u.randomValue(0.99, 1.02);    
+                if (lowPrice >= highPrice) {
+                    lowPrice = l;
+                    highPrice = h;
+                }
+                isPriceActual = true;
+                setPriceRangeCount = 0;
+
+            }
+    
+        }
+
+        if (previousLowPrice && previousHighPrice) {
+
+            const warningPercent = 20;
+
+            let deltaLow = Math.abs(lowPrice - previousLowPrice);
+            let deltaLowPercent = deltaLow / ( (lowPrice + previousLowPrice) / 2 ) * 100;
+            let deltaHigh = Math.abs(highPrice - previousHighPrice);
+            let deltaHighPercent = deltaHigh / ( (highPrice + previousHighPrice) / 2 ) * 100;
+            
+            let changedByStringLow, changedByStringHigh;
+            if (deltaLowPercent < 0.01) {
+                changedByStringLow = `(no changes)`;
+            } else {
+                changedByStringLow = `(changed by ${deltaLowPercent.toFixed(2)}%)`;
+            }
+            if (deltaHighPercent < 0.01) {
+                changedByStringHigh = `(no changes)`;
+            } else {
+                changedByStringHigh = `(changed by ${deltaHighPercent.toFixed(2)}%)`;
+            }
+
+            if (deltaLowPercent > warningPercent || deltaHighPercent > warningPercent) {
+                notify(`Price watcher's new price range changed much—new values are from ${lowPrice.toFixed(config.coin2Decimals)} ${changedByStringLow} to ${highPrice.toFixed(config.coin2Decimals)} ${changedByStringHigh} ${config.coin2}.`, 'warn');
+            } else {
+                log.log(`Price watcher set a new price range from ${lowPrice.toFixed(config.coin2Decimals)} ${changedByStringLow} to ${highPrice.toFixed(config.coin2Decimals)} ${changedByStringHigh} ${config.coin2}.`);
+            }
+
+        } else {
+            log.log(`Price watcher set a price range from ${lowPrice.toFixed(config.coin2Decimals)} to ${highPrice.toFixed(config.coin2Decimals)} ${config.coin2}.`);
+
+        }
+
+    } catch (e) {
+
+        errorSettingPriceRange(`Error in setPriceRange() of ${$u.getModuleName(module.id)} module: ${e}.`);
+        return false;
+
+    }
+
+}
+
+function errorSettingPriceRange(errorMessage) {
+
+    try {
+
+        let baseNotifyMessage = `Unable to set the Price Watcher's price range ${setPriceRangeCount} times in series. I've temporary turned off watching the ${config.coin1} price.`;
+        let baseMessage = `Unable to set the Price Watcher's price range ${setPriceRangeCount} times.`;
+
+        if (setPriceRangeCount > 10) {
+
+            isPriceActual = false;
+            if (Date.now()-lastNotifyPriceTimestamp > HOUR) {
+                notify(`${baseNotifyMessage} ${errorMessage}`, 'warn');
+                lastNotifyPriceTimestamp = Date.now();
+            } else {
+                log.log(`${baseNotifyMessage} ${errorMessage}`);
+            }
+
+        } else {
+            if (isPriceActual) {
+                log.log(`${baseMessage} ${errorMessage} I will continue watching ${config.coin1} price according to previous values.`);
+            } else {
+                log.log(`${baseMessage} ${errorMessage} No data to watch ${config.coin1} price. Price watching is disabled.`);
+            }
+        }
+
+    } catch (e) {
+        log.error(`Error in errorSettingPriceRange() of ${$u.getModuleName(module.id)} module: ` + e);
+    }
+
 }

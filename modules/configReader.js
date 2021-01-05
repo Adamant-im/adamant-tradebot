@@ -19,6 +19,10 @@ const fields = {
 		type: Array,
 		default: ['https://info.adamant.im']
 	},
+	exchanges: {
+		type: Array,
+		isRequired: true
+	},
 	exchange: {
 		type: String,
 		isRequired: true
@@ -90,6 +94,7 @@ const fields = {
 };
 
 try {
+
 	if (isDev) {
 		config = JSON.parse(jsonminify(fs.readFileSync('./config.test', 'utf-8')));
 	} else {
@@ -102,9 +107,12 @@ try {
 	} catch (e) {
 		exit('Passphrase is not valid! Error: ' + e);
 	}
+
 	const address = keys.createAddressFromPublicKey(keysPair.publicKey);
 	config.publicKey = keysPair.publicKey;
 	config.address = address;
+
+	config.supported_exchanges = config.exchanges.join(', ');
 	config.exchangeName = config.exchange;
 	config.exchange = config.exchangeName.toLowerCase();
 	config.pair = config.pair.toUpperCase();
@@ -121,6 +129,8 @@ try {
 			exit(`Bot's ${address} config is wrong. Field type _${f}_ is not valid, expected type is _${fields[f].type.name}_. Cannot start Bot.`);
 		}
 	});
+
+	log.log(`The bot successfully read the config-file${isDev ? ' (dev)' : ''}.`);
 
 } catch (e) {
 	log.error('Error reading config: ' + e);

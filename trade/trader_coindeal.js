@@ -1,14 +1,14 @@
 const COINDEAL = require('./coindeal_api');
 const apiServer = 'https://apigateway.coindeal.com';
-const log = require('../helpers/log');
+// const log = require('../helpers/log');
 const $u = require('../helpers/utils');
 
 // API endpoints:
 // https://apigateway.coindeal.com
 
-module.exports = (apiKey, secretKey, pwd) => {
+module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
 
-	COINDEAL.setConfig(apiServer, apiKey, secretKey, pwd);
+	COINDEAL.setConfig(apiServer, apiKey, secretKey, pwd, log, publicOnly);
 	
 	return {
 		getBalances(nonzero = true) {

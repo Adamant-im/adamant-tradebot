@@ -15,10 +15,11 @@ module.exports = {
    "mm_liquiditySpreadPercent": 2,
    "mm_liquidityTrend": "middle",
    "mm_isPriceWatcherActive": false,
-   "mm_priceWatcherLowPrice": 0.98,
-   "mm_priceWatcherMidPrice": 1,
-   "mm_priceWatcherHighPrice": 1.02,
-   "mm_priceWatcherDeviationPercent": 2,
-   "mm_priceWatcherSource": "const",
+   "mm_priceWatcherLowPriceInSourceCoin": 0,
+   "mm_priceWatcherMidPriceInSourceCoin": 0,
+   "mm_priceWatcherHighPriceInSourceCoin": 0,
+   "mm_priceWatcherDeviationPercent": 0,
+   "mm_priceWatcherSource": "#",
+   "mm_priceWatcherSourcePolicy": "smart",
    "mm_priceWatcherAction": "fill"
 }

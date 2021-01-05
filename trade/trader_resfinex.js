@@ -1,14 +1,14 @@
 const RESFINEX = require('./resfinex_api');
 const apiServer = 'https://api.resfinex.com';
-const log = require('../helpers/log');
+//const log = require('../helpers/log');
 const $u = require('../helpers/utils');
 
 // API endpoints:
 // https://api.resfinex.com/
 
-module.exports = (apiKey, secretKey, pwd) => {
+module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
 
-	RESFINEX.setConfig(apiServer, apiKey, secretKey, pwd);
+	RESFINEX.setConfig(apiServer, apiKey, secretKey, pwd, log, publicOnly);
 	
 	return {
 		getBalances(nonzero = true) {

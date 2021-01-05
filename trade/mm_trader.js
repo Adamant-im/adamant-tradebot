@@ -39,7 +39,7 @@ module.exports = {
 
             let output = '';
             let orderParamsString = '';
-            const pairObj = $u.getPairObj(config.pair);
+            const pairObj = $u.getPairObject(config.pair);
 
             if (!price) {
                 if ((Date.now()-lastNotifyPriceTimestamp > HOUR) && priceReq.message) {
@@ -278,15 +278,11 @@ async function setPrice(type, pair, coin1Amount) {
 
         let isSpreadCorrectedByPriceWatcher = false;
 
-        if (tradeParams.mm_isPriceWatcherActive) {
-        // if (true) {
+        let pw = require('./mm_price_watcher');
+        if (tradeParams.mm_isPriceWatcherActive && pw.getIsPriceActual()) {
 
-            let lowPrice = tradeParams.mm_priceWatcherLowPrice * $u.randomValue(0.98, 1.01);
-            let highPrice = tradeParams.mm_priceWatcherHighPrice * $u.randomValue(0.99, 1.02);
-            if (lowPrice >= highPrice) {
-                lowPrice = tradeParams.mm_priceWatcherLowPrice;
-                highPrice = tradeParams.mm_priceWatcherHighPrice;
-            }
+            let lowPrice = pw.getLowPrice();
+            let highPrice = pw.getHighPrice();
             // console.log('lowPrice:', +lowPrice.toFixed(config.coin2Decimals), 'highPrice:', +highPrice.toFixed(config.coin2Decimals));
 
             if (type === 'buy') {
@@ -366,7 +362,7 @@ async function setPrice(type, pair, coin1Amount) {
                     if (tradeParams.mm_isLiquidityActive) {
                         // 80% in order book and 20% in spread
                         mmCurrentAction = Math.random() > 0.8 ? 'executeInSpread' : 'executeInOrderBook';
-                        console.log(`Mm-order with spread+ and mm_isLiquidityActive on: mmCurrentAction ${mmCurrentAction}`)
+                        console.log(`Mm-order with spread+ and mm_isLiquidityActive on: mmCurrentAction=${mmCurrentAction}`)
                     } else {
                         let obSpread = orderBookInfo.spreadPercent;
                         if (obSpread < 2) { // small spread
@@ -379,7 +375,7 @@ async function setPrice(type, pair, coin1Amount) {
                         } else {
                             mmCurrentAction = Math.random() > 0.001 ? 'executeInSpread' : 'executeInOrderBook';
                         }
-                        console.log(`Mm-order with spread+ and mm_isLiquidityActive off: obSpread ${obSpread}, mmCurrentAction ${mmCurrentAction}`)
+                        console.log(`Mm-order with spread+ and mm_isLiquidityActive off: orderBookInfo.spreadPercent=${obSpread}, mmCurrentAction=${mmCurrentAction}`)
                     }
                 } else {
                     mmCurrentAction = 'executeInOrderBook';

@@ -27,6 +27,7 @@ Trading is a mode when bot run orders according to some strategy. It can be prof
 * Dynamic order book building
 * Spread & liquidity maintenance
 * Price range setting
+* Arbitrage token price on other trade pairs or exchanges
 * Stores and displays statistics
 * Managed with your commands using ADAMANT Messenger
 
@@ -43,9 +44,9 @@ If the bot don't support the exchange you need, code it by yourself, or [hire de
 
 After installation, you control the bot in secure ADAMANT Messenger chat directly.
 
-Available commands: ask a bot with `/help` command. Read more how to install and use the bot: [Crypto trading & Market making bot in ADAMANT](https://medium.com/adamant-im/crypto-trading-market-making-bot-in-adamant-82fa48b78f51).
+Available commands: ask a bot with `/help` command. Read more how to install and use the bot: [marketmaking.app/guides](https://marketmaking.app/guides/).
 
-We can run market making for you, see [marketmaking.app/services](https://marketmaking.app/services/).
+We can run market-making for you, see [marketmaking.app/services](https://marketmaking.app/services/).
 
 ## Requirements
 

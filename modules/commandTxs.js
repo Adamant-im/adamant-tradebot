@@ -185,259 +185,385 @@ function stop(params) {
 
 async function enable(params) {
 
-	/*
-		enable ob 15 — enable order book building with X maximum number of orders
-		enable liq 2% 1000 ADM 50 USDT downtrend — provide liquidity with maximum of 1000 ADM asks (sell) and 50 USDT bids (buy) within 2% spread & keep average price lower
-			- downtrend, uptrend, middle
-		[unavailable] enable pw 0.1—0.15 USDT — watching for price in range 0.1-0.15 USDT
-		[unavailable] enable pw 0.15 USDT 2% — watching for price in range 0.15 USDT +-2%
-		[unavailable] enable pw ADM/USDT@Bit-Z 1% — watching for price in range of ADM/USDT@Bit-Z +-1%
-	*/
-
-
-	const type = (params[0] || '').trim();
-	if (!type || !type.length || !["ob", "liq", "pw"].includes(type)) {
-        return {
-            msgNotify: '',
-            msgSendBack: `Indicate option: _ob_ for order book building, _liq_ for liquidity and spread maintenance, _pw_ for price watching. Example: */enable ob 15*.`,
-            notifyType: 'log'
-		} 
-	}
-
 	let msgNotify, msgSendBack, infoString, notesStringNotify, notesStringMsg, optionsString;
 
-	if (type === "ob") {
+	try {
 
-		const orderBookOrdersCount = +params[1];
-		tradeParams.mm_isOrderBookActive = true;
-		if (orderBookOrdersCount && orderBookOrdersCount != Infinity)
-			tradeParams.mm_orderBookOrdersCount = orderBookOrdersCount;
-		else if (!orderBookOrdersCount.length && !tradeParams.mm_orderBookOrdersCount)
-			orderBookOrdersCount = 15; // default for mm_orderBookOrdersCount
-
-		infoString = `with ${tradeParams.mm_orderBookOrdersCount} maximum number of orders`;	
-		optionsString = `Order book building`;
-
-	} else if (type === "liq") {
-
-		const spreadString = params[1];
-		// console.log(spreadString);
-
-		if (!spreadString || (spreadString.slice(-1) !== '%')) {
+		const type = (params[0] || '').trim();
+		if (!type || !type.length || !["ob", "liq", "pw"].includes(type)) {
 			return {
 				msgNotify: '',
-				msgSendBack: `Set a spread in percentage. Example: */enable liq 2% 1000 ADM 50 USDT uptrend*.`,
+				msgSendBack: `Indicate option: _ob_ for order book building, _liq_ for liquidity and spread maintenance, _pw_ for price watching. Example: */enable ob 15*.`,
 				notifyType: 'log'
-			}	
-		}
-		const spreadValue = +spreadString.slice(0, -1);
-		// console.log(spreadValue);
-		if (!spreadValue || spreadValue === Infinity || spreadValue <= 0 || spreadValue > 80) {
-			return {
-				msgNotify: '',
-				msgSendBack: `Set correct spread in percentage. Example: */enable liq 2% 1000 ADM 50 USDT uptrend*.`,
-				notifyType: 'log'
-			}
+			} 
 		}
 
-		const coin1 = params[3].toUpperCase();
-		const coin2 = params[5].toUpperCase();
-		// console.log(coin1, coin2);
+		if (type === "ob") {
 
-		if (!coin1 || !coin2 || coin1 === coin2 || (![config.coin1, config.coin2].includes(coin1)) || (![config.coin1, config.coin2].includes(coin2))) {
-			return {
-				msgNotify: '',
-				msgSendBack: `Incorrect liquidity coins. Config is set to trade ${config.pair} pair. Example: */enable liq 2% 100 ${config.coin1} 50 ${config.coin2} uptrend*.`,
-				notifyType: 'log'
-			}
-		}
-		// console.log(coin1, coin2, "good");
+			const orderBookOrdersCount = +params[1];
+			tradeParams.mm_isOrderBookActive = true;
+			if (orderBookOrdersCount && orderBookOrdersCount != Infinity)
+				tradeParams.mm_orderBookOrdersCount = orderBookOrdersCount;
+			else if (!orderBookOrdersCount.length && !tradeParams.mm_orderBookOrdersCount)
+				orderBookOrdersCount = 15; // default for mm_orderBookOrdersCount
 
-		const coin1Amount = +params[2];
-		// console.log(coin1Amount);
+			infoString = `with ${tradeParams.mm_orderBookOrdersCount} maximum number of orders`;	
+			optionsString = `Order book building`;
 
-		if (!coin1Amount || coin1Amount === Infinity || coin1Amount <= 0) {
-			return {
-				msgNotify: '',
-				msgSendBack: `Incorrect ${coin1} amount: ${coin1Amount}. Example: */enable liq 2% 100 ${config.coin1} 50 ${config.coin2} uptrend*.`,
-				notifyType: 'log'
-			}
-		}
-		// console.log(coin1Amount, "good");
+		} else if (type === "liq") {
 
-		const coin2Amount = +params[4];
-		// console.log(coin2Amount);
+			const spreadString = params[1];
+			// console.log(spreadString);
 
-		if (!coin2Amount || coin2Amount === Infinity || coin2Amount <= 0) {
-			return {
-				msgNotify: '',
-				msgSendBack: `Incorrect ${coin2} amount: ${coin2Amount}. Example: */enable liq 2% 100 ${config.coin1} 50 ${config.coin2} uptrend*.`,
-				notifyType: 'log'
-			}
-		}
-		// console.log(coin2Amount, "good");
-
-		let trend = params[6];
-		// console.log(trend);
-
-		if (!trend) {
-			trend = 'middle';
-		}
-
-		trend = trend.toLowerCase();;
-
-		if ((!['middle', 'downtrend', 'uptrend'].includes(trend))) {
-			return {
-				msgNotify: '',
-				msgSendBack: `Incorrect trend. Example: */enable liq 2% 100 ${config.coin1} 50 ${config.coin2} uptrend*.`,
-				notifyType: 'log'
-			}
-		}
-		// console.log(trend, "good");
-
-		if (coin1 === config.coin1) {
-			tradeParams.mm_liquiditySellAmount = coin1Amount;
-			tradeParams.mm_liquidityBuyQuoteAmount = coin2Amount;
-		} else {
-			tradeParams.mm_liquiditySellAmount = coin2Amount;
-			tradeParams.mm_liquidityBuyQuoteAmount = coin1Amount;
-		}
-		// console.log(tradeParams.mm_liquiditySellAmount, tradeParams.mm_liquidityBuyQuoteAmount);
-
-		tradeParams.mm_liquidityTrend = trend;
-		tradeParams.mm_liquiditySpreadPercent = spreadValue;
-		tradeParams.mm_isLiquidityActive = true;
-		
-		if (trend === 'middle')
-			trend = 'middle trend';
-		infoString = `with ${tradeParams.mm_liquiditySellAmount} ${config.coin1} asks (sell) and ${tradeParams.mm_liquidityBuyQuoteAmount} ${config.coin2} bids (buy) within ${spreadValue}% spread & ${trend}`;
-		optionsString = `Liquidity and spread maintenance`;
-
-	} else if (type === "pw") {
-
-		let rangeOrValue = $u.parseRangeOrValue(params[1]);
-		if (!rangeOrValue.isRange && !rangeOrValue.isValue) {
-			return {
-				msgNotify: '',
-				msgSendBack: `Set a price range or value. Example: */enable pw 0.1—0.2* or */enable pw 0.5 1%*.`,
-				notifyType: 'log'
-			}
-		}
-
-		let pwLowPrice, pwHighPrice, pwMidPrice, pwDeviationPercent, pwSource;
-
-		if (rangeOrValue.isRange) {
-			pwLowPrice = rangeOrValue.from;
-			pwHighPrice = rangeOrValue.to;
-			pwMidPrice = (rangeOrValue.from + rangeOrValue.to) / 2;
-			pwDeviationPercent = pwLowPrice / pwMidPrice * 100;
-			pwSource = 'const';
-		}
-
-		if (rangeOrValue.isValue) {
-
-			const percentString = params[2];
-				if (!percentString || (percentString.slice(-1) !== '%')) {
+			if (!spreadString || (spreadString.slice(-1) !== '%')) {
 				return {
 					msgNotify: '',
-					msgSendBack: `Set a deviation in percentage. Example: */enable pw 0.5 1%*.`,
+					msgSendBack: `Set a spread in percentage. Example: */enable liq 2% 1000 ADM 50 USDT uptrend*.`,
 					notifyType: 'log'
 				}	
 			}
-			const percentValue = +percentString.slice(0, -1);
-			if (!percentValue || percentValue === Infinity || percentValue <= 0 || percentValue > 80) {
+			const spreadValue = +spreadString.slice(0, -1);
+			// console.log(spreadValue);
+			if (!spreadValue || spreadValue === Infinity || spreadValue <= 0 || spreadValue > 80) {
 				return {
 					msgNotify: '',
-					msgSendBack: `Set correct deviation in percentage. Example: */enable pw 0.5 1%*.`,
+					msgSendBack: `Set correct spread in percentage. Example: */enable liq 2% 1000 ADM 50 USDT uptrend*.`,
 					notifyType: 'log'
 				}
 			}
-			pwLowPrice = rangeOrValue.value * (1 - percentValue/100);
-			pwHighPrice = rangeOrValue.value * (1 + percentValue/100);
-			pwMidPrice = rangeOrValue.isValue;
-			pwDeviationPercent = percentValue;
-			pwSource = 'const';
-		}
-		
-		infoString = `from ${pwLowPrice.toFixed(config.coin2Decimals)} to ${pwHighPrice.toFixed(config.coin2Decimals)} ${config.coin2} (${pwDeviationPercent.toFixed(2)}% deviation)`;
-		optionsString = `Price watching`;
 
-		let isConfirmed = params[params.length-1];
-		if (isConfirmed && (['-y', '-Y'].includes(isConfirmed))) {
-			isConfirmed = true;
-		} else {
-			isConfirmed = false;
-		}
+			const coin1 = params[3].toUpperCase();
+			const coin2 = params[5].toUpperCase();
+			// console.log(coin1, coin2);
 
-		if (isConfirmed) {
-			tradeParams.mm_isPriceWatcherActive = true;
-			tradeParams.mm_priceWatcherLowPrice = pwLowPrice;
-			tradeParams.mm_priceWatcherHighPrice = pwHighPrice;
-			tradeParams.mm_priceWatcherMidPrice = pwMidPrice;
-			tradeParams.mm_priceWatcherDeviationPercent = pwDeviationPercent;
-			tradeParams.mm_priceWatcherSource = pwSource;
-
-		} else {
-
-			let priceInfoString = '';
-
-			const pairObj = $u.getPairObj(config.pair, false);
-			const pair = pairObj.pair;
-			const coin1 = pairObj.coin1;
-			const coin2 = pairObj.coin2;
-			const coin1Decimals =  pairObj.coin1Decimals;
-			const coin2Decimals =  pairObj.coin2Decimals;
-
-			const currencies = Store.currencies;
-			const res = Object
-				.keys(Store.currencies)
-				.filter(t => t.startsWith(coin1 + '/'))
-				.map(t => {
-					let p = `${coin1}/**${t.replace(coin1 + '/', '')}**`;
-					return `${p}: ${currencies[t]}`;
-				})
-				.join(', ');
-
-			if (!res.length) {
-				if (!pair) {
-					priceInfoString = `I can’t get rates for *${coin1} from Infoservice*.`;
+			if (!coin1 || !coin2 || coin1 === coin2 || (![config.coin1, config.coin2].includes(coin1)) || (![config.coin1, config.coin2].includes(coin2))) {
+				return {
+					msgNotify: '',
+					msgSendBack: `Incorrect liquidity coins. Config is set to trade ${config.pair} pair. Example: */enable liq 2% 100 ${config.coin1} 50 ${config.coin2} uptrend*.`,
+					notifyType: 'log'
 				}
-			} else {
-				priceInfoString = `Global market rates for ${coin1}:\n${res}.`;
+			}
+			// console.log(coin1, coin2, "good");
+
+			const coin1Amount = +params[2];
+			// console.log(coin1Amount);
+
+			if (!coin1Amount || coin1Amount === Infinity || coin1Amount <= 0) {
+				return {
+					msgNotify: '',
+					msgSendBack: `Incorrect ${coin1} amount: ${coin1Amount}. Example: */enable liq 2% 100 ${config.coin1} 50 ${config.coin2} uptrend*.`,
+					notifyType: 'log'
+				}
+			}
+			// console.log(coin1Amount, "good");
+
+			const coin2Amount = +params[4];
+			// console.log(coin2Amount);
+
+			if (!coin2Amount || coin2Amount === Infinity || coin2Amount <= 0) {
+				return {
+					msgNotify: '',
+					msgSendBack: `Incorrect ${coin2} amount: ${coin2Amount}. Example: */enable liq 2% 100 ${config.coin1} 50 ${config.coin2} uptrend*.`,
+					notifyType: 'log'
+				}
+			}
+			// console.log(coin2Amount, "good");
+
+			let trend = params[6];
+			// console.log(trend);
+
+			if (!trend) {
+				trend = 'middle';
 			}
 
-			const exchangeRatesBefore = await traderapi.getRates(pair);
-			if (priceInfoString)
-				priceInfoString += "\n\n";
-			if (exchangeRatesBefore) {
-				priceInfoString += `${config.exchangeName} rates for ${pair} pair:\nBid: ${exchangeRatesBefore.bid.toFixed(coin2Decimals)}, ask: ${exchangeRatesBefore.ask.toFixed(coin2Decimals)}.`;
-			} else {
-				priceInfoString += `Unable to get ${config.exchangeName} rates for ${pair}.`;
-			}
+			trend = trend.toLowerCase();;
 
-			pendingConfirmation.command = `/enable ${params.join(' ')}`;
-			pendingConfirmation.timestamp = Date.now();
-			msgNotify = '';
-			msgSendBack = `Are you sure to enable ${optionsString} for ${config.pair} pair ${infoString}? Confirm with **/y** command or ignore.\n\n${priceInfoString}`;
+			if ((!['middle', 'downtrend', 'uptrend'].includes(trend))) {
+				return {
+					msgNotify: '',
+					msgSendBack: `Incorrect trend. Example: */enable liq 2% 100 ${config.coin1} 50 ${config.coin2} uptrend*.`,
+					notifyType: 'log'
+				}
+			}
+			// console.log(trend, "good");
+
+			if (coin1 === config.coin1) {
+				tradeParams.mm_liquiditySellAmount = coin1Amount;
+				tradeParams.mm_liquidityBuyQuoteAmount = coin2Amount;
+			} else {
+				tradeParams.mm_liquiditySellAmount = coin2Amount;
+				tradeParams.mm_liquidityBuyQuoteAmount = coin1Amount;
+			}
+			// console.log(tradeParams.mm_liquiditySellAmount, tradeParams.mm_liquidityBuyQuoteAmount);
+
+			tradeParams.mm_liquidityTrend = trend;
+			tradeParams.mm_liquiditySpreadPercent = spreadValue;
+			tradeParams.mm_isLiquidityActive = true;
 			
-			return {
-				msgNotify,
-				msgSendBack,
-				notifyType: 'log'
+			if (trend === 'middle')
+				trend = 'middle trend';
+			infoString = `with ${tradeParams.mm_liquiditySellAmount} ${config.coin1} asks (sell) and ${tradeParams.mm_liquidityBuyQuoteAmount} ${config.coin2} bids (buy) within ${spreadValue}% spread & ${trend}`;
+			optionsString = `Liquidity and spread maintenance`;
+
+		} else if (type === "pw") {
+
+			let pwSourceInput = params[1];
+			if (!pwSourceInput || pwSourceInput === undefined) {
+				return {
+					msgNotify: '',
+					msgSendBack: `Wrong parameters. Example: */enable pw 0.1—0.2 USDT* or */enable pw ADM/USDT@Bit-Z 0.5% smart*.`,
+					notifyType: 'log'
+				}
 			}
 
-		}
-	}
+			let rangeOrValue, coin;
+			let exchange, exchangeName, pair;
+			let pairObj;
+			let percentString, percentValue;
 
-	if (tradeParams.mm_isActive) {
-		msgNotify = `${config.notifyName} enabled ${optionsString} for ${config.pair} pair ${infoString}.`;
-		msgSendBack = `${optionsString} is enabled for ${config.pair} pair ${infoString}.`;
-	} else {
-		notesStringNotify = ` Market making and ${optionsString} are not started yet.`
-		notesStringMsg = ` To start Market making and ${optionsString}, type */start mm*.`
-		msgNotify = `${config.notifyName} enabled ${optionsString} for ${config.pair} pair ${infoString}.${notesStringNotify}`;
-		msgSendBack = `${optionsString} is enabled for ${config.pair} pair ${infoString}.${notesStringMsg}`;
-	}
+			let pwLowPrice, pwHighPrice, pwMidPrice, pwDeviationPercent, pwSource, pwSourcePolicy;
+
+			if (params[1].indexOf('@') > -1) {
+
+				[pair, exchange] = params[1].split('@');
+
+				if (!pair || pair.length < 3 || !exchange || exchange.length < 3) {
+					return {
+						msgNotify: '',
+						msgSendBack: `Wrong price source. Example: */enable pw ADM/USDT@Bit-Z 0.5% smart*.`,
+						notifyType: 'log'
+					}
+				}
+
+				config.exchanges.forEach(e => {
+					if (e.toLowerCase() === exchange.toLowerCase()) {
+						exchangeName = e;
+					}
+				});
+
+				if (!exchangeName || exchangeName === undefined) {
+					return {
+						msgNotify: '',
+						msgSendBack: `I don't support ${exchange} exchange. Supported exchanges: ${config.supported_exchanges}. Example: */enable pw ADM/USDT@Bit-Z 0.5% smart*.`,
+						notifyType: 'log'
+					}
+				}
+
+				pairObj = $u.getPairObject(pair, false);
+
+				if (!pairObj.isPairParsed) {
+					return {
+						msgNotify: '',
+						msgSendBack: `Trading pair ${pair.toUpperCase()} is not valid. Example: */enable pw ADM/USDT@Bit-Z 0.5% smart*.`,
+						notifyType: 'log'
+					}
+				}
+
+				if (pairObj.coin1 !== config.coin1) {
+					return {
+						msgNotify: '',
+						msgSendBack: `Base currency of a trading pair must be ${config.coin1}, like ${config.coin1}/USDT.`,
+						notifyType: 'log'
+					}
+				}
+
+				let exchangeapi = require('../trade/trader_' + exchange.toLowerCase())(null, null, null, log, true);
+				let orderBook = await exchangeapi.getOrderBook(pairObj.pair);
+				if (!orderBook || !orderBook.asks[0] || !orderBook.bids[0]) {
+					return {
+						msgNotify: '',
+						msgSendBack: `Unable to get the order book for ${pairObj.pair} at ${exchangeName} exchange. Check if you've specified trading pair correctly. It may be a temporary API error also.`,
+						notifyType: 'log'
+					}
+				}
+
+				pwSource = `${pairObj.pair}@${exchangeName}`;
+				
+				percentString = params[2];
+				if (!percentString || (percentString.slice(-1) !== '%')) {
+					return {
+						msgNotify: '',
+						msgSendBack: `Set a deviation in percentage. Example: */enable pw ADM/USDT@Bit-Z 0.5% smart*.`,
+						notifyType: 'log'
+					}	
+				}
+				percentValue = +percentString.slice(0, -1);
+				if (percentValue === Infinity || percentValue < 0 || percentValue > 90) {
+					return {
+						msgNotify: '',
+						msgSendBack: `Set correct deviation in percentage. Example: */enable pw ADM/USDT@Bit-Z 0.5% smart*.`,
+						notifyType: 'log'
+					}
+				}
+				pwDeviationPercent = percentValue;
+
+				pwSourcePolicy = params[3];
+				if (!pwSourcePolicy || pwSourcePolicy === undefined) {
+					pwSourcePolicy = 'smart';
+				}
+				pwSourcePolicy = pwSourcePolicy.toLowerCase();
+				if (!['smart', 'strict'].includes(pwSourcePolicy)) {
+					return {
+						msgNotify: '',
+						msgSendBack: `Wrong deviation policy. Allowed _smart_ or _strict_. Example: */enable pw ADM/USDT@Bit-Z 0.5% smart*.`,
+						notifyType: 'log'
+					}
+				}
+
+				pwLowPrice = 0;
+				pwHighPrice = 0;
+				pwMidPrice = 0;
+
+				infoString = `based on ${pwSource} with ${pwSourcePolicy} policy and ${pwDeviationPercent.toFixed(2)}% deviation`;
+
+			} else {
+
+				rangeOrValue = $u.parseRangeOrValue(params[1]);
+				if (!rangeOrValue.isRange && !rangeOrValue.isValue) {
+					return {
+						msgNotify: '',
+						msgSendBack: `Set a price range or value. Example: */enable pw 0.1—0.2 USDT* or */enable pw 0.5 USDT 1%*.`,
+						notifyType: 'log'
+					}
+				}
+
+				coin = params[2];
+				if (!coin || !coin.length || coin.toUpperCase() === config.coin1) {
+					return {
+						msgNotify: '',
+						msgSendBack: `Incorrect currency. Example: */enable pw 0.1—0.2 USDT* or */enable pw 0.5 USDT 1%*.`,
+						notifyType: 'log'
+					}
+				}
+				coin = coin.toUpperCase();
+
+				if (!$u.isHasTicker(coin)) {
+					return {
+						msgNotify: '',
+						msgSendBack: `I don't know currency ${coin}. Example: */enable pw 0.1—0.2 USDT* or */enable pw 0.5 USDT 1%*.`,
+						notifyType: 'log'
+					}
+				}
+
+				if (rangeOrValue.isRange) {
+					pwLowPrice = rangeOrValue.from;
+					pwHighPrice = rangeOrValue.to;
+					pwMidPrice = (rangeOrValue.from + rangeOrValue.to) / 2;
+					pwDeviationPercent = (rangeOrValue.to - rangeOrValue.from) / 2 / pwMidPrice * 100;
+					pwSource = coin;
+				}
+				
+				if (rangeOrValue.isValue) {
+
+					percentString = params[3];
+						if (!percentString || (percentString.slice(-1) !== '%')) {
+						return {
+							msgNotify: '',
+							msgSendBack: `Set a deviation in percentage. Example: */enable pw 0.5 USDT 1%*.`,
+							notifyType: 'log'
+						}
+					}
+					percentValue = +percentString.slice(0, -1);
+					if (!percentValue || percentValue === Infinity || percentValue <= 0 || percentValue > 90) {
+						return {
+							msgNotify: '',
+							msgSendBack: `Set correct deviation in percentage. Example: */enable pw 0.5 USDT 1%*.`,
+							notifyType: 'log'
+						}
+					}
+					pwLowPrice = rangeOrValue.value * (1 - percentValue/100);
+					pwHighPrice = rangeOrValue.value * (1 + percentValue/100);
+					pwMidPrice = rangeOrValue.isValue;
+					pwDeviationPercent = percentValue;
+					pwSource = coin;
+				}
+				
+				// let sourceString = pwSource === '#' ? `${config.coin2} (this pair rate)` : `${coin} (global rate)`;
+				let sourceString = `${coin} (global rate)`;
+				infoString = `from ${pwLowPrice.toFixed(config.coin2Decimals)} to ${pwHighPrice.toFixed(config.coin2Decimals)} ${sourceString}—${pwDeviationPercent.toFixed(2)}% price deviation`;
+
+			}
+			
+			optionsString = `Price watching`;
+
+			let isConfirmed = params[params.length-1];
+			if (isConfirmed && (['-y', '-Y'].includes(isConfirmed))) {
+				isConfirmed = true;
+			} else {
+				isConfirmed = false;
+			}
+
+			if (isConfirmed) {
+
+				tradeParams.mm_isPriceWatcherActive = true;
+				tradeParams.mm_priceWatcherLowPriceInSourceCoin = pwLowPrice;
+				tradeParams.mm_priceWatcherMidPriceInSourceCoin = pwMidPrice;
+				tradeParams.mm_priceWatcherHighPriceInSourceCoin = pwHighPrice;
+				tradeParams.mm_priceWatcherDeviationPercent = pwDeviationPercent;
+				tradeParams.mm_priceWatcherSource = pwSource;
+				tradeParams.mm_priceWatcherSourcePolicy = pwSourcePolicy;
+
+			} else {
+
+				let priceInfoString = '';
+
+				pairObj = $u.getPairObject(config.pair, false);
+
+				const currencies = Store.currencies;
+				const res = Object
+					.keys(Store.currencies)
+					.filter(t => t.startsWith(pairObj.coin1 + '/'))
+					.map(t => {
+						let p = `${pairObj.coin1}/**${t.replace(pairObj.coin1 + '/', '')}**`;
+						return `${p}: ${currencies[t]}`;
+					})
+					.join(', ');
+
+				if (!res.length) {
+					if (!pairObj.pair) {
+						priceInfoString = `I can’t get rates for *${pairObj.coin1}* from Infoservice.`;
+					}
+				} else {
+					priceInfoString = `Global market rates for ${pairObj.coin1}:\n${res}.`;
+				}
+
+				const exchangeRatesBefore = await traderapi.getRates(pairObj.pair);
+				if (priceInfoString)
+					priceInfoString += "\n\n";
+				if (exchangeRatesBefore) {
+					priceInfoString += `${config.exchangeName} rates for ${pairObj.pair} pair:\nBid: ${exchangeRatesBefore.bid.toFixed(pairObj.coin2Decimals)}, ask: ${exchangeRatesBefore.ask.toFixed(pairObj.coin2Decimals)}.`;
+				} else {
+					priceInfoString += `Unable to get ${config.exchangeName} rates for ${pairObj.pair}.`;
+				}
+
+				pendingConfirmation.command = `/enable ${params.join(' ')}`;
+				pendingConfirmation.timestamp = Date.now();
+				msgNotify = '';
+				msgSendBack = `Are you sure to enable ${optionsString} for ${config.pair} pair ${infoString}? Confirm with **/y** command or ignore.\n\n${priceInfoString}`;
+				
+				return {
+					msgNotify,
+					msgSendBack,
+					notifyType: 'log'
+				}
+
+			}
+
+		} // type === "pw"
+
+		if (tradeParams.mm_isActive) {
+			msgNotify = `${config.notifyName} enabled ${optionsString} for ${config.pair} pair ${infoString}.`;
+			msgSendBack = `${optionsString} is enabled for ${config.pair} pair ${infoString}.`;
+		} else {
+			notesStringNotify = ` Market making and ${optionsString} are not started yet.`
+			notesStringMsg = ` To start Market making and ${optionsString}, type */start mm*.`
+			msgNotify = `${config.notifyName} enabled ${optionsString} for ${config.pair} pair ${infoString}.${notesStringNotify}`;
+			msgSendBack = `${optionsString} is enabled for ${config.pair} pair ${infoString}.${notesStringMsg}`;
+		}
+
+	} catch (e) {
+		log.error(`Error in enable() of ${$u.getModuleName(module.id)} module: ` + e);
+	} 
 
 	return {
 		msgNotify,
@@ -717,14 +843,14 @@ async function fill(params) {
 
 	let output = '';
 	let type;
-	const pairObj = $u.getPairObj(params[0]);
+	const pairObj = $u.getPairObject(params[0]);
 	const pair = pairObj.pair;
 	const coin1 = pairObj.coin1;
 	const coin2 = pairObj.coin2;
 	const coin1Decimals =  pairObj.coin1Decimals;
 	const coin2Decimals =  pairObj.coin2Decimals;
 
-	if (pairObj.isPairFromParam) {
+	if (pairObj.isPairParsed) {
 		type = params[1].trim();
 	} else {
 		type = params[0].trim();
@@ -1010,7 +1136,7 @@ function getBuySellParams(params, type) {
 		}
 	}
 
-	const pairObj = $u.getPairObj(params[0]);
+	const pairObj = $u.getPairObject(params[0]);
 	const pair = pairObj.pair;
 	const coin1 = pairObj.coin1;
 	const coin2 = pairObj.coin2;
@@ -1110,7 +1236,7 @@ async function rates(params) {
 	if (params[0].toUpperCase().trim() === config.coin1)
 		params[0] = config.pair;
 
-	const pairObj = $u.getPairObj(params[0], false);
+	const pairObj = $u.getPairObject(params[0], false);
 	const pair = pairObj.pair;
 	const coin1 = pairObj.coin1;
 	const coin2 = pairObj.coin2;
@@ -1174,7 +1300,7 @@ async function deposit(params) {
 
 	let output = '';
 
-	const pairObj = $u.getPairObj(params[0], true);
+	const pairObj = $u.getPairObject(params[0], true);
 	const pair = pairObj.pair;
 	const coin1 = pairObj.coin1;
 
@@ -1210,7 +1336,7 @@ async function stats(params) {
 
 	let output = '';
 
-	const pairObj = $u.getPairObj(params[0]);
+	const pairObj = $u.getPairObject(params[0]);
 	const pair = pairObj.pair;
 	const coin1 = pairObj.coin1;
 	const coin2 = pairObj.coin2;
@@ -1286,7 +1412,7 @@ async function orders(params) {
 
 	let output = '';
 
-	const pairObj = $u.getPairObj(params[0]);
+	const pairObj = $u.getPairObject(params[0]);
 	const pair = pairObj.pair;
 	const coin1 = pairObj.coin1;
 	const coin2 = pairObj.coin2;
@@ -1389,7 +1515,7 @@ async function make(params, tx, confirmation) {
 
 			let priceInfoString = '';
 
-			const pairObj = $u.getPairObj(config.pair, false);
+			const pairObj = $u.getPairObject(config.pair, false);
 			const pair = pairObj.pair;
 			const coin1 = pairObj.coin1;
 			const coin2 = pairObj.coin2;
@@ -1498,10 +1624,11 @@ async function make(params, tx, confirmation) {
 				pendingConfirmation.timestamp = Date.now();
 				msgNotify = '';
 				let pwWarning = ' ';
-				if (tradeParams.mm_isActive && tradeParams.mm_isPriceWatcherActive) {
-					pwWarning = `\n\n**Warning**: Price watcher is enabled for ${config.pair} from ${tradeParams.mm_priceWatcherLowPrice.toFixed(config.coin2Decimals)} to ${tradeParams.mm_priceWatcherHighPrice.toFixed(config.coin2Decimals)} ${config.coin2}.`;
-					if (targetPrice < tradeParams.mm_priceWatcherLowPrice || targetPrice > tradeParams.mm_priceWatcherHighPrice)
-						pwWarning += ` **Target price ${targetPrice} ${config.coin2} is out of this range.** The bot will try to restore a price.`;
+				let pw = require('../trade/mm_price_watcher');
+				if (tradeParams.mm_isActive && pw.getIsPriceActual()) {
+					pwWarning = `\n\n**Warning**: Price watcher is enabled for ${config.pair} from ${pw.getLowPrice().toFixed(config.coin2Decimals)} to ${pw.getHighPrice().toFixed(config.coin2Decimals)} ${config.coin2}.`;
+					if (targetPrice < pw.getLowPrice() || targetPrice > pw.getHighPrice())
+						pwWarning += ` **Target price ${targetPrice} ${config.coin2} is out of this range.** If you confirm change, the bot will try to restore a price then.`;
 					pwWarning += `\n\n`;
 				}
 				msgSendBack = `Are you sure to make ${priceString}? I am going to **${actionString}**.${pwWarning}Confirm with **/y** command or ignore.\n\n${priceInfoString}`;

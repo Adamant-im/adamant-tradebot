@@ -1,5 +1,5 @@
 const request = require('request');
-const log = require('../helpers/log');
+// const log = require('../helpers/log');
 const DEFAULT_HEADERS = {
     "Accept": "application/json"
 }
@@ -10,6 +10,7 @@ var config = {
     'secret_key': '',
     'tradePwd': ''
 };
+var log = {};
 
 function sign_api(path, data, type = 'get') {
     var url = `${WEB_BASE}${path}`; 
@@ -86,12 +87,14 @@ function setSign() {
 }
 
 var EXCHANGE_API = {
-    setConfig : function(apiServer,apiKey,secretKey,tradePwd){
+
+    setConfig: function(apiServer, apiKey, secretKey, tradePwd, logger, publicOnly = false) {
         WEB_BASE = apiServer;
+        log = logger;
         config = {
-            'apiKey': apiKey ,
-            'secret_key': secretKey ,
-            'tradePwd': tradePwd || '',
+            'apiKey': apiKey,
+            'secret_key': secretKey,
+            'tradePwd': tradePwd || ''
         };
     },
 
@@ -174,7 +177,7 @@ var EXCHANGE_API = {
             data.limit = size;
         else
             data.limit = 0;
-        return sign_api(`/api/v1/public/orderbook/${symbol}`, data);
+        return public_api(`${WEB_BASE}/api/v1/public/orderbook/${symbol}`, data);
     },
 
     /**

@@ -19,13 +19,20 @@ const LIFETIME_KOEF = 1.5;
 let isPreviousIterationFinished = true;
 
 module.exports = {
+
     async test() {
         console.log('==========================');
         console.log('**************before');
+        let pw = require('./mm_price_watcher');
+        console.log(`isPriceActual: ${pw.getIsPriceActual()}`);
         // let req = await traderapi.cancelOrder('ADM_USDT');
-        let req = await traderapi.getOrderBook('ADM_USDT');
+        // let exchangeapi = require('./trader_' + 'atomars')(null, null, null, log, true);
+        // let req = await exchangeapi.getOrderBook('ADM/USDT');
+        let pw2 = require('./mm_price_watcher');
+        console.log(`isPriceActual: ${pw2.getIsPriceActual()}`);
+
         console.log('**************after:');
-        console.log(req);
+        // console.log(req);
     },
 	run() {
         this.iteration();
@@ -108,7 +115,7 @@ module.exports = {
 
             let output = '';
             let orderParamsString = '';
-            const pairObj = $u.getPairObj(config.pair);
+            const pairObj = $u.getPairObject(config.pair);
 
             if (!price) {
                 if ((Date.now()-lastNotifyPriceTimestamp > HOUR) && priceReq.message) {
@@ -278,15 +285,11 @@ async function setPrice(type, pair, position) {
 
         let price = $u.randomValue(low, high);
         
-        if (tradeParams.mm_isPriceWatcherActive) {
-        // if (true) {
+        let pw = require('./mm_price_watcher');
+        if (tradeParams.mm_isPriceWatcherActive && pw.getIsPriceActual()) {
         
-            let lowPrice = tradeParams.mm_priceWatcherLowPrice * $u.randomValue(0.98, 1.01);
-            let highPrice = tradeParams.mm_priceWatcherHighPrice * $u.randomValue(0.99, 1.02);
-            if (lowPrice >= highPrice) {
-                lowPrice = tradeParams.mm_priceWatcherLowPrice;
-                highPrice = tradeParams.mm_priceWatcherHighPrice;
-            }
+            let lowPrice = pw.getLowPrice();
+            let highPrice = pw.getHighPrice();
             // console.log('lowPrice:', +lowPrice.toFixed(config.coin2Decimals), 'highPrice:', +highPrice.toFixed(config.coin2Decimals));
 
             if (type === 'sell') {

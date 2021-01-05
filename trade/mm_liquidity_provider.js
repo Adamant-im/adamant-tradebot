@@ -162,7 +162,7 @@ module.exports = {
 
             let output = '';
             let orderParamsString = '';
-            const pairObj = $u.getPairObj(config.pair);
+            const pairObj = $u.getPairObject(config.pair);
 
             orderParamsString = `type=${type}, pair=${config.pair}, price=${price}, coin1Amount=${coin1Amount}, coin2Amount=${coin2Amount}`;
             if (!type || !price || !coin1Amount || !coin2Amount) {
@@ -314,15 +314,11 @@ async function setPrice(type, orderBookInfo) {
         let price, lowPrice = 0, highPrice = 0;
         // console.log('=====', price, precision);
 
-        if (tradeParams.mm_isPriceWatcherActive) {
-        // if (true) {
+        let pw = require('./mm_price_watcher');
+        if (tradeParams.mm_isPriceWatcherActive && pw.getIsPriceActual()) {
     
-            lowPrice = tradeParams.mm_priceWatcherLowPrice * $u.randomValue(0.98, 1.01);
-            highPrice = tradeParams.mm_priceWatcherHighPrice * $u.randomValue(0.99, 1.02);
-            if (lowPrice >= highPrice) {
-                lowPrice = tradeParams.mm_priceWatcherLowPrice;
-                highPrice = tradeParams.mm_priceWatcherHighPrice;
-            }
+            lowPrice = pw.getLowPrice();
+            highPrice = pw.getHighPrice();
             // console.log('lowPrice:', +lowPrice.toFixed(config.coin2Decimals), 'highPrice:', +highPrice.toFixed(config.coin2Decimals));
 
         }

@@ -1,6 +1,6 @@
 var CryptoJS = require('crypto-js');
 const request = require('request');
-const log = require('../helpers/log');
+// const log = require('../helpers/log');
 const DEFAULT_HEADERS = {
     "Content-Type": "application/x-www-form-urlencoded",
     "User-Agent": "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.71 Safari/537.36"
@@ -12,6 +12,7 @@ var config = {
     'secret_key': '',
     'tradePwd': ''
 };
+var log = {};
 
 // https://apidocv2.bitz.ai/en/
 
@@ -141,8 +142,10 @@ function getSignBaseParams() {
 }
 
 var EXCHANGE_API = {
-    setConfig : function(apiServer,apiKey,secretKey,tradePwd){
+
+    setConfig: function(apiServer, apiKey, secretKey, tradePwd, logger, publicOnly = false) {
         WEB_BASE = apiServer;
+        log = logger;
         config = {
             'apiKey': apiKey ,
             'secret_key': secretKey ,

@@ -1,6 +1,6 @@
 var CryptoJS = require('crypto-js');
 const request = require('request');
-const log = require('../helpers/log');
+// const log = require('../helpers/log');
 const DEFAULT_HEADERS = {
     "Content-Type": "application/x-www-form-urlencoded",
     "User-Agent": "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.71 Safari/537.36"
@@ -11,6 +11,8 @@ var config = {
     'auth-token': '',
     'auth-secret': ''
 };
+var log = {};
+var isAuthPassed = false;
 
 function api(path, r_data, do_sign, type, do_stringify) {
     var url = `${WEB_BASE}${path}`; 
@@ -97,9 +99,15 @@ function setSign(params) {
 
 var EXCHANGE_API = {
 
-    setConfig: async function(apiServer, username, password) {
-        if (!WEB_BASE) {
-            WEB_BASE = apiServer;
+    setConfig: async function(apiServer, username, password, logger, publicOnly = false) {
+
+        WEB_BASE = apiServer;
+        log = logger;
+
+        if (!publicOnly && !isAuthPassed) {
+
+            // Create API keys by login/password for each instance of trader_atomars
+
             let loginReq = await this.login(username, password).catch(err => {
                 log.log(`Login API request (apiServer: ${apiServer}, username: ${username}) failed. ${err}. Exiting. Try to restart the bot.`);
                 process.exit(0);
@@ -115,6 +123,8 @@ var EXCHANGE_API = {
                 'auth-token': res.token,
                 'auth-secret': res.data.secret
             };
+
+            isAuthPassed = true;
             // console.log(config);
         }
     },
