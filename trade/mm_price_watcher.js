@@ -14,8 +14,8 @@ let lastNotifyPriceTimestamp = 0;
 const HOUR = 1000 * 60 * 60;
 const INTERVAL_MIN = 10000;
 const INTERVAL_MAX = 30000;
-const LIFETIME_MIN = 1000 * 60 * 30; // 30 minutes
-const LIFETIME_MAX = HOUR * 2; // 2 hours
+const LIFETIME_MIN = HOUR * 5;
+const LIFETIME_MAX = HOUR * 10;
 
 let isPreviousIterationFinished = true;
 
