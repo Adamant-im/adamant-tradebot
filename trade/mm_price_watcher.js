@@ -291,6 +291,7 @@ async function setPriceRange() {
 
             let exchange, pair;
             [pair, exchange] = tradeParams.mm_priceWatcherSource.split('@');
+            let pairObj = $u.getPairObject(pair, false);
 
             let exchangeapi = require('./trader_' + exchange.toLowerCase())(null, null, null, log, true);
             let orderBook = await exchangeapi.getOrderBook(pair);
@@ -301,8 +302,13 @@ async function setPriceRange() {
 
             if (tradeParams.mm_priceWatcherSourcePolicy === 'strict') {
 
-                l = orderBook.bids[0].price;
-                h = orderBook.asks[0].price;
+                l = Store.mathEqual(pairObj.coin2, config.coin2, orderBook.bids[0].price, true).outAmount;
+                h = Store.mathEqual(pairObj.coin2, config.coin2, orderBook.asks[0].price, true).outAmount;
+    
+                if (!l || l <= 0 || !h || h <= 0) {
+                    errorSettingPriceRange(`Wrong results of Store.mathEqual function: l=${l}, h=${h}.`);
+                    return false;
+                }
 
                 log.log(`Got a reference price range for ${pair} at ${exchange} exchange (strict): from ${l} to ${h}.`);
 
@@ -315,10 +321,18 @@ async function setPriceRange() {
                     return false;
                 }
 
-                l = orderBookInfo.smartBid;
-                h = orderBookInfo.smartAsk;
+                l = Store.mathEqual(pairObj.coin2, config.coin2, orderBookInfo.smartBid, true).outAmount;
+                h = Store.mathEqual(pairObj.coin2, config.coin2, orderBookInfo.smartAsk, true).outAmount;
+    
+                if (!l || l <= 0 || !h || h <= 0) {
+                    errorSettingPriceRange(`Wrong results of Store.mathEqual function: l=${l}, h=${h}.`);
+                    return false;
+                }
 
-                log.log(`Got a reference price range for ${pair} at ${exchange} exchange: smart from ${l} to ${h}, strict from ${orderBook.bids[0].price} to ${orderBook.asks[0].price}.`);
+                let l_strict = Store.mathEqual(pairObj.coin2, config.coin2, orderBook.bids[0].price, true).outAmount;
+                let h_strict = Store.mathEqual(pairObj.coin2, config.coin2, orderBook.asks[0].price, true).outAmount;
+
+                log.log(`Got a reference price range for ${pair} at ${exchange} exchange: smart from ${l} to ${h}, strict from ${l_strict} to ${h_strict}.`);
 
             }
 
@@ -341,7 +355,7 @@ async function setPriceRange() {
             
             if (!l || l <= 0 || !h || h <= 0) {
 
-                errorSettingPriceRange(`Wrong results of Store.mathEqual function: lowPrice=${lowPrice}, highPrice=${highPrice}.`);
+                errorSettingPriceRange(`Wrong results of Store.mathEqual function: l=${l}, h=${h}.`);
                 return false;
 
             } else {
