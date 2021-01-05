@@ -165,7 +165,7 @@ function setSign(secret, str) {
 
 var EXCHANGE_API = {
 
-    setConfig: function(apiServer, apiKey, secretKey, tradePwd, logger, log, publicOnly = false) {
+    setConfig: function(apiServer, apiKey, secretKey, tradePwd, logger, publicOnly = false) {
         WEB_BASE = apiServer;
         log = logger;
         config = {

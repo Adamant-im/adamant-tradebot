@@ -108,54 +108,62 @@ module.exports = {
 	*/
 	getPairObject(aPair, letCoin1only = false) {
 
-		let pair = (aPair || '').toUpperCase().trim();
-		let coin1Decimals = 8;
-		let coin2Decimals = 8;
-		let isPairParsed = true;
-		let coin1, coin2;
-	
-		if (!pair || pair.indexOf('/') === -1 || pair === config.pair) {
+		try {
 
-			// aPair is not a pair, or is a default pair
+			let pair = (aPair || '').toUpperCase().trim();
+			let coin1Decimals = 8;
+			let coin2Decimals = 8;
+			let isPairParsed = true;
+			let coin1, coin2;
+		
+			if (!pair || pair.indexOf('/') === -1 || pair === config.pair) {
 
-			if (pair !== config.pair) {
-				isPairParsed = false;
-			}
+				// aPair is not a pair, or is a default pair
 
-			if ((pair.indexOf('/') === -1) && letCoin1only) {
-
-				// aPair is not a pair, may be a coin only
-				coin1 = pair;
-				if (coin1 === config.coin1) {
-					coin1Decimals = config.coin1Decimals;		
+				if (pair !== config.pair) {
+					isPairParsed = false;
 				}
-				pair = null;
-				coin2 = null;
 
-			} else { 
-				
-				// Set a default trading pair
-				pair = config.pair;
-				coin1Decimals = config.coin1Decimals;
-				coin2Decimals = config.coin2Decimals;
+				if ((pair.indexOf('/') === -1) && letCoin1only) {
+
+					// aPair is not a pair, may be a coin only
+					coin1 = pair;
+					if (coin1 === config.coin1) {
+						coin1Decimals = config.coin1Decimals;		
+					}
+					pair = null;
+					coin2 = null;
+
+				} else { 
+					
+					// Set a default trading pair
+					pair = config.pair;
+					coin1Decimals = config.coin1Decimals;
+					coin2Decimals = config.coin2Decimals;
+
+				}
 
 			}
+		
+			if (pair) {
+				coin1 = pair.substr(0, pair.indexOf('/')); 
+				coin2 = pair.substr(pair.indexOf('/') + 1, pair.length);
+			}
+		
+			return {
+				pair,
+				coin1,
+				coin2,
+				coin1Decimals,
+				coin2Decimals,
+				isPairParsed
+			}
+			
+		} catch (e) {
+			log.warn(`Error in getPairObject() of ${this.getModuleName(module.id)} module: ${e}.`);
+			return false;
+		}
 
-		}
-	
-		if (pair) {
-			coin1 = pair.substr(0, pair.indexOf('/')); 
-			coin2 = pair.substr(pair.indexOf('/') + 1, pair.length);
-		}
-	
-		return {
-			pair,
-			coin1,
-			coin2,
-			coin1Decimals,
-			coin2Decimals,
-			isPairParsed
-		}
 	},
 	randomValue(low, high, doRound = false) {
 		let random = Math.random() * (high - low) + low;
@@ -170,126 +178,133 @@ module.exports = {
 	},
 	getOrderBookInfo(orderBook, customSpreadPercent, targetPrice) {
 
-		if (!orderBook || !orderBook.asks[0] || !orderBook.bids[0])
+		try {
+
+			if (!orderBook || !orderBook.asks[0] || !orderBook.bids[0])
+				return false;
+			
+			const highestBid = orderBook.bids[0].price;
+			const lowestAsk = orderBook.asks[0].price
+
+			let typeTargetPrice, amountTargetPrice = 0, targetPriceOrdersCount = 0, amountTargetPriceQuote = 0;
+			if (targetPrice) {
+				if (targetPrice > highestBid && targetPrice < lowestAsk) {
+					typeTargetPrice = 'inSpread';
+				} else if (targetPrice < highestBid) {
+					typeTargetPrice = 'sell';
+				} else if (targetPrice > lowestAsk) {
+					typeTargetPrice = 'buy';
+				}
+			}
+
+			const spread = lowestAsk - highestBid;
+			const averagePrice = (lowestAsk + highestBid) / 2;
+			const spreadPercent = spread / averagePrice * 100;
+
+			let downtrendAveragePrice = highestBid + this.randomValue(0, 0.15) * spread;
+			if (downtrendAveragePrice >= lowestAsk)
+				downtrendAveragePrice = highestBid;
+
+			let uptrendAveragePrice = lowestAsk - this.randomValue(0, 0.15) * spread;
+			if (uptrendAveragePrice <= highestBid)
+				uptrendAveragePrice = lowestAsk;
+
+			let middleAveragePrice = averagePrice - this.randomValue(-0.3, 0.3) * spread;
+			if (middleAveragePrice >= lowestAsk || middleAveragePrice <= highestBid)
+				middleAveragePrice = averagePrice;
+
+			let liquidity = [];
+			liquidity.percent2 = {};
+			liquidity.percent2.spreadPercent = 2;
+			liquidity.percent5 = {};
+			liquidity.percent5.spreadPercent = 5;
+			liquidity.percent10 = {};
+			liquidity.percent10.spreadPercent = 10;
+			liquidity.percentCustom = {};
+			liquidity.percentCustom.spreadPercent = customSpreadPercent;
+			liquidity.full = {};
+			liquidity.full.spreadPercent = 0;
+
+			for (const key in liquidity) {
+				liquidity[key].bidsCount = 0;
+				liquidity[key].amountBids = 0;
+				liquidity[key].amountBidsQuote = 0;
+				liquidity[key].asksCount = 0;
+				liquidity[key].amountAsks = 0;
+				liquidity[key].amountAsksQuote = 0;
+				liquidity[key].totalCount = 0;
+				liquidity[key].amountTotal = 0;
+				liquidity[key].amountTotalQuote = 0;
+				liquidity[key].lowPrice = averagePrice - averagePrice * liquidity[key].spreadPercent/100;
+				liquidity[key].highPrice = averagePrice + averagePrice * liquidity[key].spreadPercent/100;
+				liquidity[key].spread = averagePrice * liquidity[key].spreadPercent / 100;
+				// average price is the same for any spread
+			}
+
+			for (const bid of orderBook.bids) {
+
+				for (const key in liquidity) {
+					if (!liquidity[key].spreadPercent || bid.price > liquidity[key].lowPrice) {
+						liquidity[key].bidsCount += 1;
+						liquidity[key].amountBids += bid.amount;
+						liquidity[key].amountBidsQuote += bid.amount * bid.price;
+						liquidity[key].totalCount += 1;
+						liquidity[key].amountTotal += bid.amount;
+						liquidity[key].amountTotalQuote += bid.amount * bid.price;
+					}
+				}
+				if (typeTargetPrice === 'sell' && bid.price >= targetPrice) {
+					amountTargetPrice += bid.amount;
+					amountTargetPriceQuote += bid.amount * bid.price;
+					targetPriceOrdersCount += 1;
+				}
+
+			}
+
+			for (const ask of orderBook.asks) {
+
+				for (const key in liquidity) {
+					if (!liquidity[key].spreadPercent || ask.price < liquidity[key].highPrice) {
+						liquidity[key].asksCount += 1;
+						liquidity[key].amountAsks += ask.amount;
+						liquidity[key].amountAsksQuote += ask.amount * ask.price;
+						liquidity[key].totalCount += 1;
+						liquidity[key].amountTotal += ask.amount;
+						liquidity[key].amountTotalQuote += ask.amount * ask.price;
+					}
+				}
+				if (typeTargetPrice === 'buy' && ask.price <= targetPrice) {
+					amountTargetPrice += ask.amount;
+					amountTargetPriceQuote += ask.amount * ask.price;
+					targetPriceOrdersCount += 1;
+				}
+
+			}
+
+			let smartBid = this.getSmartPrice(orderBook.bids, 'bids', liquidity);
+			let smartAsk = this.getSmartPrice(orderBook.asks, 'asks', liquidity);
+			
+			return {
+				highestBid,
+				lowestAsk,
+				smartBid,
+				smartAsk,
+				spread,
+				spreadPercent,
+				averagePrice,
+				liquidity,
+				downtrendAveragePrice,
+				uptrendAveragePrice,
+				middleAveragePrice,
+				typeTargetPrice,
+				amountTargetPrice,
+				amountTargetPriceQuote,
+				targetPriceOrdersCount
+			}
+
+		} catch (e) {
+			log.warn(`Error in getOrderBookInfo() of ${this.getModuleName(module.id)} module: ${e}.`);
 			return false;
-		
-		const highestBid = orderBook.bids[0].price;
-		const lowestAsk = orderBook.asks[0].price
-
-		let typeTargetPrice, amountTargetPrice = 0, targetPriceOrdersCount = 0, amountTargetPriceQuote = 0;
-		if (targetPrice) {
-			if (targetPrice > highestBid && targetPrice < lowestAsk) {
-				typeTargetPrice = 'inSpread';
-			} else if (targetPrice < highestBid) {
-				typeTargetPrice = 'sell';
-			} else if (targetPrice > lowestAsk) {
-				typeTargetPrice = 'buy';
-			}
-		}
-
-		const spread = lowestAsk - highestBid;
-		const averagePrice = (lowestAsk + highestBid) / 2;
-		const spreadPercent = spread / averagePrice * 100;
-
-		let downtrendAveragePrice = highestBid + this.randomValue(0, 0.15) * spread;
-		if (downtrendAveragePrice >= lowestAsk)
-			downtrendAveragePrice = highestBid;
-
-		let uptrendAveragePrice = lowestAsk - this.randomValue(0, 0.15) * spread;
-		if (uptrendAveragePrice <= highestBid)
-			uptrendAveragePrice = lowestAsk;
-
-		let middleAveragePrice = averagePrice - this.randomValue(-0.3, 0.3) * spread;
-		if (middleAveragePrice >= lowestAsk || middleAveragePrice <= highestBid)
-			middleAveragePrice = averagePrice;
-
-		let liquidity = [];
-		liquidity.percent2 = {};
-		liquidity.percent2.spreadPercent = 2;
-		liquidity.percent5 = {};
-		liquidity.percent5.spreadPercent = 5;
-		liquidity.percent10 = {};
-		liquidity.percent10.spreadPercent = 10;
-		liquidity.percentCustom = {};
-		liquidity.percentCustom.spreadPercent = customSpreadPercent;
-		liquidity.full = {};
-		liquidity.full.spreadPercent = 0;
-
-		for (const key in liquidity) {
-			liquidity[key].bidsCount = 0;
-			liquidity[key].amountBids = 0;
-			liquidity[key].amountBidsQuote = 0;
-			liquidity[key].asksCount = 0;
-			liquidity[key].amountAsks = 0;
-			liquidity[key].amountAsksQuote = 0;
-			liquidity[key].totalCount = 0;
-			liquidity[key].amountTotal = 0;
-			liquidity[key].amountTotalQuote = 0;
-			liquidity[key].lowPrice = averagePrice - averagePrice * liquidity[key].spreadPercent/100;
-			liquidity[key].highPrice = averagePrice + averagePrice * liquidity[key].spreadPercent/100;
-			liquidity[key].spread = averagePrice * liquidity[key].spreadPercent / 100;
-			// average price is the same for any spread
-		}
-
-		for (const bid of orderBook.bids) {
-
-			for (const key in liquidity) {
-				if (!liquidity[key].spreadPercent || bid.price > liquidity[key].lowPrice) {
-					liquidity[key].bidsCount += 1;
-					liquidity[key].amountBids += bid.amount;
-					liquidity[key].amountBidsQuote += bid.amount * bid.price;
-					liquidity[key].totalCount += 1;
-					liquidity[key].amountTotal += bid.amount;
-					liquidity[key].amountTotalQuote += bid.amount * bid.price;
-				}
-			}
-			if (typeTargetPrice === 'sell' && bid.price >= targetPrice) {
-				amountTargetPrice += bid.amount;
-				amountTargetPriceQuote += bid.amount * bid.price;
-				targetPriceOrdersCount += 1;
-			}
-
-		}
-
-		for (const ask of orderBook.asks) {
-
-			for (const key in liquidity) {
-				if (!liquidity[key].spreadPercent || ask.price < liquidity[key].highPrice) {
-					liquidity[key].asksCount += 1;
-					liquidity[key].amountAsks += ask.amount;
-					liquidity[key].amountAsksQuote += ask.amount * ask.price;
-					liquidity[key].totalCount += 1;
-					liquidity[key].amountTotal += ask.amount;
-					liquidity[key].amountTotalQuote += ask.amount * ask.price;
-				}
-			}
-			if (typeTargetPrice === 'buy' && ask.price <= targetPrice) {
-				amountTargetPrice += ask.amount;
-				amountTargetPriceQuote += ask.amount * ask.price;
-				targetPriceOrdersCount += 1;
-			}
-
-		}
-
-		let smartBid = this.getSmartPrice(orderBook.bids, 'bids', liquidity);
-		let smartAsk = this.getSmartPrice(orderBook.asks, 'asks', liquidity);
-		
-		return {
-			highestBid,
-			lowestAsk,
-			smartBid,
-			smartAsk,
-			spread,
-			spreadPercent,
-			averagePrice,
-			liquidity,
-			downtrendAveragePrice,
-			uptrendAveragePrice,
-			middleAveragePrice,
-			typeTargetPrice,
-			amountTargetPrice,
-			amountTargetPriceQuote,
-			targetPriceOrdersCount
 		}
 	},
 	getSmartPrice(items, type, liquidity) {
@@ -359,7 +374,8 @@ module.exports = {
 			return smartPrice;
 
 		} catch (e) {
-			log.warn(`Error in getSmartPrice() of ${this.getModuleName(module.id)} module: ${e}.`);	
+			log.warn(`Error in getSmartPrice() of ${this.getModuleName(module.id)} module: ${e}.`);
+			return false;
 		}
 
 	},

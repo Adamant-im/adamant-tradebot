@@ -24,7 +24,7 @@ let isPriceActual = false;
 let setPriceRangeCount = 0;
 let pwExchange, pwExchangeApi;
 
-console.log(`Module ${$u.getModuleName(module.id)} is loaded.`);
+log.log(`Module ${$u.getModuleName(module.id)} is loaded.`);
 
 module.exports = {
     getLowPrice() {
