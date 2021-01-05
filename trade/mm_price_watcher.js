@@ -22,6 +22,7 @@ let isPreviousIterationFinished = true;
 let lowPrice, highPrice;
 let isPriceActual = false;
 let setPriceRangeCount = 0;
+let pwExchange, pwExchangeApi;
 
 console.log(`Module ${$u.getModuleName(module.id)} is loaded.`);
 
@@ -34,6 +35,16 @@ module.exports = {
     },
     getIsPriceActual() {
         return isPriceActual;
+    },
+    setPwExchangeApi(exchange) {
+        if (pwExchange !== exchange) {
+            pwExchangeApi = require('./trader_' + exchange.toLowerCase())(null, null, null, log, true);
+            pwExchange = exchange;
+            log.log(`Price watcher switched to ${exchange} exchange API.`)
+        }
+    },
+    getPwExchangeApi() {
+        return pwExchangeApi;
     },
 	run() {
         // isPriceActual = true;
@@ -293,8 +304,9 @@ async function setPriceRange() {
             [pair, exchange] = tradeParams.mm_priceWatcherSource.split('@');
             let pairObj = $u.getPairObject(pair, false);
 
-            let exchangeapi = require('./trader_' + exchange.toLowerCase())(null, null, null, log, true);
-            let orderBook = await exchangeapi.getOrderBook(pair);
+            // let exchangeapi = require('./trader_' + exchange.toLowerCase())(null, null, null, log, true);
+            module.exports.setPwExchangeApi(exchange);
+            let orderBook = await pwExchangeApi.getOrderBook(pair);
             if (!orderBook || !orderBook.asks[0] || !orderBook.bids[0]) {
                 errorSettingPriceRange(`Unable to get the order book for ${pair} at ${exchange} exchange. It may be a temporary API error.`);
                 return false;
