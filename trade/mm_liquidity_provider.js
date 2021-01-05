@@ -15,7 +15,7 @@ const INTERVAL_MIN = 30000;
 const INTERVAL_MAX = 90000;
 const LIFETIME_MIN = 1000 * 60 * 7; // 7 minutes
 const LIFETIME_MAX = HOUR * 7; // 7 hours
-const MAX_ORDERS = 6; // each side
+const MAX_ORDERS = 7; // each side
 
 let isPreviousIterationFinished = true;
 
@@ -372,10 +372,10 @@ function setAmount(type, price) {
 
     if (type === 'sell') {
         min = tradeParams.mm_liquiditySellAmount / MAX_ORDERS;
-        max = tradeParams.mm_liquiditySellAmount / 3 * 2;
+        max = tradeParams.mm_liquiditySellAmount / 2;
     } else {
         min = tradeParams.mm_liquidityBuyQuoteAmount / price / MAX_ORDERS;
-        max = tradeParams.mm_liquidityBuyQuoteAmount / price / 3 * 2;
+        max = tradeParams.mm_liquidityBuyQuoteAmount / price / 2;
     }
 
     return $u.randomValue(min, max);
