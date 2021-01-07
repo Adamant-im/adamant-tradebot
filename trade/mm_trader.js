@@ -12,6 +12,8 @@ let lastNotifyPriceTimestamp = 0;
 
 const HOUR = 1000 * 60 * 60;
 
+let isPreviousIterationFinished = true;
+
 module.exports = {
 	run() {
         this.iteration();
@@ -20,13 +22,19 @@ module.exports = {
         let interval = setPause();
         // console.log(interval);
         if (interval && tradeParams.mm_isActive) {
-            this.executeMmOrder();
+            if (isPreviousIterationFinished) {
+                this.executeMmOrder();
+            } else {
+                log.log(`Postponing iteration of the market-maker for ${interval} ms. Previous iteration is in progress yet.`);
+            }
             setTimeout(() => {this.iteration()}, interval);
         } else {
             setTimeout(() => {this.iteration()}, 3000); // Check for config.mm_isActive every 3 seconds
         }
     },
 	async executeMmOrder() {
+
+        isPreviousIterationFinished = false;
 
         try {
 
@@ -159,6 +167,9 @@ module.exports = {
         } catch (e) {
             log.error(`Error in executeMmOrder() of ${$u.getModuleName(module.id)} module: ` + e);
         }
+
+        isPreviousIterationFinished = true;
+
     },
 };
 

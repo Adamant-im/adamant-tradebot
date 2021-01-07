@@ -67,9 +67,9 @@ module.exports = {
     },
 	async reviewPrices() {
 
-        try {
+        isPreviousIterationFinished = false;
 
-            isPreviousIterationFinished = false;
+        try {
 
             const {ordersDb} = db;
             let pwOrders = await ordersDb.find({
@@ -124,11 +124,11 @@ module.exports = {
 
             }
 
-            isPreviousIterationFinished = true;
-
         } catch (e) {
             log.error(`Error in reviewPrices() of ${$u.getModuleName(module.id)} module: ` + e);
         }
+
+        isPreviousIterationFinished = true;
 
     },
 	async closePriceWatcherOrders(pwOrders) {

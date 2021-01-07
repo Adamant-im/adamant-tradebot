@@ -41,9 +41,9 @@ module.exports = {
     },
 	async updateLiquidity() {
 
-        try {
+        isPreviousIterationFinished = false;
 
-            isPreviousIterationFinished = false;
+        try {
 
             const {ordersDb} = db;
             let liquidityOrders = await ordersDb.find({
@@ -90,11 +90,11 @@ module.exports = {
     
             log.info(`Liquidity stats: opened ${liquidityStats.bidsCount} bids-buy orders for ${liquidityStats.bidsTotalQuoteAmount.toFixed(config.coin2Decimals)} of ${tradeParams.mm_liquidityBuyQuoteAmount} ${config.coin2} and ${liquidityStats.asksCount} asks-sell orders with ${liquidityStats.asksTotalAmount.toFixed(config.coin1Decimals)} of ${tradeParams.mm_liquiditySellAmount} ${config.coin1}.`);
 
-            isPreviousIterationFinished = true;
-
         } catch (e) {
             log.error(`Error in updateLiquidity() of ${$u.getModuleName(module.id)} module: ` + e);
         }
+
+        isPreviousIterationFinished = true;
 
     },
 	async closeLiquidityOrders(liquidityOrders, orderBookInfo) {
