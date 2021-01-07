@@ -41,7 +41,7 @@ module.exports = {
         }
 
     },
-	async async updateLiquidity() {
+    async updateLiquidity() {
 
         try {
 
