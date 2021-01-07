@@ -29,7 +29,9 @@ module.exports = {
         // console.log(interval);
         if (interval && tradeParams.mm_isActive && tradeParams.mm_isLiquidityActive) {
             if (isPreviousIterationFinished) {
-                this.updateLiquidity();
+                isPreviousIterationFinished = false;
+                await this.updateLiquidity();
+                isPreviousIterationFinished = true;
             } else {
                 log.log(`Postponing iteration of the liquidity provider for ${interval} ms. Previous iteration is in progress yet.`);
             }
@@ -39,9 +41,7 @@ module.exports = {
         }
 
     },
-	async updateLiquidity() {
-
-        isPreviousIterationFinished = false;
+	async async updateLiquidity() {
 
         try {
 
@@ -56,7 +56,6 @@ module.exports = {
             let orderBookInfo = $u.getOrderBookInfo(await traderapi.getOrderBook(config.pair), tradeParams.mm_liquiditySpreadPercent);
             if (!orderBookInfo) {
                 log.warn(`${config.notifyName}: Order books are empty for ${config.pair}, or temporary API error. Unable to get spread while placing liq-order.`);
-                isPreviousIterationFinished = true;
                 return;
             }
             // console.log(orderBookInfo);
@@ -94,8 +93,6 @@ module.exports = {
         } catch (e) {
             log.error(`Error in updateLiquidity() of ${$u.getModuleName(module.id)} module: ` + e);
         }
-
-        isPreviousIterationFinished = true;
 
     },
 	async closeLiquidityOrders(liquidityOrders, orderBookInfo) {

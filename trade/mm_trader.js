@@ -23,7 +23,9 @@ module.exports = {
         // console.log(interval);
         if (interval && tradeParams.mm_isActive) {
             if (isPreviousIterationFinished) {
-                this.executeMmOrder();
+                isPreviousIterationFinished = false;
+                await this.executeMmOrder();
+                isPreviousIterationFinished = true;
             } else {
                 log.log(`Postponing iteration of the market-maker for ${interval} ms. Previous iteration is in progress yet.`);
             }
@@ -33,8 +35,6 @@ module.exports = {
         }
     },
 	async executeMmOrder() {
-
-        isPreviousIterationFinished = false;
 
         try {
 
@@ -54,14 +54,12 @@ module.exports = {
                     notify(priceReq.message, 'warn');
                     lastNotifyPriceTimestamp = Date.now();
                 }
-                isPreviousIterationFinished = true;                
                 return;
             }
 
             orderParamsString = `type=${type}, pair=${config.pair}, price=${price}, mmCurrentAction=${priceReq.mmCurrentAction}, coin1Amount=${coin1Amount}, coin2Amount=${coin2Amount}`;
             if (!type || !price || !coin1Amount || !coin2Amount) {
                 log.warn(`${config.notifyName} unable to run mm-order with params: ${orderParamsString}.`);
-                isPreviousIterationFinished = true;
                 return;
             }
 
@@ -79,7 +77,6 @@ module.exports = {
                         log.log(balances.message);
                     }
                 }
-                isPreviousIterationFinished = true;
                 return;
             }
 
@@ -170,8 +167,6 @@ module.exports = {
         } catch (e) {
             log.error(`Error in executeMmOrder() of ${$u.getModuleName(module.id)} module: ` + e);
         }
-
-        isPreviousIterationFinished = true;
 
     },
 };

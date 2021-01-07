@@ -43,7 +43,9 @@ module.exports = {
         // console.log(interval);
         if (interval && tradeParams.mm_isActive && tradeParams.mm_isOrderBookActive) {
             if (isPreviousIterationFinished) {
-                this.buildOrderBook();
+                isPreviousIterationFinished = false;
+                await this.buildOrderBook();
+                isPreviousIterationFinished = true;
             } else {
                 log.log(`Postponing iteration of the order book builder for ${interval} ms. Previous iteration is in progress yet.`);
             }
@@ -54,8 +56,6 @@ module.exports = {
 
     },
 	async buildOrderBook() {
-
-        isPreviousIterationFinished = false;
 
         const {ordersDb} = db;
         const orderBookOrders = await ordersDb.find({
@@ -69,8 +69,6 @@ module.exports = {
             await this.placeOrderBookOrder(orderBookOrders.length);
         }
         await this.closeOrderBookOrders(orderBookOrders);
-
-        isPreviousIterationFinished = true;
         
     },
 	async closeOrderBookOrders(orderBookOrders) {

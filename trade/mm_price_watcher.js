@@ -56,7 +56,9 @@ module.exports = {
         // console.log(interval);
         if (interval && tradeParams.mm_isActive && tradeParams.mm_isPriceWatcherActive) {
             if (isPreviousIterationFinished) {
+                isPreviousIterationFinished = false;
                 this.reviewPrices();
+                isPreviousIterationFinished = true;
             } else {
                 log.log(`Postponing iteration of the price watcher for ${interval} ms. Previous iteration is in progress yet.`);
             }
@@ -66,8 +68,6 @@ module.exports = {
         }
     },
 	async reviewPrices() {
-
-        isPreviousIterationFinished = false;
 
         try {
 
@@ -93,7 +93,6 @@ module.exports = {
                 let orderBook = await traderapi.getOrderBook(config.pair);
                 if (!orderBook || !orderBook.asks[0] || !orderBook.bids[0]) {
                     log.warn(`${config.notifyName}: Order books are empty for ${config.pair}, or temporary API error. Unable to check if I need to place pw-order.`);
-                    isPreviousIterationFinished = true;
                     return;
                 }
 
@@ -128,8 +127,6 @@ module.exports = {
         } catch (e) {
             log.error(`Error in reviewPrices() of ${$u.getModuleName(module.id)} module: ` + e);
         }
-
-        isPreviousIterationFinished = true;
 
     },
 	async closePriceWatcherOrders(pwOrders) {
