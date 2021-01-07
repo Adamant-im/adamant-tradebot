@@ -56,6 +56,7 @@ module.exports = {
             let orderBookInfo = $u.getOrderBookInfo(await traderapi.getOrderBook(config.pair), tradeParams.mm_liquiditySpreadPercent);
             if (!orderBookInfo) {
                 log.warn(`${config.notifyName}: Order books are empty for ${config.pair}, or temporary API error. Unable to get spread while placing liq-order.`);
+                isPreviousIterationFinished = true;
                 return;
             }
             // console.log(orderBookInfo);

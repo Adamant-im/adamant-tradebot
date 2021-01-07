@@ -93,6 +93,7 @@ module.exports = {
                 let orderBook = await traderapi.getOrderBook(config.pair);
                 if (!orderBook || !orderBook.asks[0] || !orderBook.bids[0]) {
                     log.warn(`${config.notifyName}: Order books are empty for ${config.pair}, or temporary API error. Unable to check if I need to place pw-order.`);
+                    isPreviousIterationFinished = true;
                     return;
                 }
 

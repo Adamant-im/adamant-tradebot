@@ -54,12 +54,14 @@ module.exports = {
                     notify(priceReq.message, 'warn');
                     lastNotifyPriceTimestamp = Date.now();
                 }
+                isPreviousIterationFinished = true;                
                 return;
             }
 
             orderParamsString = `type=${type}, pair=${config.pair}, price=${price}, mmCurrentAction=${priceReq.mmCurrentAction}, coin1Amount=${coin1Amount}, coin2Amount=${coin2Amount}`;
             if (!type || !price || !coin1Amount || !coin2Amount) {
                 log.warn(`${config.notifyName} unable to run mm-order with params: ${orderParamsString}.`);
+                isPreviousIterationFinished = true;
                 return;
             }
 
@@ -77,6 +79,7 @@ module.exports = {
                         log.log(balances.message);
                     }
                 }
+                isPreviousIterationFinished = true;
                 return;
             }
 
@@ -174,7 +177,6 @@ module.exports = {
 };
 
 function setType() {
-    // return 'buy';
 
     if (!tradeParams || !tradeParams.mm_buyPercent) {
         log.warn(`Param mm_buyPercent is not set. Check ${config.exchangeName} config.`);
