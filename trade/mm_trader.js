@@ -18,7 +18,7 @@ module.exports = {
 	run() {
         this.iteration();
     },
-    iteration() {
+    async iteration() {
         let interval = setPause();
         // console.log(interval);
         if (interval && tradeParams.mm_isActive) {

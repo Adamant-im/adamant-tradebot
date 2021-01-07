@@ -23,7 +23,7 @@ module.exports = {
 	run() {
         this.iteration();
     },
-    iteration() {
+    async iteration() {
 
         let interval = setPause();
         // console.log(interval);

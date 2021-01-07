@@ -51,7 +51,7 @@ module.exports = {
         // console.log(`isPriceActual: ${this.getIsPriceActual()}`);
         this.iteration();
     },
-    iteration() {
+    async iteration() {
         let interval = setPause();
         // console.log(interval);
         if (interval && tradeParams.mm_isActive && tradeParams.mm_isPriceWatcherActive) {
