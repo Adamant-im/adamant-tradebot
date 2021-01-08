@@ -101,10 +101,10 @@ var EXCHANGE_API = {
 
     setConfig: async function(apiServer, username, password, logger, publicOnly = false) {
 
-        WEB_BASE = apiServer;
-        log = logger;
+        if (!publicOnly && !isAuthPassed && apiServer && logger) {
 
-        if (!publicOnly && !isAuthPassed) {
+            WEB_BASE = apiServer;
+            log = logger;
 
             // Create API keys by login/password for each instance of trader_atomars
 

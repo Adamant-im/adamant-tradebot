@@ -166,13 +166,17 @@ function setSign(secret, str) {
 var EXCHANGE_API = {
 
     setConfig: function(apiServer, apiKey, secretKey, tradePwd, logger, publicOnly = false) {
-        WEB_BASE = apiServer;
-        log = logger;
-        config = {
-            'apiKey': apiKey,
-            'secret_key': secretKey,
-            'tradePwd': tradePwd || '',
-        };
+
+        if (!publicOnly && apiServer && logger) {
+            WEB_BASE = apiServer;
+            log = logger;
+            config = {
+                'apiKey': apiKey,
+                'secret_key': secretKey,
+                'tradePwd': tradePwd || '',
+            };
+        }
+
     },
 
     /**

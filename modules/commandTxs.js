@@ -325,6 +325,8 @@ async function enable(params) {
 
 			if (params[1].indexOf('@') > -1) {
 
+				// watch pair@exchange
+
 				[pair, exchange] = params[1].split('@');
 
 				if (!pair || pair.length < 3 || !exchange || exchange.length < 3) {
@@ -363,6 +365,14 @@ async function enable(params) {
 					return {
 						msgNotify: '',
 						msgSendBack: `Base currency of a trading pair must be ${config.coin1}, like ${config.coin1}/USDT.`,
+						notifyType: 'log'
+					}
+				}
+
+				if (pairObj.pair.toUpperCase() === config.pair.toUpperCase() && exchange.toLowerCase() === config.exchange.toLowerCase()) {
+					return {
+						msgNotify: '',
+						msgSendBack: `Unable to set Price watcher to the same trading pair as I trade, ${pairObj.pair}@${exchangeName}. Set price in numbers or watch other trading pair/exchange. Example: */enable pw 0.1—0.2 USDT* or */enable pw ADM/USDT@Bit-Z 0.5% smart*.`,
 						notifyType: 'log'
 					}
 				}
@@ -417,6 +427,8 @@ async function enable(params) {
 				infoString = `based on ${pwSource} with ${pwSourcePolicy} policy and ${pwDeviationPercent.toFixed(2)}% deviation`;
 
 			} else {
+
+				// watch price in coin
 
 				rangeOrValue = $u.parseRangeOrValue(params[1]);
 				if (!rangeOrValue.isRange && !rangeOrValue.isValue) {
@@ -479,7 +491,7 @@ async function enable(params) {
 				}
 				
 				// let sourceString = pwSource === '#' ? `${config.coin2} (this pair rate)` : `${coin} (global rate)`;
-				let sourceString = `${coin} (global rate)`;
+				let sourceString = coin === config.coin2 ? `${coin}` : `${coin} (global rate)`;
 				infoString = `from ${pwLowPrice.toFixed(config.coin2Decimals)} to ${pwHighPrice.toFixed(config.coin2Decimals)} ${sourceString}—${pwDeviationPercent.toFixed(2)}% price deviation`;
 
 			}
@@ -856,7 +868,7 @@ async function fill(params) {
 		type = params[0].trim();
 	}
 
-	if ( (type === 'buy' && amountName === 'amount') || (type === 'sell' && amountName === 'quote') ) {
+	if ( (type === 'buy' && amountName === 'amount') || (type === 'sell' && amountName === 'quote') || (amount === undefined && quote === undefined)) {
 		output = 'Buy should follow with _quote_, sell with _amount_.';
 		return {
 			msgNotify: ``,
@@ -874,7 +886,7 @@ async function fill(params) {
 		}
 	}
 
-	if (!count || count === Infinity || count < 1) {
+	if (!count || count === Infinity || count < 1 || count === undefined) {
 		output = 'Specify order count.';
 		return {
 			msgNotify: ``,
@@ -883,21 +895,13 @@ async function fill(params) {
 		}	
 	}
 
-	if (!high || high === Infinity || !low || low === Infinity) {
-		const exchangeRates = await traderapi.getRates(pair);
-		if (exchangeRates) {
-			if (!low || low === Infinity)
-				low = exchangeRates.bid;
-			if (!high || high === Infinity)
-				high = exchangeRates.ask;
-		} else {
-			output = `Unable to get ${config.exchangeName} rates for ${pair} to fill orders.`;
-			return {
-				msgNotify: ``,
-				msgSendBack: `${output}`,
-				notifyType: 'log'
-			}	
-		}
+	if (!high || high === Infinity || high === undefined || !low || low === Infinity || low === undefined) {
+		output = 'Specify _low_ and _high_ prices to fill orders.';
+		return {
+			msgNotify: ``,
+			msgSendBack: `${output}`,
+			notifyType: 'log'
+		}	
 	}
 
 	// console.log(pair, type, count, amount, low, high);
