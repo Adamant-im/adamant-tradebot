@@ -167,9 +167,15 @@ var EXCHANGE_API = {
 
     setConfig: function(apiServer, apiKey, secretKey, tradePwd, logger, publicOnly = false) {
 
-        if (!publicOnly && apiServer && logger) {
+        if (apiServer) {
             WEB_BASE = apiServer;
+        }
+
+        if (logger) {
             log = logger;
+        }
+
+        if (!publicOnly) {
             config = {
                 'apiKey': apiKey,
                 'secret_key': secretKey,

@@ -12,7 +12,6 @@ var config = {
     'auth-secret': ''
 };
 var log = {};
-var isAuthPassed = false;
 
 function api(path, r_data, do_sign, type, do_stringify) {
     var url = `${WEB_BASE}${path}`; 
@@ -101,10 +100,15 @@ var EXCHANGE_API = {
 
     setConfig: async function(apiServer, username, password, logger, publicOnly = false) {
 
-        if (!publicOnly && !isAuthPassed && apiServer && logger) {
-
+        if (apiServer) {
             WEB_BASE = apiServer;
+        }
+
+        if (logger) {
             log = logger;
+        }
+
+        if (!publicOnly && !config['auth-token']) {
 
             // Create API keys by login/password for each instance of trader_atomars
 
@@ -124,8 +128,6 @@ var EXCHANGE_API = {
                 'auth-secret': res.data.secret
             };
 
-            isAuthPassed = true;
-            // console.log(config);
         }
     },
 
