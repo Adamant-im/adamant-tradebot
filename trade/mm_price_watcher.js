@@ -405,7 +405,7 @@ async function setPriceRange() {
             }
 
             if (deltaLowPercent > warningPercent || deltaHighPercent > warningPercent) {
-                notify(`Price watcher's new price range changed much—new values are from ${lowPrice.toFixed(config.coin2Decimals)} ${changedByStringLow} to ${highPrice.toFixed(config.coin2Decimals)} ${changedByStringHigh} ${config.coin2}.`, 'warn');
+                notify(`${config.notifyName}: Price watcher's new price range changed much—new values are from ${lowPrice.toFixed(config.coin2Decimals)} ${changedByStringLow} to ${highPrice.toFixed(config.coin2Decimals)} ${changedByStringHigh} ${config.coin2}.`, 'warn');
             } else {
                 log.log(`Price watcher set a new price range from ${lowPrice.toFixed(config.coin2Decimals)} ${changedByStringLow} to ${highPrice.toFixed(config.coin2Decimals)} ${changedByStringHigh} ${config.coin2}.`);
             }
