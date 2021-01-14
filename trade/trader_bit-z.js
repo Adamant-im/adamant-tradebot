@@ -1,6 +1,6 @@
 const BITZ = require('./bit-z_api');
 const apiServer = 'https://apiv2.bitz.com';
-const log = require('../helpers/log');
+// const log = require('../helpers/log');
 const $u = require('../helpers/utils');
 
 // API endpoints:
@@ -10,9 +10,9 @@ const $u = require('../helpers/utils');
 // https://api.bitzoverseas.com
 // https://api.bitzspeed.com
 
-module.exports = (apiKey, secretKey, pwd) => {
+module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
 
-	BITZ.setConfig(apiServer, apiKey, secretKey, pwd);
+	BITZ.setConfig(apiServer, apiKey, secretKey, pwd, log, publicOnly);
 	
 	return {
 		getBalances(nonzero = true) {

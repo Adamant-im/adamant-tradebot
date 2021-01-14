@@ -1,6 +1,6 @@
 const crypto = require("crypto")
 const request = require('request');
-const log = require('../helpers/log');
+// const log = require('../helpers/log');
 
 let WEB_BASE = "https://api.resfinex.com"; // API server like https://api.resfinex.com/
 var config = {
@@ -8,6 +8,7 @@ var config = {
     'secret_key': '',
     'tradePwd': ''
 };
+var log = {};
 
 function sign_api(path, data, type = 'get') {
 
@@ -163,13 +164,25 @@ function setSign(secret, str) {
 }
 
 var EXCHANGE_API = {
-    setConfig : function(apiServer,apiKey,secretKey,tradePwd) {
-        WEB_BASE = apiServer;
-        config = {
-            'apiKey': apiKey,
-            'secret_key': secretKey,
-            'tradePwd': tradePwd || '',
-        };
+
+    setConfig: function(apiServer, apiKey, secretKey, tradePwd, logger, publicOnly = false) {
+
+        if (apiServer) {
+            WEB_BASE = apiServer;
+        }
+
+        if (logger) {
+            log = logger;
+        }
+
+        if (!publicOnly) {
+            config = {
+                'apiKey': apiKey,
+                'secret_key': secretKey,
+                'tradePwd': tradePwd || '',
+            };
+        }
+
     },
 
     /**

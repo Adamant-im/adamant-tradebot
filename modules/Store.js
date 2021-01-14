@@ -56,28 +56,33 @@ module.exports = {
 			log.error('Error while updating currencies: ' + e);
 		};
 	},
-	getPrice(from, to){
+	getPrice(from, to) {
+
 		try {
+
 			from = from.toUpperCase();
 			to = to.toUpperCase();
 			let price = + (this.currencies[from + '/' + to] || 1 / this.currencies[to + '/' + from] || 0).toFixed(8);
-			if (price){
+			if (price) {
 				return price;
 			}
 			const priceFrom = +(this.currencies[from + '/USD']);
 			const priceTo = +(this.currencies[to + '/USD']);
 			return +(priceFrom / priceTo || 1).toFixed(8);
+
 		} catch (e){
-			log.error('Error while calculating getPrice(): ', e);
+			log.error(`Error while calculating getPrice() from ${from} to ${to}: ${e}.`);
 			return 0;
 		}
+
 	},
-	mathEqual(from, to, amount, doNotAccountFees){
+	mathEqual(from, to, amount, doNotAccountFees) {
+
 		let price = this.getPrice(from, to);
-		if (!doNotAccountFees){
+		if (!doNotAccountFees) {
 			price *= (100 - config['exchange_fee_' + from]) / 100;
 		};
-		if (!price){
+		if (!price) {
 			return {
 				outAmount: 0,
 				exchangePrice: 0
@@ -89,6 +94,7 @@ module.exports = {
 			exchangePrice: price
 		};
 	}
+
 };
 
 config.notifyName = `${config.bot_name} (${module.exports.botName})`;

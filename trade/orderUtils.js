@@ -17,6 +17,7 @@ module.exports = {
         try {
 
             let orderParamsString = `type=${orderType}, limit=${limit}, pair=${pair}, price=${limit === 1 ? price : 'Market'}, coin1Amount=${coin1Amount}, coin2Amount=${coin2Amount}`;
+            log.log(`Placing an order from orderUtils.addOrder(): ${orderParamsString}`);
 
             orderReq = await traderapi.placeOrder(orderType, pair, price, coin1Amount, limit, coin2Amount, pairObj);
             if (orderReq && orderReq.orderid) {
@@ -40,7 +41,7 @@ module.exports = {
                 });
                 await order.save();
 
-                let limit_marketString = limit === 1 ? `for ${coin2Amount.toFixed(pairObj.coin2Decimals)} ${pairObj.coin2}` : `at Market price`;
+                let limit_marketString = limit === 1 ? `at ${price.toFixed(pairObj.coin2Decimals)} ${pairObj.coin2}` : `at Market price`;
                 let output = `${orderType} ${coin1Amount.toFixed(pairObj.coin1Decimals)} ${pairObj.coin1} ${limit_marketString}`;
                 log.info(`Successfully executed ${purpose}-order to ${output}.`);
                     

@@ -19,24 +19,33 @@ const LIFETIME_KOEF = 1.5;
 let isPreviousIterationFinished = true;
 
 module.exports = {
+
     async test() {
         console.log('==========================');
         console.log('**************before');
+        let pw = require('./mm_price_watcher');
+        console.log(`isPriceActual: ${pw.getIsPriceActual()}`);
         // let req = await traderapi.cancelOrder('ADM_USDT');
-        let req = await traderapi.getOrderBook('ADM_USDT');
+        // let exchangeapi = require('./trader_' + 'atomars')(null, null, null, log, true);
+        // let req = await exchangeapi.getOrderBook('ADM/USDT');
+        let pw2 = require('./mm_price_watcher');
+        console.log(`isPriceActual: ${pw2.getIsPriceActual()}`);
+
         console.log('**************after:');
-        console.log(req);
+        // console.log(req);
     },
 	run() {
         this.iteration();
     },
-    iteration() {
+    async iteration() {
 
         let interval = setPause();
         // console.log(interval);
         if (interval && tradeParams.mm_isActive && tradeParams.mm_isOrderBookActive) {
             if (isPreviousIterationFinished) {
-                this.buildOrderBook();
+                isPreviousIterationFinished = false;
+                await this.buildOrderBook();
+                isPreviousIterationFinished = true;
             } else {
                 log.log(`Postponing iteration of the order book builder for ${interval} ms. Previous iteration is in progress yet.`);
             }
@@ -47,8 +56,6 @@ module.exports = {
 
     },
 	async buildOrderBook() {
-
-        isPreviousIterationFinished = false;
 
         const {ordersDb} = db;
         const orderBookOrders = await ordersDb.find({
@@ -62,8 +69,6 @@ module.exports = {
             await this.placeOrderBookOrder(orderBookOrders.length);
         }
         await this.closeOrderBookOrders(orderBookOrders);
-
-        isPreviousIterationFinished = true;
         
     },
 	async closeOrderBookOrders(orderBookOrders) {
@@ -108,7 +113,7 @@ module.exports = {
 
             let output = '';
             let orderParamsString = '';
-            const pairObj = $u.getPairObj(config.pair);
+            const pairObj = $u.getPairObject(config.pair);
 
             if (!price) {
                 if ((Date.now()-lastNotifyPriceTimestamp > HOUR) && priceReq.message) {
@@ -278,27 +283,23 @@ async function setPrice(type, pair, position) {
 
         let price = $u.randomValue(low, high);
         
-        if (tradeParams.mm_isPriceWatcherActive) {
-        // if (true) {
+        let pw = require('./mm_price_watcher');
+        if (tradeParams.mm_isPriceWatcherActive && pw.getIsPriceActual()) {
         
-            let lowPrice = tradeParams.mm_priceWatcherLowPrice * $u.randomValue(0.98, 1.01);
-            let highPrice = tradeParams.mm_priceWatcherHighPrice * $u.randomValue(0.99, 1.02);
-            if (lowPrice >= highPrice) {
-                lowPrice = tradeParams.mm_priceWatcherLowPrice;
-                highPrice = tradeParams.mm_priceWatcherHighPrice;
-            }
+            let lowPrice = pw.getLowPrice();
+            let highPrice = pw.getHighPrice();
             // console.log('lowPrice:', +lowPrice.toFixed(config.coin2Decimals), 'highPrice:', +highPrice.toFixed(config.coin2Decimals));
 
             if (type === 'sell') {
                 if (price < lowPrice) {
                     price = lowPrice * $u.randomValue(1, 1.21);
-                    output = `${config.notifyName}: Corrected price to sell not lower than ${lowPrice.toFixed(config.coin2Decimals)} while placing ob-order. Low: ${low.toFixed(config.coin2Decimals)}, high: ${high.toFixed(config.coin2Decimals)} ${config.coin2}.`;
+                    output = `${config.notifyName}: Price watcher corrected price to sell not lower than ${lowPrice.toFixed(config.coin2Decimals)} while placing ob-order. Low: ${low.toFixed(config.coin2Decimals)}, high: ${high.toFixed(config.coin2Decimals)} ${config.coin2}.`;
                     log.log(output);
                 }
             } else {
                 if (price > highPrice) {
                     price = highPrice * $u.randomValue(0.79, 1);
-                    output = `${config.notifyName}: Corrected price to buy not higher than ${highPrice.toFixed(config.coin2Decimals)} while placing ob-order. Low: ${low.toFixed(config.coin2Decimals)}, high: ${high.toFixed(config.coin2Decimals)} ${config.coin2}.`;
+                    output = `${config.notifyName}: Price watcher corrected price to buy not higher than ${highPrice.toFixed(config.coin2Decimals)} while placing ob-order. Low: ${low.toFixed(config.coin2Decimals)}, high: ${high.toFixed(config.coin2Decimals)} ${config.coin2}.`;
                     log.log(output);
                 }
             }        

@@ -18,7 +18,7 @@ module.exports = {
     
     async clearOrders(purposes, pair, doForce = false) {
 
-        console.log(`clearOrders(${purposes}, ${pair}, ${doForce})..`);
+        // console.log(`clearOrders(${purposes}, ${pair}, ${doForce})..`);
 
         const {ordersDb} = db;
         let ordersToClear;
@@ -70,7 +70,7 @@ module.exports = {
         
             };
 
-            console.log(`Clearing orders. Try number: ${tries}, cleared: ${clearedOrders.length}, total: ${ordersToClear.length}.`)
+            // console.log(`Clearing orders. Try number: ${tries}, cleared: ${clearedOrders.length}, total: ${ordersToClear.length}.`)
             notFinished = doForce && ordersToClear.length > clearedOrders.length && tries < MAX_TRIES;
             
         } while (notFinished);
@@ -85,7 +85,7 @@ module.exports = {
 
     async clearAllOrders(pair, doForce = false) {
 
-        console.log(`clearAllOrders(${pair}, ${doForce})..`);
+        // console.log(`clearAllOrders(${pair}, ${doForce})..`);
         // First, close orders which are in bot's database
         // 'all' = ['mm', 'tb', 'ob', 'liq', 'pw']
         let clearedInfo = await this.clearOrders('all', pair, doForce);
@@ -127,7 +127,7 @@ module.exports = {
             
                 };
     
-                console.log(`Clearing general orders. Try number: ${tries}, cleared: ${clearedOrders.length}, total: ${openOrders.length}.`)
+                // console.log(`Clearing general orders. Try number: ${tries}, cleared: ${clearedOrders.length}, total: ${openOrders.length}.`)
                 notFinished = doForce && openOrders.length > clearedOrders.length && tries < MAX_TRIES;
                 
             } while (notFinished);

@@ -23,7 +23,7 @@
 	/** Socket connection is recommended for better user experience **/
 	"socket": true,
 
-	/** Choose socket connection, "ws" or "wss" depending on your server **/
+	/** Choose socket connection protocol, "ws" or "wss" depending on your server **/
 	"ws_type": "ws",
 
     /** List of ADAMANT InfoServices for catching exchange rates **/
@@ -39,7 +39,15 @@
 	/** Notify non-admins that they are not admins. If false, bot will be silent. **/
 	"notify_non_admins": true,
 
-	/** Exchange to work with. Available values: "Bit-Z", "CoinDeal", "Resfinex", "Atomars". Case insensitive. **/
+	/** List of supported exchanges **/
+	"exchanges": [
+		"Bit-Z",
+		"CoinDeal",
+		"Resfinex",
+		"Atomars"
+	],
+
+	/** Exchange to work with. Case insensitive. **/
 	"exchange": "Resfinex",
 
 	/** Pair to trade **/
@@ -53,10 +61,9 @@
 
 	/** Interval in minutes to clear all opened orders.
 		Some exchanges has API issues with closing or matching orders.
-		Because of this, your account can accumulate open orders and lead to freezed balances.
+		Because of this, your account can accumulate open orders and lead to frozen balances.
 		In such a case you can run "/clear all" command manually, or set this parameter for automatic clearing.
-		Note: this command cancels all of account orders, including ones which you set manually with "/fill" command.
-		If the exchange supports getting orders by pair param, only orders for the trade pair will be cleared.
+		Note: this command cancels all of account orders for the pair, including ones which you set manually.
 		0 means disabled.
 	**/
 	"clearAllOrdersInterval": 0,
@@ -67,22 +74,22 @@
 	/** Exchange's account API secret for connection. Or password for Atomars **/
 	"apisecret": "YOUR-SECRET..",
 
-	/** Exchange's account trade password. If needed. **/
+	/** Exchange's account trade password. Mandatory for Bit-Z. **/
 	"apipassword": "YOUR-TRADE-PASS",
 
     /** How to reply user in-chat, if first unknown command received. **/
-    "welcome_string": "Hi! 😊 I'm a trade and market making bot. ℹ️ Learn more about me on ADAMANT’s blog or type **/help** to see what I can.",
+    "welcome_string": "Hi! 😊 I'm a trade and market making bot. ℹ️ Learn more on https://marketmaking.app or type **/help**.",
 
 	/** Bot's name for notifications **/
     "bot_name": "Lovely Trade Bot",
 
-	/** ADAMANT address for notifications and monitoring (if needed, recommended) **/
+	/** ADAMANT address for notifications and monitoring. Optional. **/
     "adamant_notify": "",
 
-    /** Slack key for notifications and monitoring (if needed) **/
+    /** Slack key for notifications and monitoring. Optional. **/
     "slack": "https://hooks.slack.com/services/...",
 
-	/** If you don't want to receive "not enough balance" and "unable to execute cross-order" notifications, set this "true" **/
+	/** If you don't want to receive "not enough balance" notifications, set this to "true" **/
     "silent_mode": false,
 
 	/** Port for getting debug info. 

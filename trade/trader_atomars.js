@@ -1,17 +1,17 @@
 const Atomars = require('./atomars_api');
 const apiServer = 'https://api.atomars.com/v1';
-const log = require('../helpers/log');
+// const log = require('../helpers/log');
 const $u = require('../helpers/utils');
 const {SAT} = require('../helpers/const');
 
 // API endpoints:
 // https://api.atomars.com/v1
 
-module.exports = (apiKey, secretKey, pwd) => {
+module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
 
     // apiKey = username
     // secretKey = password
-    Atomars.setConfig(apiServer, apiKey, secretKey);
+    Atomars.setConfig(apiServer, apiKey, secretKey, log, publicOnly);
 	
 	return {
 		getBalances(nonzero = true) {

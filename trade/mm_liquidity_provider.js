@@ -15,7 +15,7 @@ const INTERVAL_MIN = 30000;
 const INTERVAL_MAX = 90000;
 const LIFETIME_MIN = 1000 * 60 * 7; // 7 minutes
 const LIFETIME_MAX = HOUR * 7; // 7 hours
-const MAX_ORDERS = 6; // each side
+const MAX_ORDERS = 7; // each side
 
 let isPreviousIterationFinished = true;
 
@@ -23,13 +23,15 @@ module.exports = {
 	run() {
         this.iteration();
     },
-    iteration() {
+    async iteration() {
 
         let interval = setPause();
         // console.log(interval);
         if (interval && tradeParams.mm_isActive && tradeParams.mm_isLiquidityActive) {
             if (isPreviousIterationFinished) {
-                this.updateLiquidity();
+                isPreviousIterationFinished = false;
+                await this.updateLiquidity();
+                isPreviousIterationFinished = true;
             } else {
                 log.log(`Postponing iteration of the liquidity provider for ${interval} ms. Previous iteration is in progress yet.`);
             }
@@ -39,11 +41,9 @@ module.exports = {
         }
 
     },
-	async updateLiquidity() {
+    async updateLiquidity() {
 
         try {
-
-            isPreviousIterationFinished = false;
 
             const {ordersDb} = db;
             let liquidityOrders = await ordersDb.find({
@@ -60,12 +60,12 @@ module.exports = {
             }
             // console.log(orderBookInfo);
 
-            console.log('liquidityOrders-Untouched', liquidityOrders.length);
+            // console.log('liquidityOrders-Untouched', liquidityOrders.length);
 //            liquidityOrders = await this.updateLiquidityOrders(liquidityOrders); // update orders which partially filled or not found
             liquidityOrders = await orderUtils.updateOrders(liquidityOrders, config.pair); // update orders which partially filled or not found
-            console.log('liquidityOrders-AfterUpdate', liquidityOrders.length);
+            // console.log('liquidityOrders-AfterUpdate', liquidityOrders.length);
             liquidityOrders = await this.closeLiquidityOrders(liquidityOrders, orderBookInfo); // close orders which expired or out of spread
-            console.log('liquidityOrders-AfterClose', liquidityOrders.length);
+            // console.log('liquidityOrders-AfterClose', liquidityOrders.length);
 
             let liquidityStats = $u.getOrdersStats(liquidityOrders);
             // console.log(liquidityStats);
@@ -89,8 +89,6 @@ module.exports = {
             } while (amountPlaced);
     
             log.info(`Liquidity stats: opened ${liquidityStats.bidsCount} bids-buy orders for ${liquidityStats.bidsTotalQuoteAmount.toFixed(config.coin2Decimals)} of ${tradeParams.mm_liquidityBuyQuoteAmount} ${config.coin2} and ${liquidityStats.asksCount} asks-sell orders with ${liquidityStats.asksTotalAmount.toFixed(config.coin1Decimals)} of ${tradeParams.mm_liquiditySellAmount} ${config.coin1}.`);
-
-            isPreviousIterationFinished = true;
 
         } catch (e) {
             log.error(`Error in updateLiquidity() of ${$u.getModuleName(module.id)} module: ` + e);
@@ -162,7 +160,7 @@ module.exports = {
 
             let output = '';
             let orderParamsString = '';
-            const pairObj = $u.getPairObj(config.pair);
+            const pairObj = $u.getPairObject(config.pair);
 
             orderParamsString = `type=${type}, pair=${config.pair}, price=${price}, coin1Amount=${coin1Amount}, coin2Amount=${coin2Amount}`;
             if (!type || !price || !coin1Amount || !coin2Amount) {
@@ -314,15 +312,11 @@ async function setPrice(type, orderBookInfo) {
         let price, lowPrice = 0, highPrice = 0;
         // console.log('=====', price, precision);
 
-        if (tradeParams.mm_isPriceWatcherActive) {
-        // if (true) {
+        let pw = require('./mm_price_watcher');
+        if (tradeParams.mm_isPriceWatcherActive && pw.getIsPriceActual()) {
     
-            lowPrice = tradeParams.mm_priceWatcherLowPrice * $u.randomValue(0.98, 1.01);
-            highPrice = tradeParams.mm_priceWatcherHighPrice * $u.randomValue(0.99, 1.02);
-            if (lowPrice >= highPrice) {
-                lowPrice = tradeParams.mm_priceWatcherLowPrice;
-                highPrice = tradeParams.mm_priceWatcherHighPrice;
-            }
+            lowPrice = pw.getLowPrice();
+            highPrice = pw.getHighPrice();
             // console.log('lowPrice:', +lowPrice.toFixed(config.coin2Decimals), 'highPrice:', +highPrice.toFixed(config.coin2Decimals));
 
         }
@@ -333,7 +327,7 @@ async function setPrice(type, orderBookInfo) {
             price = $u.randomValue(low, high);
             if (lowPrice && price < lowPrice) {
                 price = lowPrice;
-                output = `${config.notifyName}: Corrected price to sell not lower than ${lowPrice.toFixed(config.coin2Decimals)} while placing liq-order. Low: ${low.toFixed(config.coin2Decimals)}, high: ${high.toFixed(config.coin2Decimals)} ${config.coin2}.`;
+                output = `${config.notifyName}: Price watcher corrected price to sell not lower than ${lowPrice.toFixed(config.coin2Decimals)} while placing liq-order. Low: ${low.toFixed(config.coin2Decimals)}, high: ${high.toFixed(config.coin2Decimals)} ${config.coin2}.`;
                 log.log(output);
             }
             if (price - precision < orderBookInfo.highestBid)
@@ -346,7 +340,7 @@ async function setPrice(type, orderBookInfo) {
             price = $u.randomValue(low, high);
             if (highPrice && price > highPrice) {
                 price = highPrice;
-                output = `${config.notifyName}: Corrected price to buy not higher than ${highPrice.toFixed(config.coin2Decimals)} while placing liq-order. Low: ${low.toFixed(config.coin2Decimals)}, high: ${high.toFixed(config.coin2Decimals)} ${config.coin2}.`;
+                output = `${config.notifyName}: Price watcher corrected price to buy not higher than ${highPrice.toFixed(config.coin2Decimals)} while placing liq-order. Low: ${low.toFixed(config.coin2Decimals)}, high: ${high.toFixed(config.coin2Decimals)} ${config.coin2}.`;
                 log.log(output);
             }
             // console.log('****', price, low, high);
@@ -376,10 +370,10 @@ function setAmount(type, price) {
 
     if (type === 'sell') {
         min = tradeParams.mm_liquiditySellAmount / MAX_ORDERS;
-        max = tradeParams.mm_liquiditySellAmount / 3 * 2;
+        max = tradeParams.mm_liquiditySellAmount / 2;
     } else {
         min = tradeParams.mm_liquidityBuyQuoteAmount / price / MAX_ORDERS;
-        max = tradeParams.mm_liquidityBuyQuoteAmount / price / 3 * 2;
+        max = tradeParams.mm_liquidityBuyQuoteAmount / price / 2;
     }
 
     return $u.randomValue(min, max);

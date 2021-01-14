@@ -1,6 +1,6 @@
 {
   "name": "adamant-tradebot",
-  "version": "2.10.7",
+  "version": "3.0.13",
   "description": "ADAMANT Trading and Market Making bot",
   "main": "index.js",
   "scripts": {
@@ -22,6 +22,7 @@
     "wash trading",
     "order book",
     "exchange",
+    "arbitrage",
     "idcm",
     "crypto",
     "cryptocurrency",

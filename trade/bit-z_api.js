@@ -1,6 +1,6 @@
 var CryptoJS = require('crypto-js');
 const request = require('request');
-const log = require('../helpers/log');
+// const log = require('../helpers/log');
 const DEFAULT_HEADERS = {
     "Content-Type": "application/x-www-form-urlencoded",
     "User-Agent": "Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.71 Safari/537.36"
@@ -12,6 +12,7 @@ var config = {
     'secret_key': '',
     'tradePwd': ''
 };
+var log = {};
 
 // https://apidocv2.bitz.ai/en/
 
@@ -94,10 +95,10 @@ function sign_api(path, data) {
                         try {
                             let status = JSON.parse(data).status;
                             if (wrongAccountErrors.includes(status)) {
-                                console.log(`Bit-Z declined a request to ${url} because of wrong account data. Make sure API keys are correct, not expired, bot's IP set as trusted, trade password is set. Reply data: ${data}.`);
+                                log.warn(`Bit-Z declined a request to ${url} because of wrong account data. Make sure API keys are correct, not expired, bot's IP set as trusted, trade password is set. Reply data: ${data}.`);
                             }
                         } catch (err) {
-                            console.log(`Exception while processing data in sign_api() request to ${url}: ${err}`);
+                            log.log(`Exception while processing data in sign_api() request to ${url}: ${err}`);
                         }
                     } else {
                         reject(res.statusCode);
@@ -141,13 +142,25 @@ function getSignBaseParams() {
 }
 
 var EXCHANGE_API = {
-    setConfig : function(apiServer,apiKey,secretKey,tradePwd){
-        WEB_BASE = apiServer;
-        config = {
-            'apiKey': apiKey ,
-            'secret_key': secretKey ,
-            'tradePwd': tradePwd || '',
-        };
+
+    setConfig: function(apiServer, apiKey, secretKey, tradePwd, logger, publicOnly = false) {
+
+        if (apiServer) {
+            WEB_BASE = apiServer;
+        }
+
+        if (logger) {
+            log = logger;
+        }
+
+        if (!publicOnly) {
+            config = {
+                'apiKey': apiKey ,
+                'secret_key': secretKey ,
+                'tradePwd': tradePwd || '',
+            };
+        }
+
     },
 
     /**
