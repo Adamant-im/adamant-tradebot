@@ -245,8 +245,7 @@ async function setPrice(type, pair, position) {
 
         let output = '';
         let high, low;
-        // not all exchanges have limit/size parameter for orderBook/depth
-        // const orderBook = await traderapi.getOrderBook(pair, tradeParams.mm_orderBookHeight + 1);
+
         const orderBook = await traderapi.getOrderBook(pair);
         if (!orderBook) {
             log.warn(`Unable to get order book for ${pair} to set a price while placing ob-order.`);
@@ -279,6 +278,16 @@ async function setPrice(type, pair, position) {
                 high = orderList[position-2].price;
                 low = orderList[position-1].price;
             }
+            const precision = $u.getPrecision(config.coin2Decimals);
+            console.log(`ob precision: ${precision}, before: low ${low}, high ${high}`);
+            if (low + precision < high) {
+                low += precision;
+            }
+            if (high - precision > low) {
+                high -= precision;
+            }
+            console.log(`ob precision: ${precision}, after: low ${low}, high ${high}`);
+
         }
 
         let price = $u.randomValue(low, high);
