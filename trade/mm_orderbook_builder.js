@@ -277,14 +277,14 @@ async function setPrice(type, position, orderList) {
 
         // Put orders between current orders, but not with the same price
         const precision = $u.getPrecision(config.coin2Decimals);
-        console.log(`ob precision: ${precision}, before: low ${low}, high ${high}`);
+        // console.log(`ob precision: ${precision}, before: low ${low}, high ${high}`);
         if (low + precision < high) {
             low += precision;
         }
         if (high - precision > low) {
             high -= precision;
         }
-        console.log(`ob precision: ${precision}, after: low ${low}, high ${high}`);
+/        console.log(`ob precision: ${precision}, after: low ${low}, high ${high}`);
 
         let price = $u.randomValue(low, high);
         
