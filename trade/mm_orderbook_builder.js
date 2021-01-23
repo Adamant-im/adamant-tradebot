@@ -333,7 +333,7 @@ function setAmount() {
 
 function setPosition(orderCount) {
     let maxPosition = Math.min(orderCount, tradeParams.mm_orderBookHeight);
-    return $u.randomValue(2, maxPosition);
+    return $u.randomValue(2, maxPosition, true);
 }
 
 function setLifeTime(position) {
