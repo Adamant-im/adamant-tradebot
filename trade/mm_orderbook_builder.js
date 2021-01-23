@@ -284,7 +284,7 @@ async function setPrice(type, position, orderList) {
         if (high - precision > low) {
             high -= precision;
         }
-/        console.log(`ob precision: ${precision}, after: low ${low}, high ${high}`);
+        // console.log(`ob precision: ${precision}, after: low ${low}, high ${high}`);
 
         let price = $u.randomValue(low, high);
         
