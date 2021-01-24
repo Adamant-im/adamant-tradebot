@@ -405,6 +405,7 @@ async function setPrice(type, pair, coin1Amount) {
             if (!output) {
                 if (isSpreadCorrectedByPriceWatcher) {
                     output = `${config.notifyName}: Refusing to place mm-order because of price watcher. Corrected spread is too small. Low: ${bid_low.toFixed(config.coin2Decimals)}, high: ${ask_high.toFixed(config.coin2Decimals)} ${config.coin2}. Check current order books and the price watcher parameters.`;
+                    skipNotify = true;
                 } else {
                     output = `${config.notifyName}: No spread currently, and market making settings deny trading in the order book. Low: ${bid_low.toFixed(config.coin2Decimals)}, high: ${ask_high.toFixed(config.coin2Decimals)} ${config.coin2}. Unable to set a price for ${pair}. Update settings or create spread manually.`;
                 }

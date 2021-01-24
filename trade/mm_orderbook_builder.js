@@ -104,8 +104,26 @@ module.exports = {
         try {
 
             const type = setType();
-            const position = setPosition();
-            const priceReq = await setPrice(type, config.pair, position);
+
+            let orderBook = await traderapi.getOrderBook(config.pair);
+            if (!orderBook || !orderBook.asks[0] || !orderBook.bids[0]) {
+                log.warn(`${config.notifyName}: Order books are empty for ${config.pair}, or temporary API error. Unable to check if I need to place ob-order.`);
+                return;
+            }
+            let orderList = type === 'buy' ? orderBook.bids : orderBook.asks;
+            // Remove duplicates by 'price' field
+            orderList = orderList.filter((order, index, self) =>
+                index === self.findIndex((o) => (
+                    o.price === order.price
+                ))
+            )
+            if (!orderList || !orderList[0] || !orderList[1]) {
+                log.warn(`${config.notifyName}: Filtered order count of type ${type} is less then 2 for ${config.pair}, or temporary API error. Unable to set a price while placing ob-order.`);
+                return;
+            }
+
+            const position = setPosition(orderList.length);
+            const priceReq = await setPrice(type, position, orderList);
             const price = priceReq.price;
             const coin1Amount = setAmount();
             const coin2Amount = coin1Amount * price;
@@ -239,47 +257,34 @@ async function isEnoughCoins(coin1, coin2, amount1, amount2, type) {
     }
 }
 
-async function setPrice(type, pair, position) {
+async function setPrice(type, position, orderList) {
 
     try {
 
         let output = '';
         let high, low;
-        // not all exchanges have limit/size parameter for orderBook/depth
-        // const orderBook = await traderapi.getOrderBook(pair, tradeParams.mm_orderBookHeight + 1);
-        const orderBook = await traderapi.getOrderBook(pair);
-        if (!orderBook) {
-            log.warn(`Unable to get order book for ${pair} to set a price while placing ob-order.`);
-            return {
-                price: false,
-            }
-        }
         
-        let orderList = type === 'buy' ? orderBook.bids : orderBook.asks;
-        // Remove duplicates by 'price' field
-        orderList = orderList.filter((order, index, self) =>
-            index === self.findIndex((o) => (
-                o.price === order.price
-            ))
-        )
+        if (orderList.length < position)
+            position = orderList.length;
 
-        if (!orderList || !orderList[0] || !orderList[1]) {
-            output = `${config.notifyName}: Orders count of type ${type} is less then 2, or temporary API error. Unable to set a price for ${pair} while placing ob-order.`;
-            return {
-                price: false,
-                message: output
-            }
+        if (type === 'sell') {
+            low = orderList[position-2].price;
+            high = orderList[position-1].price;
         } else {
-            if (orderList.length < position)
-                position = orderList.length;
-            if (type === 'sell') {
-                low = orderList[position-2].price;
-                high = orderList[position-1].price;
-            } else {
-                high = orderList[position-2].price;
-                low = orderList[position-1].price;
-            }
+            high = orderList[position-2].price;
+            low = orderList[position-1].price;
         }
+
+        // Put orders between current orders, but not with the same price
+        const precision = $u.getPrecision(config.coin2Decimals);
+        // console.log(`ob precision: ${precision}, before: low ${low}, high ${high}`);
+        if (low + precision < high) {
+            low += precision;
+        }
+        if (high - precision > low) {
+            high -= precision;
+        }
+        // console.log(`ob precision: ${precision}, after: low ${low}, high ${high}`);
 
         let price = $u.randomValue(low, high);
         
@@ -322,12 +327,13 @@ function setAmount() {
         log.warn(`Params mm_maxAmount or mm_minAmount are not set. Check ${config.exchangeName} config.`);
         return false;
     }
-    return Math.random() * (tradeParams.mm_maxAmount - tradeParams.mm_minAmount) + tradeParams.mm_minAmount;
+    return $u.randomValue(tradeParams.mm_minAmount, tradeParams.mm_maxAmount);
 
 }
 
-function setPosition() {
-    return Math.round(Math.random() * (tradeParams.mm_orderBookHeight - 2) + 2);
+function setPosition(orderCount) {
+    let maxPosition = Math.min(orderCount, tradeParams.mm_orderBookHeight);
+    return $u.randomValue(2, maxPosition, true);
 }
 
 function setLifeTime(position) {

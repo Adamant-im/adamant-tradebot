@@ -79,12 +79,12 @@ module.exports = {
                 exchange: config.exchange
             });
 
-            console.log('pwOrders-Untouched', pwOrders.length);
+            // console.log('pwOrders-Untouched', pwOrders.length);
             // pwOrders = await this.updatePriceWatcherOrders(pwOrders); // update orders which partially filled or not found
             pwOrders = await orderUtils.updateOrders(pwOrders, config.pair); // update orders which partially filled or not found
-            console.log('pwOrders-AfterUpdate', pwOrders.length);
+            // console.log('pwOrders-AfterUpdate', pwOrders.length);
             pwOrders = await this.closePriceWatcherOrders(pwOrders); // close orders which expired
-            console.log('pwOrders-AfterClose', pwOrders.length);
+            // console.log('pwOrders-AfterClose', pwOrders.length);
 
             setPriceRange();
 
