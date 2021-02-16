@@ -2,6 +2,7 @@ const db = require('../modules/DB');
 const config = require('../modules/configReader');
 const log = require('../helpers/log');
 const traderapi = require('./trader_' + config.exchange)(config.apikey, config.apisecret, config.apipassword, log);
+const orderUtils = require('./orderUtils');
 
 /** 
  * Purposes:
@@ -108,6 +109,7 @@ module.exports = {
             pair: pair || config.pair,
             exchange: config.exchange
         });
+        dbOrders = await orderUtils.updateOrders(dbOrders, pair || config.pair); // update orders which partially filled or not found
 
         let dbOrderIds = dbOrders.map(order => {
             return order._id;
@@ -120,7 +122,9 @@ module.exports = {
         const openOrders = await traderapi.getOpenOrders(pair || config.pair);
         if (openOrders) {
 
-            totalOrdersCount = openOrders.length;
+            // totalOrdersCount may be not actual or even negative because of several reasons
+            totalOrdersCount = openOrders.length - dbOrderIds.length;
+
             let clearedOrders = [];
             let notFinished = false;
             let tries = 0;
@@ -151,7 +155,7 @@ module.exports = {
                 };
     
                 // console.log(`Clearing general orders. Try number: ${tries}, cleared: ${clearedOrders.length}, total: ${openOrders.length}.`)
-                notFinished = doForce && openOrders.length > clearedOrders.length && tries < MAX_TRIES;
+                notFinished = doForce && totalOrdersCount > clearedOrders.length && tries < MAX_TRIES;
                 
             } while (notFinished);
     
