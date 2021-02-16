@@ -12,10 +12,17 @@ const traderapi = require('./trader_' + config.exchange)(config.apikey, config.a
  * liq: liquidity order
  * pw: price watcher order
  * man: manually placed order with /fill, /buy, /sell, /make price commands
+ * unk: unknown order (not in the local bot's database)
 */
 
 module.exports = {
     
+    /**
+     * Cancels orders of specific purposes
+     * @param {Array} purposes Cancel orders of these purposes
+     * @param {String} pair Exchange pair to cancel orders on it
+     * @param {Boolean} doForce Make several iterations to cancel orders to bypass API limitations
+     */
     async clearOrders(purposes, pair, doForce = false) {
 
         // console.log(`clearOrders(${purposes}, ${pair}, ${doForce})..`);
@@ -83,6 +90,86 @@ module.exports = {
 
     },
 
+    /**
+     * Cancels unknown orders (which are not in the bot's local db)
+     * Helpful when exchange API fails to actually close order, but said it did
+     * @param {Array} purposes Cancel orders of these purposes
+     * @param {String} pair Exchange pair to cancel orders on it
+     * @param {Boolean} doForce Make several iterations to cancel orders to bypass API limitations
+     */
+    async clearUnknownOrders(pair, doForce = false) {
+
+        // console.log(`clearOrders(${purposes}, ${pair}, ${doForce})..`);
+
+        const {ordersDb} = db;
+        let openOrders;
+
+        openOrders = await ordersDb.find({
+            isProcessed: false,
+            pair: pair || config.pair,
+            exchange: config.exchange
+        });
+
+        if (purposes === 'all') {
+        } else {
+            openOrders = await ordersDb.find({
+                isProcessed: false,
+                purpose: {$in: purposes},
+                pair: pair || config.pair,
+                exchange: config.exchange
+            });    
+        }
+
+        let clearedOrders = [];
+        let notFinished = false;
+        let tries = 0;
+        const MAX_TRIES = 10;
+
+        do {
+
+            tries += 1;
+            for (const order of openOrders) {
+
+                try {
+        
+                    if (!clearedOrders.includes(order._id)) {
+                        let cancelReq = await traderapi.cancelOrder(order._id, order.type, order.pair);
+                        if (cancelReq !== undefined) {
+                            log.info(`Order collector: Cancelled ${order.purpose}-order with params: id=${order._id}, type=${order.type}, targetType=${order.targetType}, pair=${order.pair}, price=${order.price}, coin1Amount=${order.coin1Amount}, coin2Amount=${order.coin2Amount}.`);
+                            await order.update({
+                                isProcessed: true,
+                                isCancelled: true
+                            }, true);
+                            clearedOrders.push(order._id);
+                        } else {
+                            log.log(`Order collector: Request to cancel ${order.purpose}-order with id=${order._id} failed. Will try next time, keeping this order in the DB for now.`);
+                        }
+                    }
+        
+                } catch (e) {
+                    log.error(`Error in for (const order: ${order._id} of ordersToClear) of ${$u.getModuleName(module.id)}: ${e}.`);
+                }
+        
+            };
+
+            // console.log(`Clearing orders. Try number: ${tries}, cleared: ${clearedOrders.length}, total: ${ordersToClear.length}.`)
+            notFinished = doForce && openOrders.length > clearedOrders.length && tries < MAX_TRIES;
+            
+        } while (notFinished);
+        
+        
+        return {
+            totalOrders: openOrders.length,
+            clearedOrders: clearedOrders.length
+        }
+
+    },
+
+    /**
+     * Cancels all of open orders, including orders which are not in the bot's local db
+     * @param {String} pair Exchange pair to cancel all orders on it
+     * @param {Boolean} doForce Make several iterations to cancel orders to bypass API limitations
+     */
     async clearAllOrders(pair, doForce = false) {
 
         // console.log(`clearAllOrders(${pair}, ${doForce})..`);
@@ -151,6 +238,7 @@ module.exports = {
 };
 
 // Clear Market-making orders every 120 sec — In case if API errors
+// This function is excessive as mm_trader trigger clearOrders() manually if needed 
 setInterval(() => {
     module.exports.clearOrders(['mm'], config.pair);
 }, 120 * 1000);

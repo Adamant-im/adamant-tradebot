@@ -55,6 +55,12 @@ module.exports = {
 
         return orderReq;
     },
+    /**
+     * Updates local bot's orders database dbOrders, independent of its purpose
+     * It looks all of current exchange orders in dbOrders
+     * If found one, updates its status
+     * If not found, closes it as not actual
+    */
     async updateOrders(dbOrders, pair) {
 
         let updatedOrders = [];

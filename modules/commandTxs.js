@@ -1433,26 +1433,34 @@ async function orders(params) {
 	}
 
 	let ordersByType = await orderStats.ordersByType(pair);
+	let diffStringUnknownOrdersCount = '';
 
 	const openOrders = await traderapi.getOpenOrders(pair);
 	if (openOrders) {
 
 		let diff, sign;
-		let diffString = '';
+		let diffStringExchnageOrdersCount = '';
 		if (previousOrders.openOrdersCount) {
 			diff = openOrders.length - previousOrders.openOrdersCount;
 			sign = diff > 0 ? '+' : '−';
 			diff = Math.abs(diff);
-			if (diff) diffString = ` (${sign}${diff})`;
+			if (diff) diffStringExchnageOrdersCount = ` (${sign}${diff})`;
 		}
 
 		if (openOrders.length > 0)
-			output = `${config.exchangeName} open orders for ${pair} pair: ${openOrders.length}${diffString}.`;
+			output = `${config.exchangeName} open orders for ${pair} pair: ${openOrders.length}${diffStringExchnageOrdersCount}.`;
 		else 
 			output = `No open orders on ${config.exchangeName} for ${pair}.`;
 
-		ordersByType.openOrdersCount = openOrders.length;
-
+			ordersByType.openOrdersCount = openOrders.length;
+			ordersByType.unkLength = openOrders.length - ordersByType.all.length;
+			if (previousOrders.unkLength) {
+				diff = ordersByType.unkLength - previousOrders.unkLength;
+				sign = diff > 0 ? '+' : '−';
+				diff = Math.abs(diff);
+				if (diff) diffStringUnknownOrdersCount = ` (${sign}${diff})`;
+			}
+	
 	} else {
 		output = `Unable to get ${config.exchangeName} orders for ${pair}.`;
 	}
@@ -1483,6 +1491,8 @@ async function orders(params) {
 		output += `\nTotal — ${ordersByType.all.length}${getDiffString('all')}`;
 		output += '.';
 		
+		output += `\n\nOrders which are not in my database (Unknown orders): ${ordersByType.unkLength}${diffStringUnknownOrdersCount}.`;
+
 
 	} else {
 		output += "\n\n" + `No open orders in my database.`;
