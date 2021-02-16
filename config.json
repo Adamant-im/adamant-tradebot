@@ -59,11 +59,11 @@
 	/** Meaningful decimals for output of coin2 amounts. Depends on coin and exchange **/
 	"coin2Decimals": 6, // 0.123456 USDT
 
-	/** Interval in minutes to clear all opened orders.
+	/** Interval in minutes to clear all of Unknown (which are not placed by the bot) opened orders.
 		Some exchanges has API issues with closing or matching orders.
 		Because of this, your account can accumulate open orders and lead to frozen balances.
-		In such a case you can run "/clear all" command manually, or set this parameter for automatic clearing.
-		Note: this command cancels all of account orders for the pair, including ones which you set manually.
+		In such a case you can run "/clear unk" command manually, or set this parameter for automatic clearing.
+		Note: this command cancels all of Unknown orders for the pair, including ones you placed on exchange's website.
 		0 means disabled.
 	**/
 	"clearAllOrdersInterval": 0,

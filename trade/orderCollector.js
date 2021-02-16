@@ -254,8 +254,8 @@ setInterval(() => {
 if (config.clearAllOrdersInterval) {
     setInterval(() => {
 
-        log.info(`Clearing all opened orders every ${config.clearAllOrdersInterval} minutes as set in config..`);
-        module.exports.clearAllOrders(config.pair);
+        log.info(`Clearing all Unknown opened orders every ${config.clearAllOrdersInterval} minutes as set in config..`);
+        module.exports.clearUnknownOrders(config.pair);
 
     }, config.clearAllOrdersInterval * 60 * 1000);
 }
