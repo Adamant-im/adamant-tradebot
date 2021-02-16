@@ -728,7 +728,7 @@ async function clear(params) {
 	if (!pair || !pair.length) {
 		return {
 			msgNotify: ``,
-			msgSendBack: 'Please specify market to clear orders in. F. e., */clear DOGE/BTC mm*.',
+			msgSendBack: 'Specify market to clear orders in. F. e., */clear DOGE/BTC mm*.',
 			notifyType: 'log'
 		}	
 	}
@@ -741,30 +741,37 @@ async function clear(params) {
 
 	params.forEach(param => {
 
-		if (['all'].includes(param)) {
+		if (['all'].includes(param.toLowerCase())) {
 			// purposes = ['mm', 'tb', 'ob', 'liq', 'pw'];
 			purposes = 'all';
 		}
-		if (['tb'].includes(param)) {
+		if (['unk'].includes(param.toLowerCase())) {
+			purposes = 'unk';
+			purposeString = `unknown`;
+		}
+		if (['tb'].includes(param.toLowerCase())) {
 			purposes = ['tb'];
 			purposeString = `trade bot`;
 		}
-		if (['ob'].includes(param)) {
+		if (['ob'].includes(param.toLowerCase())) {
 			purposes = ['ob'];
 			purposeString = `order book`;
 		}
-		if (['liq'].includes(param)) {
+		if (['liq'].includes(param.toLowerCase())) {
 			purposes = ['liq'];
 			purposeString = `liquidity`;
 		}
-		if (['pw'].includes(param)) {
+		if (['pw'].includes(param.toLowerCase())) {
 			purposes = ['pw'];
 			purposeString = `price watcher`;
 		}
 	});
 	if (!purposes) {
-		purposes = ['mm'];
-		purposeString = `market making`;
+		return {
+			msgNotify: ``,
+			msgSendBack: 'Specify type of orders to clear. F. e., */clear mm*.',
+			notifyType: 'log'
+		}	
 	}
 
 	let output = '';
@@ -793,16 +800,21 @@ async function clear(params) {
 
 	} else {
 
-		clearedInfo = await orderCollector.clearOrders(purposes, pair, doForce);
-		if (clearedInfo.totalOrders) {
+		if (purposes === 'unk') {
 
-			output = `Closed ${clearedInfo.clearedOrders} of ${clearedInfo.totalOrders} **${purposeString}** orders on ${config.exchangeName} for ${pair}.`;
+			clearedInfo = await orderCollector.clearUnknownOrders(pair, doForce);
 
 		} else {
 
-			output = `No open **${purposeString}** orders on ${config.exchangeName} for ${pair}.`;
+			clearedInfo = await orderCollector.clearOrders(purposes, pair, doForce);
 
-		}		
+		}
+
+		if (clearedInfo.totalOrders) {
+			output = `Closed ${clearedInfo.clearedOrders} of ${clearedInfo.totalOrders} **${purposeString}** orders on ${config.exchangeName} for ${pair}.`;
+		} else {
+			output = `No open **${purposeString}** orders on ${config.exchangeName} for ${pair}.`;
+		}
 
 	}
 
