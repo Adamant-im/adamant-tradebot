@@ -1452,8 +1452,8 @@ async function orders(params) {
 
 		let diff, sign;
 		let diffStringExchnageOrdersCount = '';
-		if (previousOrders.openOrdersCount) {
-			diff = openOrders.length - previousOrders.openOrdersCount;
+		if (previousOrders[pair] && previousOrders[pair].openOrdersCount) {
+			diff = openOrders.length - previousOrders[pair].openOrdersCount;
 			sign = diff > 0 ? '+' : '−';
 			diff = Math.abs(diff);
 			if (diff) diffStringExchnageOrdersCount = ` (${sign}${diff})`;
@@ -1467,8 +1467,8 @@ async function orders(params) {
 
 		ordersByType.openOrdersCount = openOrders.length;
 		ordersByType.unkLength = openOrders.length - ordersByType.all.length;
-		if (previousOrders.unkLength) {
-			diff = ordersByType.unkLength - previousOrders.unkLength;
+		if (previousOrders[pair] && previousOrders[pair].unkLength) {
+			diff = ordersByType.unkLength - previousOrders[pair].unkLength;
 			sign = diff > 0 ? '+' : '−';
 			diff = Math.abs(diff);
 			if (diff) diffStringUnknownOrdersCount = ` (${sign}${diff})`;
@@ -1481,8 +1481,8 @@ async function orders(params) {
 	let getDiffString = function (orderType) {
 		let diff, sign;
 		let diffString = '';
-		if (previousOrders[orderType] && previousOrders[orderType].length >= 0) {
-			diff = ordersByType[orderType].length - previousOrders[orderType].length;
+		if (previousOrders[pair] && previousOrders[pair][orderType] && previousOrders[pair][orderType].length >= 0) {
+			diff = ordersByType[orderType].length - previousOrders[pair][orderType].length;
 			sign = diff > 0 ? '+' : '−';
 			diff = Math.abs(diff);
 			if (diff) diffString = ` (${sign}${diff})`;
@@ -1510,7 +1510,7 @@ async function orders(params) {
 
 	output += `\n\nOrders which are not in my database (Unknown orders): ${ordersByType.unkLength}${diffStringUnknownOrdersCount}.`;
 
-	previousOrders = ordersByType;
+	previousOrders[pair] = ordersByType;
 
 	return {
 		msgNotify: ``,
