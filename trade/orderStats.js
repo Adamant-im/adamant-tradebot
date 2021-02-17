@@ -119,6 +119,7 @@ module.exports = {
     async ordersByType(pair) {
 
         let ordersByType = {};
+        ordersByType.all = [];
 
         try {
 

@@ -1459,19 +1459,20 @@ async function orders(params) {
 			if (diff) diffStringExchnageOrdersCount = ` (${sign}${diff})`;
 		}
 
-		if (openOrders.length > 0)
+		if (openOrders.length > 0) {
 			output = `${config.exchangeName} open orders for ${pair} pair: ${openOrders.length}${diffStringExchnageOrdersCount}.`;
-		else 
+		} else {
 			output = `No open orders on ${config.exchangeName} for ${pair}.`;
+		}
 
-			ordersByType.openOrdersCount = openOrders.length;
-			ordersByType.unkLength = openOrders.length - ordersByType.all.length;
-			if (previousOrders.unkLength) {
-				diff = ordersByType.unkLength - previousOrders.unkLength;
-				sign = diff > 0 ? '+' : '−';
-				diff = Math.abs(diff);
-				if (diff) diffStringUnknownOrdersCount = ` (${sign}${diff})`;
-			}
+		ordersByType.openOrdersCount = openOrders.length;
+		ordersByType.unkLength = openOrders.length - ordersByType.all.length;
+		if (previousOrders.unkLength) {
+			diff = ordersByType.unkLength - previousOrders.unkLength;
+			sign = diff > 0 ? '+' : '−';
+			diff = Math.abs(diff);
+			if (diff) diffStringUnknownOrdersCount = ` (${sign}${diff})`;
+		}
 	
 	} else {
 		output = `Unable to get ${config.exchangeName} orders for ${pair}.`;
@@ -1502,13 +1503,12 @@ async function orders(params) {
 
 		output += `\nTotal — ${ordersByType.all.length}${getDiffString('all')}`;
 		output += '.';
-		
-		output += `\n\nOrders which are not in my database (Unknown orders): ${ordersByType.unkLength}${diffStringUnknownOrdersCount}.`;
-
 
 	} else {
 		output += "\n\n" + `No open orders in my database.`;
 	}
+
+	output += `\n\nOrders which are not in my database (Unknown orders): ${ordersByType.unkLength}${diffStringUnknownOrdersCount}.`;
 
 	previousOrders = ordersByType;
 
