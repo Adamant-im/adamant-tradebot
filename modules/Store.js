@@ -68,9 +68,9 @@ module.exports = {
 			}
 			const priceFrom = +(this.currencies[from + '/USD']);
 			const priceTo = +(this.currencies[to + '/USD']);
-			return +(priceFrom / priceTo || 1).toFixed(8);
+			return +(priceFrom / priceTo || 0).toFixed(8);
 
-		} catch (e){
+		} catch (e) {
 			log.error(`Error while calculating getPrice() from ${from} to ${to}: ${e}.`);
 			return 0;
 		}

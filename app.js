@@ -40,7 +40,11 @@ function init() {
 		}
 
 	} catch (e) {
-		notify(`${config.notifyName} is not started. Error: ${e}`, 'error');
+		let errorMsg = `${config.notifyName} is not started. Error: ${e}`;
+		if (e.toString().includes('findOne')) {
+			errorMsg += '. Make sure MongoDB service is running.';
+		}
+		notify(errorMsg, 'error');
 		process.exit(1);
 	}
 }

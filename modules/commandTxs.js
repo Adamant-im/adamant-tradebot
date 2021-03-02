@@ -1252,7 +1252,7 @@ async function rates(params) {
 	if (params[0].toUpperCase().trim() === config.coin1)
 		params[0] = config.pair;
 
-	const pairObj = $u.getPairObject(params[0], false);
+	const pairObj = $u.getPairObject(params[0], true);
 	const pair = pairObj.pair;
 	const coin1 = pairObj.coin1;
 	const coin2 = pairObj.coin2;
@@ -1758,6 +1758,7 @@ async function balances() {
 	const balances = await traderapi.getBalances();
 	let output = '';
 	let totalBTC = 0, totalUSD = 0;
+	let unknownCryptos = [];
 
 	if (balances.length === 0) {
 		output = `All empty.`;
@@ -1787,16 +1788,17 @@ async function balances() {
 				}
 			}
 			if (crypto.btc) {
+				console.log(crypto);
 				totalBTC += crypto.btc;
 			} else {
 				value = Store.mathEqual(crypto.code, 'BTC', crypto.total, true).outAmount;
+				console.log(value);
 				if (value) {
 					totalBTC += value;
 				}
 			}
 		});
 
-		let unknownCryptos = [];
 		output += `Total holdings ~ ${$u.thousandSeparator(+totalUSD.toFixed(2), true)} _USD_ or ${$u.thousandSeparator(totalBTC.toFixed(8), true)} _BTC_`;
 		if (unknownCryptos.length) {
 			output += `. Note: I didn't count unknown cryptos ${unknownCryptos.join(', ')}.`;
