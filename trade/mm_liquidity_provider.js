@@ -315,15 +315,11 @@ async function setPrice(type, orderBookInfo) {
 
     const precision = $u.getPrecision(config.coin2Decimals);
     let price; let lowPrice = 0; let highPrice = 0;
-    // console.log('=====', price, precision);
 
     const pw = require('./mm_price_watcher');
     if (tradeParams.mm_isPriceWatcherActive && pw.getIsPriceActual()) {
-
       lowPrice = pw.getLowPrice();
       highPrice = pw.getHighPrice();
-      // console.log('lowPrice:', +lowPrice.toFixed(config.coin2Decimals), 'highPrice:', +highPrice.toFixed(config.coin2Decimals));
-
     }
 
     if (type === 'sell') {

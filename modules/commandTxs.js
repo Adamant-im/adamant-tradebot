@@ -239,7 +239,10 @@ async function enable(params) {
       const coin2 = params[5].toUpperCase();
       // console.log(coin1, coin2);
 
-      if (!coin1 || !coin2 || coin1 === coin2 || (![config.coin1, config.coin2].includes(coin1)) || (![config.coin1, config.coin2].includes(coin2))) {
+      if (
+        !coin1 || !coin2 || coin1 === coin2 ||
+        (![config.coin1, config.coin2].includes(coin1)) || (![config.coin1, config.coin2].includes(coin2))
+      ) {
         return {
           msgNotify: '',
           msgSendBack: `Incorrect liquidity coins. Config is set to trade ${config.pair} pair. Example: */enable liq 2% 100 ${config.coin1} 50 ${config.coin2} uptrend*.`,
@@ -373,7 +376,10 @@ async function enable(params) {
           };
         }
 
-        if (pairObj.pair.toUpperCase() === config.pair.toUpperCase() && exchange.toLowerCase() === config.exchange.toLowerCase()) {
+        if (
+          pairObj.pair.toUpperCase() === config.pair.toUpperCase() &&
+          exchange.toLowerCase() === config.exchange.toLowerCase()
+        ) {
           return {
             msgNotify: '',
             msgSendBack: `Unable to set Price watcher to the same trading pair as I trade, ${pairObj.pair}@${exchangeName}. Set price in numbers or watch other trading pair/exchange. Example: */enable pw 0.1—0.2 USDT* or */enable pw ADM/USDT@Bit-Z 0.5% smart*.`,
@@ -1266,7 +1272,6 @@ async function rates(params) {
   const pair = pairObj.pair;
   const coin1 = pairObj.coin1;
   const coin2 = pairObj.coin2;
-  const coin1Decimals = pairObj.coin1Decimals;
   const coin2Decimals = pairObj.coin2Decimals;
 
   if (!coin1 || !coin1.length) {
@@ -1441,10 +1446,6 @@ async function orders(params) {
 
   const pairObj = $u.getPairObject(params[0]);
   const pair = pairObj.pair;
-  const coin1 = pairObj.coin1;
-  const coin2 = pairObj.coin2;
-  const coin1Decimals = pairObj.coin1Decimals;
-  const coin2Decimals = pairObj.coin2Decimals;
 
   if (!pair || !pair.length) {
     output = 'Please specify market you are interested in. F. e., */orders ADM/BTC*.';
@@ -1505,14 +1506,14 @@ async function orders(params) {
 
     output += `\n\nOrders in my database:`;
 
-    output += `\nMarket making: ${ordersByType.mm.length}${getDiffString('mm')},`;
-    output += `\nDynamic order book: ${ordersByType.ob.length}${getDiffString('ob')},`;
-    output += `\nTradebot: ${ordersByType.tb.length}${getDiffString('tb')},`;
-    output += `\nLiquidity: ${ordersByType.liq.length}${getDiffString('liq')},`;
-    output += `\nPrice watching: ${ordersByType.pw.length}${getDiffString('pw')},`;
-    output += `\nManual orders: ${ordersByType.man.length}${getDiffString('man')},`;
+    output += `\nMarket making: ${ordersByType.mm.length}${getDiffString('mm')},`;
+    output += `\nDynamic order book: ${ordersByType.ob.length}${getDiffString('ob')},`;
+    output += `\nTradebot: ${ordersByType.tb.length}${getDiffString('tb')},`;
+    output += `\nLiquidity: ${ordersByType.liq.length}${getDiffString('liq')},`;
+    output += `\nPrice watching: ${ordersByType.pw.length}${getDiffString('pw')},`;
+    output += `\nManual orders: ${ordersByType.man.length}${getDiffString('man')},`;
 
-    output += `\nTotal — ${ordersByType.all.length}${getDiffString('all')}`;
+    output += `\nTotal — ${ordersByType.all.length}${getDiffString('all')}`;
     output += '.';
 
   } else {
@@ -1533,7 +1534,7 @@ async function orders(params) {
 
 async function make(params, tx, confirmation) {
 
-  // make price 1.1 — buy/sell to achieve target price of 1.1 COIN2
+  // make price 1.1 — buy/sell to achieve target price of 1.1 COIN2
 
   try {
 
@@ -1555,8 +1556,6 @@ async function make(params, tx, confirmation) {
       const pairObj = $u.getPairObject(config.pair, false);
       const pair = pairObj.pair;
       const coin1 = pairObj.coin1;
-      const coin2 = pairObj.coin2;
-      const coin1Decimals = pairObj.coin1Decimals;
       const coin2Decimals = pairObj.coin2Decimals;
 
       const currencies = Store.currencies;
@@ -1610,7 +1609,8 @@ async function make(params, tx, confirmation) {
          Moreover, we should place counter-order to set new spread
       */
       const reliabilityKoef = $u.randomValue(1.05, 1.1);
-      const orderBookInfo = $u.getOrderBookInfo(await traderapi.getOrderBook(config.pair), tradeParams.mm_liquiditySpreadPercent, targetPrice);
+      const orderBookInfo = $u.getOrderBookInfo(await traderapi.getOrderBook(config.pair),
+          tradeParams.mm_liquiditySpreadPercent, targetPrice);
       orderBookInfo.amountTargetPrice *= reliabilityKoef;
       orderBookInfo.amountTargetPriceQuote *= reliabilityKoef;
 

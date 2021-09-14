@@ -253,7 +253,6 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
           }
         } else { // buy
           if (coin2Amount) {
-            size = coin2Amount;
             output = `${orderType} ${pair_.coin1} for ${coin2Amount} ${pair_.coin2.toUpperCase()} at Market Price on ${pair} market.`;
           } else {
             message = `Unable to place order to ${orderType} ${pair_.coin1.toUpperCase()} for ${pair_.coin2.toUpperCase()} at Market Price on ${pair} market. Set ${pair_.coin2.toUpperCase()} amount.`;

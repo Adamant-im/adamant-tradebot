@@ -25,5 +25,9 @@ module.exports = {
     'new-cap': ['off'],
     'camelcase': ['off'],
     'valid-jsdoc': ['off'],
+    'no-array-constructor': ['off'],
+    'no-caller': ['off'],
+    'prefer-promise-reject-errors': ['off'],
+    'guard-for-in': ['off'],
   },
 };

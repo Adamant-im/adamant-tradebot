@@ -342,6 +342,7 @@ module.exports = {
           t = liquidity['full'].amountBidsQuote;
         }
 
+        /* eslint-disable no-unused-vars */
         prev_c_c_m1 = c_c_m1;
         prev_c_t = c_t;
         prev_s = s;
@@ -357,7 +358,8 @@ module.exports = {
         if (!smartPrice && s < prev_s && prev_c_t > enough_c_t) {
           smartPrice = el_m1.price;
         }
-        // console.log(ask.price.toFixed(4), ask.amount.toFixed(4), c.toFixed(2), c_a.toFixed(2), c_a_m1 ? c_a_m1.toFixed(2) : false, c_c_m1 ? c_c_m1.toFixed(2) : false, c_t.toFixed(2));
+        // console.log(ask.price.toFixed(4), ask.amount.toFixed(4), c.toFixed(2), c_a.toFixed(2),
+        //   c_a_m1 ? c_a_m1.toFixed(2) : false, c_c_m1 ? c_c_m1.toFixed(2) : false, c_t.toFixed(2));
 
         if (i < 20) {
           table.push({
@@ -429,10 +431,10 @@ module.exports = {
     // price: price,
 
     const laxityPercent = 30;
-    const minPrice = orderBookInfo.liquidity.percentCustom.lowPrice - orderBookInfo.liquidity.percentCustom.spread * laxityPercent / 100;
-    const maxPrice = orderBookInfo.liquidity.percentCustom.highPrice + orderBookInfo.liquidity.percentCustom.spread * laxityPercent / 100;
-    // console.log('isOrderOutOfSpread:', order.price, orderBookInfo.liquidity.percentCustom.lowPrice, orderBookInfo.liquidity.percentCustom.highPrice);
-    // console.log('isOrderOutOfSpread with laxity:', order.price, minPrice, maxPrice);
+    const minPrice = orderBookInfo.liquidity.percentCustom.lowPrice -
+      orderBookInfo.liquidity.percentCustom.spread * laxityPercent / 100;
+    const maxPrice = orderBookInfo.liquidity.percentCustom.highPrice +
+      orderBookInfo.liquidity.percentCustom.spread * laxityPercent / 100;
 
     return (order.price < minPrice) || (order.price > maxPrice);
 
@@ -538,7 +540,7 @@ module.exports = {
    * @param {number} timestamp Timestamp to format
    * @return {object} Contains different formatted strings
    */
-   formatDate(timestamp) {
+  formatDate(timestamp) {
     if (!timestamp) return false;
     const formattedDate = {};
     const dateObject = new Date(timestamp);

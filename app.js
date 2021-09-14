@@ -5,11 +5,11 @@ const checker = require('./modules/checkerTransactions');
 const doClearDB = process.argv.includes('clear_db');
 const config = require('./modules/configReader');
 const txParser = require('./modules/incomingTxsParser');
-const log = require('./helpers/log');
 
 // Socket connection
 const api = require('./modules/api');
-api.socket.initSocket({ socket: config.socket, wsType: config.ws_type, onNewMessage: txParser, admAddress: Store.user.ADM.address });
+api.socket.initSocket({ socket: config.socket, wsType: config.ws_type,
+  onNewMessage: txParser, admAddress: Store.user.ADM.address });
 
 setTimeout(init, 5000);
 

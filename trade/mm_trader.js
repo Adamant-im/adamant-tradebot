@@ -526,8 +526,6 @@ async function setPrice(type, pair, coin1Amount) {
         deltaPercent = $u.randomValue(0.01, 0.45);
       }
 
-      // console.log('2:', bid_low.toFixed(8), ask_high.toFixed(8), interval.toFixed(8), deltaPercent.toFixed(2));
-      let from; let to;
       if (type === 'buy') {
         price = bid_low + interval*deltaPercent;
       } else {
@@ -536,10 +534,7 @@ async function setPrice(type, pair, coin1Amount) {
 
       const minPrice = +bid_low + +precision;
       const maxPrice = ask_high - precision;
-      // price = 0.009618977658650832;
-      // console.log('low, high', bid_low, ask_high);
-      // console.log('min, max', minPrice, maxPrice);
-      // console.log('price1', price);
+
       if (price >= maxPrice) {
         price = ask_high - precision;
       }

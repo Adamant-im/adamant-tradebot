@@ -154,7 +154,8 @@ module.exports = {
 
         };
 
-        // console.log(`Clearing general orders. Try number: ${tries}, cleared: ${clearedOrders.length}, total: ${openOrders.length}.`)
+        // console.log(`Clearing general orders. Try number: ${tries},
+        //  cleared: ${clearedOrders.length}, total: ${openOrders.length}.`)
         notFinished = doForce && totalOrdersCount > clearedOrders.length && tries < MAX_TRIES;
 
       } while (notFinished);

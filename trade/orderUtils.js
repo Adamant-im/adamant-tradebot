@@ -1,12 +1,8 @@
 const $u = require('../helpers/utils');
 const config = require('../modules/configReader');
 const log = require('../helpers/log');
-const notify = require('../helpers/notify');
-const tradeParams = require('./tradeParams_' + config.exchange);
 const traderapi = require('./trader_' + config.exchange)(config.apikey, config.apisecret, config.apipassword, log);
 const db = require('../modules/DB');
-const orderCollector = require('./orderCollector');
-
 
 module.exports = {
 

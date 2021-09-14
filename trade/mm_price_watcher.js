@@ -364,8 +364,10 @@ async function setPriceRange() {
 
       // Price range is set in some coin
 
-      l = Store.mathEqual(tradeParams.mm_priceWatcherSource, config.coin2, tradeParams.mm_priceWatcherLowPriceInSourceCoin, true).outAmount;
-      h = Store.mathEqual(tradeParams.mm_priceWatcherSource, config.coin2, tradeParams.mm_priceWatcherHighPriceInSourceCoin, true).outAmount;
+      l = Store.mathEqual(tradeParams.mm_priceWatcherSource, config.coin2,
+          tradeParams.mm_priceWatcherLowPriceInSourceCoin, true).outAmount;
+      h = Store.mathEqual(tradeParams.mm_priceWatcherSource, config.coin2,
+          tradeParams.mm_priceWatcherHighPriceInSourceCoin, true).outAmount;
 
       if (!l || l <= 0 || !h || h <= 0) {
 
