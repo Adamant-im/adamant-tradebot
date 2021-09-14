@@ -1,6 +1,5 @@
 const jsonminify = require('jsonminify');
 const fs = require('fs');
-const log = require('../helpers/log');
 const keys = require('adamant-api/helpers/keys');
 const isDev = process.argv.includes('dev');
 let config = {};
@@ -130,10 +129,10 @@ try {
 		}
 	});
 
-	log.log(`The bot successfully read the config-file${isDev ? ' (dev)' : ''}.`);
+	console.log(`The bot successfully read the config-file${isDev ? ' (dev)' : ''}.`);
 
 } catch (e) {
-	log.error('Error reading config: ' + e);
+	console.error('Error reading config: ' + e);
 }
 
 function exit(msg) {
