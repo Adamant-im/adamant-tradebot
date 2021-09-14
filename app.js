@@ -9,42 +9,42 @@ const log = require('./helpers/log');
 
 // Socket connection
 const api = require('./modules/api');
-api.socket.initSocket({socket: config.socket, wsType: config.ws_type, onNewMessage: txParser, admAddress: Store.user.ADM.address});
+api.socket.initSocket({ socket: config.socket, wsType: config.ws_type, onNewMessage: txParser, admAddress: Store.user.ADM.address });
 
 setTimeout(init, 5000);
 
 function init() {
-	require('./server');
-	try {
-		if (doClearDB) {
-			console.log('Clearing database..');
-			db.systemDb.db.drop();
-			db.incomingTxsDb.db.drop();
-			notify(`*${config.notifyName}: database cleared*. Manually stop the Bot now.`, 'info');
-		} else {
+  require('./server');
+  try {
+    if (doClearDB) {
+      console.log('Clearing database..');
+      db.systemDb.db.drop();
+      db.incomingTxsDb.db.drop();
+      notify(`*${config.notifyName}: database cleared*. Manually stop the Bot now.`, 'info');
+    } else {
 
-			db.systemDb.findOne().then(system => {
-				if (system) {
-					Store.lastBlock = system.lastBlock;
-				} else { // if 1st start
-					Store.updateLastBlock();
-				}
-				checker();
-				require('./trade/mm_trader').run();
-				require('./trade/mm_orderbook_builder').run();
-				require('./trade/mm_liquidity_provider').run();
-				require('./trade/mm_price_watcher').run();
-				// require('./trade/mm_orderbook_builder').test();
-				notify(`*${config.notifyName} started* for address _${Store.user.ADM.address}_ (ver. ${Store.version}).`, 'info');
-			});
-		}
+      db.systemDb.findOne().then((system) => {
+        if (system) {
+          Store.lastBlock = system.lastBlock;
+        } else { // if 1st start
+          Store.updateLastBlock();
+        }
+        checker();
+        require('./trade/mm_trader').run();
+        require('./trade/mm_orderbook_builder').run();
+        require('./trade/mm_liquidity_provider').run();
+        require('./trade/mm_price_watcher').run();
+        // require('./trade/mm_orderbook_builder').test();
+        notify(`*${config.notifyName} started* for address _${Store.user.ADM.address}_ (ver. ${Store.version}).`, 'info');
+      });
+    }
 
-	} catch (e) {
-		let errorMsg = `${config.notifyName} is not started. Error: ${e}`;
-		if (e.toString().includes('findOne')) {
-			errorMsg += '. Make sure MongoDB service is running.';
-		}
-		notify(errorMsg, 'error');
-		process.exit(1);
-	}
+  } catch (e) {
+    let errorMsg = `${config.notifyName} is not started. Error: ${e}`;
+    if (e.toString().includes('findOne')) {
+      errorMsg += '. Make sure MongoDB service is running.';
+    }
+    notify(errorMsg, 'error');
+    process.exit(1);
+  }
 }

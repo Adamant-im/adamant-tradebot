@@ -1,3 +1,3 @@
 module.exports = {
-	SAT: 100000000
+  SAT: 100000000,
 };
