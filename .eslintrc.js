@@ -24,5 +24,6 @@ module.exports = {
     'padded-blocks': ['off'],
     'new-cap': ['off'],
     'camelcase': ['off'],
+    'valid-jsdoc': ['off'],
   },
 };

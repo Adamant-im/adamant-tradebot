@@ -1606,9 +1606,9 @@ async function make(params, tx, confirmation) {
       // get amount from orderBook to but or sell
 
       /* reliabilityKoef: we must be sure that we'll fill all orders in the order book,
-			   and users/bot can add more orders while filling these orders
-			   Moreover, we should place counter-order to set new spread
-			*/
+         and users/bot can add more orders while filling these orders
+         Moreover, we should place counter-order to set new spread
+      */
       const reliabilityKoef = $u.randomValue(1.05, 1.1);
       const orderBookInfo = $u.getOrderBookInfo(await traderapi.getOrderBook(config.pair), tradeParams.mm_liquiditySpreadPercent, targetPrice);
       orderBookInfo.amountTargetPrice *= reliabilityKoef;

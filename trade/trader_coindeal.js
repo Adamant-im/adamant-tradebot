@@ -117,9 +117,9 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
     },
     cancelOrder(orderId) {
       /*
-				Watch this: sometimes cancelled orders on Coindeal switched to "CANCELLING" state
-				Balances stay frozen. To fix them, you need to contact Coindeal support.
-			*/
+        Watch this: sometimes cancelled orders on Coindeal switched to "CANCELLING" state
+        Balances stay frozen. To fix them, you need to contact Coindeal support.
+      */
       return new Promise((resolve, reject) => {
         COINDEAL.cancelEntrustSheet(orderId).then(function(data) {
           try {
@@ -134,9 +134,9 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
           } catch (e) {
             if (e instanceof SyntaxError) {
               /*
-								Watch this: Sometimes you'll get <h2>The server returned a "404 Not Found".</h2> instead of JSON.
-								This means this order does not exist.
-							*/
+                Watch this: Sometimes you'll get <h2>The server returned a "404 Not Found".</h2> instead of JSON.
+                This means this order does not exist.
+              */
               resolve(false);
               log.warn(`Error while processing cancelOrder() request: ${e}. It seems the order ${orderId} does not exist.`);
             } else {

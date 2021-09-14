@@ -124,9 +124,9 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
     },
     cancelOrder(orderId) {
       /*
-				Watch this: some orders on Resfinex are impossible to cancel, even on Resfinex UI
-				API returns "ok", but order persists
-			*/
+        Watch this: some orders on Resfinex are impossible to cancel, even on Resfinex UI
+        API returns "ok", but order persists
+      */
       return new Promise((resolve, reject) => {
         RESFINEX.cancelEntrustSheet(orderId).then(function(data) {
           try {

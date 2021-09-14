@@ -102,10 +102,10 @@ module.exports = {
     return config.erc20.includes(coin.toUpperCase());
   },
   /*
-		Returns a trade pair, coin1 and coin2, and decimals
-		Or coin1 only, if aPair is not a pair, and letCoin1only = true
-		If not isPairParsed, then aPair is not a valid trading pair, and default pair returned
-	*/
+    Returns a trade pair, coin1 and coin2, and decimals
+    Or coin1 only, if aPair is not a pair, and letCoin1only = true
+    If not isPairParsed, then aPair is not a valid trading pair, and default pair returned
+  */
   getPairObject(aPair, letCoin1only = false) {
 
     try {
@@ -538,7 +538,7 @@ module.exports = {
    * @param {number} timestamp Timestamp to format
    * @return {object} Contains different formatted strings
    */
-	 formatDate(timestamp) {
+   formatDate(timestamp) {
     if (!timestamp) return false;
     const formattedDate = {};
     const dateObject = new Date(timestamp);
