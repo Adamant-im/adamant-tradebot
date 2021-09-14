@@ -11,8 +11,10 @@ infoStr.write(`\n\n[The bot started] _________________${fullTime()}_____________
 
 module.exports = {
 	error(str) {
-		infoStr.write(`\n ` + 'error|' + fullTime() + '|' + str);
-		console.log('\x1b[31m', 'error|' + fullTime(), '\x1b[0m', str);
+		if (['error', 'warn', 'info', 'log'].includes(config.errorLevel)) {
+			infoStr.write(`\n ` + 'error|' + fullTime() + '|' + str);
+			console.log('\x1b[31m', 'error|' + fullTime(), '\x1b[0m', str);
+		}
 	},
 	info(str) {
 		console.log('\x1b[32m', 'info|' + fullTime(), '\x1b[0m', str);

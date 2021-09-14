@@ -1,9 +1,14 @@
 {
   "name": "adamant-tradebot",
-  "version": "3.1.2",
+  "version": "3.2.0",
   "description": "ADAMANT Trading and Market Making bot",
   "main": "index.js",
   "scripts": {
+    "lint": "npx eslint -f visualstudio .",
+    "lint:fix": "npx eslint -f visualstudio --fix",
+    "lint:fixrule": "npx eslint -f visualstudio --no-eslintrc --fix --env node,es2021,commonjs --parser-options=ecmaVersion:12 --rule",
+    "start": "node app.js dev",
+    "start:dev": "node app.js dev",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
@@ -48,7 +53,14 @@
     "request": "^2.88.0",
     "crypto-js": "^4.0.0"
   },
-  "publishConfig": {
+  "devDependencies": {
+    "eslint": "^7.32.0",
+    "eslint-config-google": "^0.14.0",
+    "eslint-plugin-import": "^2.24.2",
+    "eslint-plugin-node": "^11.1.0",
+    "eslint-plugin-promise": "^5.1.0"
+  },
+    "publishConfig": {
     "access": "public"
   },
   "repository": {
