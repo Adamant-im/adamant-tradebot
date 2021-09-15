@@ -1042,7 +1042,7 @@ async function fill(params) {
   let notPlacedString = '';
   if (placedOrders > 0) {
     if (notPlacedOrders) notPlacedString = ` ${notPlacedOrders} orders missed because of errors, check log file for details.`;
-    output = `${placedOrders} orders to ${type} ${$u.thousandSeparator(+total1.toFixed(coin1Decimals), false)} ${coin1} for ${$u.thousandSeparator(+total2.toFixed(coin2Decimals), false)} ${coin2}.${notPlacedString}`;
+    output = `${placedOrders} orders to ${type} ${$u.formatNumber(+total1.toFixed(coin1Decimals), false)} ${coin1} for ${$u.formatNumber(+total2.toFixed(coin2Decimals), false)} ${coin2}.${notPlacedString}`;
   } else {
     output = `No orders were placed. Check log file for details.`;
   }
@@ -1389,13 +1389,13 @@ async function stats(params) {
 
     let volume_Coin2 = '';
     if (exchangeRates.volume_Coin2) {
-      volume_Coin2 = ` & ${$u.thousandSeparator(+exchangeRates.volume_Coin2.toFixed(coin2Decimals), true)} ${coin2}`;
+      volume_Coin2 = ` & ${$u.formatNumber(+exchangeRates.volume_Coin2.toFixed(coin2Decimals), true)} ${coin2}`;
     }
     output += `${config.exchangeName} 24h stats for ${pair} pair:`;
     let delta = exchangeRates.high-exchangeRates.low;
     let average = (exchangeRates.high+exchangeRates.low)/2;
     let deltaPercent = delta/average * 100;
-    output += `\nVol: ${$u.thousandSeparator(+exchangeRates.volume.toFixed(coin1Decimals), true)} ${coin1}${volume_Coin2}.`;
+    output += `\nVol: ${$u.formatNumber(+exchangeRates.volume.toFixed(coin1Decimals), true)} ${coin1}${volume_Coin2}.`;
     output += `\nLow: ${exchangeRates.low.toFixed(coin2Decimals)}, high: ${exchangeRates.high.toFixed(coin2Decimals)}, delta: _${(delta).toFixed(coin2Decimals)}_ ${coin2} (${(deltaPercent).toFixed(2)}%).`;
     delta = exchangeRates.ask-exchangeRates.bid;
     average = (exchangeRates.ask+exchangeRates.bid)/2;
@@ -1414,17 +1414,17 @@ async function stats(params) {
     } else {
       output += '\n\n' + `Market making stats for ${pair} pair:` + '\n';
       if (ordersByType.coin1AmountTotalDayCount != 0) {
-        output += `24h: ${ordersByType.coin1AmountTotalDayCount} orders with ${$u.thousandSeparator(+ordersByType.coin1AmountTotalDay.toFixed(coin1Decimals), true)} ${coin1} and ${$u.thousandSeparator(+ordersByType.coin2AmountTotalDay.toFixed(coin2Decimals), true)} ${coin2}`;
+        output += `24h: ${ordersByType.coin1AmountTotalDayCount} orders with ${$u.formatNumber(+ordersByType.coin1AmountTotalDay.toFixed(coin1Decimals), true)} ${coin1} and ${$u.formatNumber(+ordersByType.coin2AmountTotalDay.toFixed(coin2Decimals), true)} ${coin2}`;
       } else {
         output += `24h: no orders`;
       }
       if (ordersByType.coin1AmountTotalMonthCount > ordersByType.coin1AmountTotalDayCount) {
-        output += `, 30d: ${ordersByType.coin1AmountTotalMonthCount} orders with ${$u.thousandSeparator(+ordersByType.coin1AmountTotalMonth.toFixed(coin1Decimals), true)} ${coin1} and ${$u.thousandSeparator(+ordersByType.coin2AmountTotalMonth.toFixed(coin2Decimals), true)} ${coin2}`;
+        output += `, 30d: ${ordersByType.coin1AmountTotalMonthCount} orders with ${$u.formatNumber(+ordersByType.coin1AmountTotalMonth.toFixed(coin1Decimals), true)} ${coin1} and ${$u.formatNumber(+ordersByType.coin2AmountTotalMonth.toFixed(coin2Decimals), true)} ${coin2}`;
       } else if (ordersByType.coin1AmountTotalMonthCount === 0) {
         output += `30d: no orders`;
       }
       if (ordersByType.coin1AmountTotalAllCount > ordersByType.coin1AmountTotalMonthCount) {
-        output += `, all time: ${ordersByType.coin1AmountTotalAllCount} orders with ${$u.thousandSeparator(+ordersByType.coin1AmountTotalAll.toFixed(coin1Decimals), true)} ${coin1} and ${$u.thousandSeparator(+ordersByType.coin2AmountTotalAll.toFixed(coin2Decimals), true)} ${coin2}`;
+        output += `, all time: ${ordersByType.coin1AmountTotalAllCount} orders with ${$u.formatNumber(+ordersByType.coin1AmountTotalAll.toFixed(coin1Decimals), true)} ${coin1} and ${$u.formatNumber(+ordersByType.coin2AmountTotalAll.toFixed(coin2Decimals), true)} ${coin2}`;
       }
       output += '.';
     }
@@ -1734,7 +1734,7 @@ async function calc(arr) {
     if ($u.isFiat(outCurrency)) {
       result = +result.toFixed(2);
     }
-    output = `Global market value of ${$u.thousandSeparator(amount)} ${inCurrency} equals **${$u.thousandSeparator(result)} ${outCurrency}**.`;
+    output = `Global market value of ${$u.formatNumber(amount)} ${inCurrency} equals **${$u.formatNumber(result)} ${outCurrency}**.`;
   } else {
     output = '';
   }
@@ -1748,13 +1748,13 @@ async function calc(arr) {
   if (exchangeRates) {
     askValue = exchangeRates.ask * amount;
     bidValue = exchangeRates.bid * amount;
-    output += `${config.exchangeName} value of ${$u.thousandSeparator(amount)} ${inCurrency}:\nBid: **${$u.thousandSeparator(bidValue.toFixed(8))} ${outCurrency}**, ask: **${$u.thousandSeparator(askValue.toFixed(8))} ${outCurrency}**.`;
+    output += `${config.exchangeName} value of ${$u.formatNumber(amount)} ${inCurrency}:\nBid: **${$u.formatNumber(bidValue.toFixed(8))} ${outCurrency}**, ask: **${$u.formatNumber(askValue.toFixed(8))} ${outCurrency}**.`;
   } else {
     exchangeRates = await traderapi.getRates(pair2);
     if (exchangeRates) {
       askValue = amount / exchangeRates.ask;
       bidValue = amount / exchangeRates.bid;
-      output += `${config.exchangeName} value of ${$u.thousandSeparator(amount)} ${inCurrency}:\nBid: **${$u.thousandSeparator(bidValue.toFixed(8))} ${outCurrency}**, ask: **${$u.thousandSeparator(askValue.toFixed(8))} ${outCurrency}**.`;
+      output += `${config.exchangeName} value of ${$u.formatNumber(amount)} ${inCurrency}:\nBid: **${$u.formatNumber(bidValue.toFixed(8))} ${outCurrency}**, ask: **${$u.formatNumber(askValue.toFixed(8))} ${outCurrency}**.`;
     } else {
       output += `Unable to get ${config.exchangeName} rates for ${pair}.`;
     }
@@ -1781,11 +1781,11 @@ async function balances() {
     output = `${config.exchangeName} balances:\n`;
     balances.forEach((crypto) => {
 
-      output += `${$u.thousandSeparator(+(crypto.total).toFixed(8), true)} _${crypto.code}_`;
+      output += `${$u.formatNumber(+(crypto.total).toFixed(8), true)} _${crypto.code}_`;
       if (crypto.total != crypto.free) {
-        output += ` (${$u.thousandSeparator(+crypto.free.toFixed(8), true)} available`;
+        output += ` (${$u.formatNumber(+crypto.free.toFixed(8), true)} available`;
         if (crypto.freezed > 0) {
-          output += ` & ${$u.thousandSeparator(+crypto.freezed.toFixed(8), true)} frozen`;
+          output += ` & ${$u.formatNumber(+crypto.freezed.toFixed(8), true)} frozen`;
         }
         output += ')';
       }
@@ -1812,7 +1812,7 @@ async function balances() {
       }
     });
 
-    output += `Total holdings ~ ${$u.thousandSeparator(+totalUSD.toFixed(2), true)} _USD_ or ${$u.thousandSeparator(totalBTC.toFixed(8), true)} _BTC_`;
+    output += `Total holdings ~ ${$u.formatNumber(+totalUSD.toFixed(2), true)} _USD_ or ${$u.formatNumber(totalBTC.toFixed(8), true)} _BTC_`;
     if (unknownCryptos.length) {
       output += `. Note: I didn't count unknown cryptos ${unknownCryptos.join(', ')}.`;
     }
@@ -1857,14 +1857,14 @@ async function balances() {
           deltaCoin2 = delta;
           signCoin2 = sign;
         }
-        output += `_${crypto.code}_: ${sign}${$u.thousandSeparator(+(delta).toFixed(8), true)}`;
+        output += `_${crypto.code}_: ${sign}${$u.formatNumber(+(delta).toFixed(8), true)}`;
         output += '\n';
       });
 
-      output += `Total holdings ${signUSD}${$u.thousandSeparator(+deltaUSD.toFixed(2), true)} _USD_ or ${signBTC}${$u.thousandSeparator(deltaBTC.toFixed(8), true)} _BTC_`;
+      output += `Total holdings ${signUSD}${$u.formatNumber(+deltaUSD.toFixed(2), true)} _USD_ or ${signBTC}${$u.formatNumber(deltaBTC.toFixed(8), true)} _BTC_`;
       if (deltaCoin1 && deltaCoin2 && (signCoin1 !== signCoin2)) {
         const price = deltaCoin2 / deltaCoin1;
-        output += `\n${signCoin1 === '+' ? 'I\'ve bought' : 'I\'ve sold'} ${$u.thousandSeparator(+deltaCoin1.toFixed(config.coin1Decimals), true)} _${config.coin1}_ at ${$u.thousandSeparator(price.toFixed(config.coin2Decimals), true)} _${config.coin2}_ price.`;
+        output += `\n${signCoin1 === '+' ? 'I\'ve bought' : 'I\'ve sold'} ${$u.formatNumber(+deltaCoin1.toFixed(config.coin1Decimals), true)} _${config.coin1}_ at ${$u.formatNumber(price.toFixed(config.coin2Decimals), true)} _${config.coin2}_ price.`;
       }
 
     } else {
