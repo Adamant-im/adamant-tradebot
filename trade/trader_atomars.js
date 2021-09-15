@@ -1,4 +1,4 @@
-const Atomars = require('./atomars_api');
+const Atomars = require('./api/atomars_api');
 const apiServer = 'https://api.atomars.com/v1';
 // const log = require('../helpers/log');
 const $u = require('../helpers/utils');

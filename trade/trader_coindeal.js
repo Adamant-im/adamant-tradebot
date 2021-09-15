@@ -1,4 +1,4 @@
-const COINDEAL = require('./coindeal_api');
+const COINDEAL = require('./api/coindeal_api');
 const apiServer = 'https://apigateway.coindeal.com';
 // const log = require('../helpers/log');
 const $u = require('../helpers/utils');

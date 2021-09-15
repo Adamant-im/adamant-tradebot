@@ -1,4 +1,4 @@
-const BITZ = require('./bit-z_api');
+const BITZ = require('./api/bit-z_api');
 const apiServer = 'https://apiv2.bitz.com';
 // const log = require('../helpers/log');
 const $u = require('../helpers/utils');

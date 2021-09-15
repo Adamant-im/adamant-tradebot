@@ -1,4 +1,4 @@
-const RESFINEX = require('./resfinex_api');
+const RESFINEX = require('./api/resfinex_api');
 const apiServer = 'https://api.resfinex.com';
 // const log = require('../helpers/log');
 const $u = require('../helpers/utils');
