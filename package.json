@@ -50,7 +50,7 @@
     "axios": "0.21.4",
     "express": "^4.17.1",
     "jsonminify": "^0.4.1",
-    "mongodb": "^3.6.3",
+    "mongodb": "^4.1.2",
     "request": "^2.88.0",
     "crypto-js": "^4.0.0"
   },
