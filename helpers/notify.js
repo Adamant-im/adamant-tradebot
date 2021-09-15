@@ -1,4 +1,4 @@
-const request = require('request');
+const axios = require('axios');
 const config = require('../modules/configReader');
 const log = require('./log');
 const api = require('../modules/api');
@@ -7,11 +7,11 @@ const {
   slack,
 } = config;
 
-
 module.exports = (message, type, silent_mode = false) => {
+
   try {
 
-    log[type](message.replace(/\*/g, '').replace(/_/g, ''));
+    log[type](removeMarkdown(message));
 
     if (!silent_mode) {
 
@@ -33,32 +33,56 @@ module.exports = (message, type, silent_mode = false) => {
           color = '#FFFFFF';
           break;
       }
-      const opts = {
-        uri: slack,
-        method: 'POST',
-        json: true,
-        timeout: 10000,
-        body: {
-          'attachments': [{
-            'fallback': message,
-            'color': color,
-            'text': message,
-            'mrkdwn_in': ['text'],
-          }],
-        },
+
+      const params = {
+        'attachments': [{
+          'fallback': message,
+          'color': color,
+          'text': makeBoldForSlack(message),
+          'mrkdwn_in': ['text'],
+        }],
       };
+
       if (slack && slack.length > 34) {
-        request(opts)
-            .on('error', function(err) {
-              log.log(`Request to Slack with message ${message} failed. ${err}.`);
+        axios.post(slack, params)
+            .catch(function(error) {
+              log.log(`Request to Slack with message ${message} failed. ${error}.`);
             });
       }
       if (adamant_notify && adamant_notify.length > 5 && adamant_notify.startsWith('U') && config.passPhrase && config.passPhrase.length > 30) {
-        api.send(config.passPhrase, adamant_notify, `${type}| ${message.replace(/\*/g, '**')}`, 'message');
+        const mdMessage = makeBoldForMarkdown(message);
+        api.send(config.passPhrase, adamant_notify, `${type}| ${mdMessage}`, 'message');
+        // api.sendMessage(config.passPhrase, adamant_notify, `${type}| ${mdMessage}`).then((response) => {
+        //   if (!response.success) {
+        //     log.warn(`Failed to send notification message '${mdMessage}' to ${adamant_notify}. ${response.errorMessage}.`);
+        //   }
+        // });
       }
+
     }
 
   } catch (e) {
     log.error('Notifier error: ' + e);
   }
+
 };
+
+function removeMarkdown(text) {
+  return doubleAsterisksToSingle(text).replace(/([_*]\b|\b[_*])/g, '');
+}
+
+function doubleAsterisksToSingle(text) {
+  return text.replace(/(\*\*\b|\b\*\*)/g, '*');
+}
+
+function singleAsteriskToDouble(text) {
+  return text.replace(/(\*\b|\b\*)/g, '**');
+}
+
+function makeBoldForMarkdown(text) {
+  return singleAsteriskToDouble(doubleAsterisksToSingle(text));
+}
+
+function makeBoldForSlack(text) {
+  return doubleAsterisksToSingle(text);
+}
