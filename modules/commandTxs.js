@@ -204,7 +204,7 @@ async function enable(params) {
 
       const orderBookOrdersCount = +params[1];
       tradeParams.mm_isOrderBookActive = true;
-      if (orderBookOrdersCount && orderBookOrdersCount != Infinity) {
+      if (orderBookOrdersCount && orderBookOrdersCount !== Infinity) {
         tradeParams.mm_orderBookOrdersCount = orderBookOrdersCount;
       } else if (!orderBookOrdersCount.length && !tradeParams.mm_orderBookOrdersCount) {
         orderBookOrdersCount = 15;
@@ -1132,7 +1132,7 @@ function getBuySellParams(params, type) {
   const amountOrQuote = quote || amount;
 
   let output = '';
-  if (((!price || price === Infinity || price <= 0) && (price != 'market')) || (!amountOrQuote || amountOrQuote === Infinity || amountOrQuote <= 0)) {
+  if (((!price || price === Infinity || price <= 0) && (price !== 'market')) || (!amountOrQuote || amountOrQuote === Infinity || amountOrQuote <= 0)) {
     output = `Incorrect params: ${amountOrQuote}, ${price}. Command works like this: */sell ADM/BTC amount=200 price=market*.`;
     return {
       msgNotify: ``,
@@ -1413,7 +1413,7 @@ async function stats(params) {
       output += '\n\n' + `There were no Market making orders for ${pair} all time.`;
     } else {
       output += '\n\n' + `Market making stats for ${pair} pair:` + '\n';
-      if (ordersByType.coin1AmountTotalDayCount != 0) {
+      if (ordersByType.coin1AmountTotalDayCount !== 0) {
         output += `24h: ${ordersByType.coin1AmountTotalDayCount} orders with ${$u.formatNumber(+ordersByType.coin1AmountTotalDay.toFixed(coin1Decimals), true)} ${coin1} and ${$u.formatNumber(+ordersByType.coin2AmountTotalDay.toFixed(coin2Decimals), true)} ${coin2}`;
       } else {
         output += `24h: no orders`;
@@ -1782,7 +1782,7 @@ async function balances() {
     balances.forEach((crypto) => {
 
       output += `${$u.formatNumber(+(crypto.total).toFixed(8), true)} _${crypto.code}_`;
-      if (crypto.total != crypto.free) {
+      if (crypto.total !== crypto.free) {
         output += ` (${$u.formatNumber(+crypto.free.toFixed(8), true)} available`;
         if (crypto.freezed > 0) {
           output += ` & ${$u.formatNumber(+crypto.freezed.toFixed(8), true)} frozen`;

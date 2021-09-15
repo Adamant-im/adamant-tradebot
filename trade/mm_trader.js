@@ -502,7 +502,7 @@ async function setPrice(type, pair, coin1Amount) {
     if (mmCurrentAction === 'executeInSpread') {
 
       let isCareful = true; // set price closer to bids & asks
-      if (tradeParams && (tradeParams.mm_isCareful != undefined)) {
+      if (tradeParams && (tradeParams.mm_isCareful !== undefined)) {
         isCareful = tradeParams.mm_isCareful;
       }
 

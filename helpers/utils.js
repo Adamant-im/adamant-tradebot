@@ -737,7 +737,7 @@ module.exports = {
     a.forEach((obj1) => {
       obj2 = b.filter((crypto) => crypto.code === obj1.code)[0];
       if (obj2) {
-        if (obj1.total != obj2.total) {
+        if (obj1.total !== obj2.total) {
           diff.push({
             code: obj1.code,
             prev: obj2.total,
