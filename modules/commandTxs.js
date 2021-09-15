@@ -4,7 +4,7 @@ const $u = require('../helpers/utils');
 const config = require('./configReader');
 const log = require('../helpers/log');
 const notify = require('../helpers/notify');
-const tradeParams = require('../trade/tradeParams_' + config.exchange);
+const tradeParams = require('../trade/settings/tradeParams_' + config.exchange);
 const traderapi = require('../trade/trader_' + config.exchange)(config.apikey, config.apisecret, config.apipassword, log);
 const orderCollector = require('../trade/orderCollector');
 const orderStats = require('../trade/orderStats');
@@ -1894,7 +1894,7 @@ function version() {
 
 function saveConfig() {
   const str = 'module.exports = ' + JSON.stringify(tradeParams, null, 2).replaceAll('"', '\'').replaceAll('\n\}', ',\n};\n');
-  fs.writeFileSync('./trade/tradeParams_' + config.exchange + '.js', str);
+  fs.writeFileSync('./trade/settings/tradeParams_' + config.exchange + '.js', str);
 }
 
 const commands = {
