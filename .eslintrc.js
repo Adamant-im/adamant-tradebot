@@ -13,7 +13,7 @@ module.exports = {
   rules: {
     'object-curly-spacing': ['error', 'always'],
     'max-len': ['error',
-      { 'code': 125,
+      { 'code': 131,
         'ignoreTrailingComments': true,
         'ignoreUrls': true,
         'ignoreStrings': true,

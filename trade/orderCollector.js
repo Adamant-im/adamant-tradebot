@@ -78,7 +78,6 @@ module.exports = {
 
       };
 
-      // console.log(`Clearing orders. Try number: ${tries}, cleared: ${clearedOrders.length}, total: ${ordersToClear.length}.`)
       notFinished = doForce && ordersToClear.length > clearedOrders.length && tries < MAX_TRIES;
 
     } while (notFinished);
@@ -222,7 +221,6 @@ module.exports = {
 
         };
 
-        // console.log(`Clearing general orders. Try number: ${tries}, cleared: ${clearedOrders.length}, total: ${openOrders.length}.`)
         notFinished = doForce && openOrders.length > clearedOrders.length && tries < MAX_TRIES;
 
       } while (notFinished);

@@ -297,7 +297,6 @@ async function setPrice(type, pair, coin1Amount) {
 
       const lowPrice = pw.getLowPrice();
       const highPrice = pw.getHighPrice();
-      // console.log('lowPrice:', +lowPrice.toFixed(config.coin2Decimals), 'highPrice:', +highPrice.toFixed(config.coin2Decimals));
 
       if (type === 'buy') {
 
@@ -378,7 +377,6 @@ async function setPrice(type, pair, coin1Amount) {
           if (tradeParams.mm_isLiquidityActive) {
             // 80% in order book and 20% in spread
             mmCurrentAction = Math.random() > 0.8 ? 'executeInSpread' : 'executeInOrderBook';
-            // console.log(`Mm-order with spread+ and mm_isLiquidityActive on: mmCurrentAction=${mmCurrentAction}`)
           } else {
             const obSpread = orderBookInfo.spreadPercent;
             if (obSpread < 2) { // small spread
@@ -391,7 +389,6 @@ async function setPrice(type, pair, coin1Amount) {
             } else {
               mmCurrentAction = Math.random() > 0.001 ? 'executeInSpread' : 'executeInOrderBook';
             }
-            // console.log(`Mm-order with spread+ and mm_isLiquidityActive off: orderBookInfo.spreadPercent=${obSpread}, mmCurrentAction=${mmCurrentAction}`)
           }
         } else {
           mmCurrentAction = 'executeInOrderBook';
@@ -428,8 +425,7 @@ async function setPrice(type, pair, coin1Amount) {
 
       let amountInSpread; let amountInConfig; let amountMaxAllowed; let firstOrderAmount;
       // fill not more, than liquidity amount * allowedAmountKoef
-      let allowedAmountKoef;
-      allowedAmountKoef = tradeParams.mm_isLiquidityActive ? $u.randomValue(0.5, 0.8) : $u.randomValue(0.2, 0.5);
+      const allowedAmountKoef = tradeParams.mm_isLiquidityActive ? $u.randomValue(0.5, 0.8) : $u.randomValue(0.2, 0.5);
 
       if (type === 'sell') {
 

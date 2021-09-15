@@ -195,8 +195,7 @@ module.exports = {
         return;
       }
 
-      let orderReq;
-      orderReq = await traderapi.placeOrder(type, config.pair, price, coin1Amount, 1, null, pairObj);
+      const orderReq = await traderapi.placeOrder(type, config.pair, price, coin1Amount, 1, null, pairObj);
       if (orderReq && orderReq.orderid) {
         const { ordersDb } = db;
         const order = new ordersDb({

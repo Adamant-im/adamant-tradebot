@@ -151,8 +151,6 @@ module.exports = {
         return;
       }
 
-      // console.log(type, price.toFixed(8), coin1Amount.toFixed(0), coin2Amount.toFixed(0), 'position:', position, 'lifeTime:', lifeTime);
-
       // Check balances
       const balances = await isEnoughCoins(config.coin1, config.coin2, coin1Amount, coin2Amount, type);
       if (!balances.result) {
@@ -167,8 +165,7 @@ module.exports = {
         return;
       }
 
-      let orderReq;
-      orderReq = await traderapi.placeOrder(type, config.pair, price, coin1Amount, 1, null, pairObj);
+      const orderReq = await traderapi.placeOrder(type, config.pair, price, coin1Amount, 1, null, pairObj);
       if (orderReq && orderReq.orderid) {
         const { ordersDb } = db;
         const order = new ordersDb({

@@ -301,8 +301,8 @@ async function setPriceRange() {
 
     if (tradeParams.mm_priceWatcherSource.indexOf('@') > -1) {
 
-      let exchange; let pair;
-      [pair, exchange] = tradeParams.mm_priceWatcherSource.split('@');
+      const pair = tradeParams.mm_priceWatcherSource.split('@')[0];
+      const exchange = tradeParams.mm_priceWatcherSource.split('@')[1];
       const pairObj = $u.getPairObject(pair, false);
 
       // let exchangeapi = require('./trader_' + exchange.toLowerCase())(null, null, null, log, true);
@@ -351,7 +351,6 @@ async function setPriceRange() {
 
       lowPrice = l * $u.randomValue(1 - tradeParams.mm_priceWatcherDeviationPercent/100, 1) * $u.randomValue(0.99, 1.005);
       highPrice = h * $u.randomValue(1, 1 + tradeParams.mm_priceWatcherDeviationPercent/100) * $u.randomValue(0.995, 1.01);
-      // log.log(`Modified price range for ${pair} at ${exchange} exchange: from ${lowPrice.toFixed(config.coin2Decimals)} to ${highPrice.toFixed(config.coin2Decimals)}.`);
       if (lowPrice >= highPrice) {
         lowPrice = l;
         highPrice = h;
