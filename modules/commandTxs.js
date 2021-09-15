@@ -1893,7 +1893,7 @@ function version() {
 }
 
 function saveConfig() {
-  const str = 'module.exports = ' + JSON.stringify(tradeParams, null, 3);
+  const str = 'module.exports = ' + JSON.stringify(tradeParams, null, 2).replaceAll('"', '\'').replaceAll('\n\}', ',\n};\n');
   fs.writeFileSync('./trade/tradeParams_' + config.exchange + '.js', str);
 }
 
