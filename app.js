@@ -21,29 +21,16 @@ function init() {
       db.incomingTxsDb.db.drop();
       notify(`*${config.notifyName}: database cleared*. Manually stop the Bot now.`, 'info');
     } else {
-
-      db.systemDb.findOne().then((system) => {
-        if (system) {
-          Store.lastBlock = system.lastBlock;
-        } else { // if 1st start
-          Store.updateLastBlock();
-        }
-        checker();
-        require('./trade/mm_trader').run();
-        require('./trade/mm_orderbook_builder').run();
-        require('./trade/mm_liquidity_provider').run();
-        require('./trade/mm_price_watcher').run();
-        // require('./trade/mm_orderbook_builder').test();
-        notify(`*${config.notifyName} started* for address _${config.address}_ (ver. ${config.version}).`, 'info');
-      });
+      checker();
+      require('./trade/mm_trader').run();
+      require('./trade/mm_orderbook_builder').run();
+      require('./trade/mm_liquidity_provider').run();
+      require('./trade/mm_price_watcher').run();
+      // require('./trade/mm_orderbook_builder').test();
+      notify(`*${config.notifyName} started* for address _${config.address}_ (ver. ${config.version}).`, 'info');
     }
-
   } catch (e) {
-    let errorMsg = `${config.notifyName} is not started. Error: ${e}`;
-    if (e.toString().includes('findOne')) {
-      errorMsg += '. Make sure MongoDB service is running.';
-    }
-    notify(errorMsg, 'error');
+    notify(`${config.notifyName} is not started. Error: ${e}`, 'error');
     process.exit(1);
   }
 }
