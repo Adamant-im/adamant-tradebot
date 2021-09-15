@@ -111,28 +111,30 @@ try {
     exit(`Bot's config is wrong. No passPhrase. Cannot start the Bot.`);
   }
 
-  let keysPair;
+  let keyPair;
   try {
-    keysPair = keys.createKeypairFromPassPhrase(config.passphrase);
+    keyPair = keys.createKeypairFromPassPhrase(config.passPhrase);
   } catch (e) {
-    exit('Passphrase is not valid! Error: ' + e);
+    exit(`Bot's config is wrong. Invalid passPhrase. Error: ${e}. Cannot start the Bot.`);
   }
-
-  const address = keys.createAddressFromPublicKey(keysPair.publicKey);
-  config.publicKey = keysPair.publicKey;
+  const address = keys.createAddressFromPublicKey(keyPair.publicKey);
+  // config.keyPair = keyPair;
+  // config.publicKey = keyPair.publicKey.toString('hex');
+  config.publicKey = keyPair.publicKey;
   config.address = address;
+  config.version = require('../package.json').version;
 
   config.supported_exchanges = config.exchanges.join(', ');
   config.exchangeName = config.exchange;
   config.exchange = config.exchangeName.toLowerCase();
   config.pair = config.pair.toUpperCase();
-  config.coin1 = config.pair.split('/')[0];
-  config.coin2 = config.pair.split('/')[1];
+  config.coin1 = config.pair.split('/')[0].trim();
+  config.coin2 = config.pair.split('/')[1].trim();
 
   Object.keys(fields).forEach((f) => {
     if (!config[f] && fields[f].isRequired) {
       exit(`Bot's ${address} config is wrong. Field _${f}_ is not valid. Cannot start Bot.`);
-    } else if (!config[f] && config[f] != 0 && fields[f].default) {
+    } else if (!config[f] && config[f] !== 0 && fields[f].default) {
       config[f] = fields[f].default;
     }
     if (config[f] && fields[f].type !== config[f].__proto__.constructor) {
@@ -140,7 +142,7 @@ try {
     }
   });
 
-  console.log(`The bot successfully read the config-file${isDev ? ' (dev)' : ''}.`);
+  console.info(`The bot ${address} successfully read a config-file${isDev ? ' (dev)' : ''}.`);
 
 } catch (e) {
   console.error('Error reading config: ' + e);
