@@ -116,7 +116,6 @@ function sign_api(path, data) {
 }
 
 function setSign(params) {
-  const pars = [];
   let keys = Object.keys(params);
   const n = keys.length;
   keys = keys.sort();

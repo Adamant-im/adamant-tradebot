@@ -29,5 +29,6 @@ module.exports = {
     'no-caller': ['off'],
     'prefer-promise-reject-errors': ['off'],
     'guard-for-in': ['off'],
+    'no-unused-vars': ['off'],
   },
 };

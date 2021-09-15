@@ -1627,7 +1627,8 @@ async function make(params, tx, confirmation) {
 
       if (confirmation) {
         // let order = true;
-        const order = await orderUtils.addOrder(orderBookInfo.typeTargetPrice, config.pair, targetPrice, orderBookInfo.amountTargetPrice, 1, orderBookInfo.amountTargetPriceQuote, pairObj);
+        const order = await orderUtils.addOrder(orderBookInfo.typeTargetPrice,
+            config.pair, targetPrice, orderBookInfo.amountTargetPrice, 1, orderBookInfo.amountTargetPriceQuote, pairObj);
         if (order && order.orderid) {
           const showRatesAfterOrder = async function(exchangeRatesBefore, priceString, actionString) {
             setTimeout(async () => {

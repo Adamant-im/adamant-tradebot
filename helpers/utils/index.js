@@ -342,7 +342,6 @@ module.exports = {
           t = liquidity['full'].amountBidsQuote;
         }
 
-        /* eslint-disable no-unused-vars */
         prev_c_c_m1 = c_c_m1;
         prev_c_t = c_t;
         prev_s = s;

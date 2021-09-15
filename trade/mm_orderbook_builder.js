@@ -210,9 +210,10 @@ function setType() {
     log.warn(`Param mm_buyPercent is not set. Check ${config.exchangeName} config.`);
     return false;
   }
+
   let type = 'sell';
-  if (Math.random() > tradeParams.mm_buyPercent) // 1 minus tradeParams.mm_buyPercent
-  {
+  // 1 minus tradeParams.mm_buyPercent
+  if (Math.random() > tradeParams.mm_buyPercent) {
     type = 'buy';
   }
   return type;

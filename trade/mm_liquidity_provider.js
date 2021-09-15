@@ -57,22 +57,18 @@ module.exports = {
         exchange: config.exchange,
       });
 
-      const orderBookInfo = $u.getOrderBookInfo(await traderapi.getOrderBook(config.pair), tradeParams.mm_liquiditySpreadPercent);
+      const orderBookInfo = $u.getOrderBookInfo(await traderapi.getOrderBook(config.pair),
+          tradeParams.mm_liquiditySpreadPercent);
+
       if (!orderBookInfo) {
         log.warn(`${config.notifyName}: Order books are empty for ${config.pair}, or temporary API error. Unable to get spread while placing liq-order.`);
         return;
       }
-      // console.log(orderBookInfo);
 
-      // console.log('liquidityOrders-Untouched', liquidityOrders.length);
-      //            liquidityOrders = await this.updateLiquidityOrders(liquidityOrders); // update orders which partially filled or not found
       liquidityOrders = await orderUtils.updateOrders(liquidityOrders, config.pair); // update orders which partially filled or not found
-      // console.log('liquidityOrders-AfterUpdate', liquidityOrders.length);
       liquidityOrders = await this.closeLiquidityOrders(liquidityOrders, orderBookInfo); // close orders which expired or out of spread
-      // console.log('liquidityOrders-AfterClose', liquidityOrders.length);
 
       const liquidityStats = $u.getOrdersStats(liquidityOrders);
-      // console.log(liquidityStats);
 
       let amountPlaced;
       do {
@@ -80,7 +76,6 @@ module.exports = {
         if (amountPlaced) {
           liquidityStats.bidsTotalQuoteAmount += amountPlaced;
           liquidityStats.bidsCount += 1;
-          // console.log(`New buy liq-order placed: ${amountPlaced}. Total sell liq-orders: ${liquidityStats.bidsTotalQuoteAmount}.`)
         }
       } while (amountPlaced);
       do {
@@ -89,7 +84,6 @@ module.exports = {
           liquidityStats.asksTotalAmount += amountPlaced;
           liquidityStats.asksCount += 1;
         }
-        // console.log(`New sell liq-order placed: ${amountPlaced}. Total sell liq-orders: ${liquidityStats.asksTotalAmount}.`)
       } while (amountPlaced);
 
       log.info(`Liquidity stats: opened ${liquidityStats.bidsCount} bids-buy orders for ${liquidityStats.bidsTotalQuoteAmount.toFixed(config.coin2Decimals)} of ${tradeParams.mm_liquidityBuyQuoteAmount} ${config.coin2} and ${liquidityStats.asksCount} asks-sell orders with ${liquidityStats.asksTotalAmount.toFixed(config.coin1Decimals)} of ${tradeParams.mm_liquiditySellAmount} ${config.coin1}.`);
@@ -177,14 +171,12 @@ module.exports = {
 
       if (type === 'sell') {
         if (coin1Amount > (tradeParams.mm_liquiditySellAmount - amountPlaced)) {
-          // console.log(`Exceeded liquidity amounts to ${type}. Pending: ${coin1Amount.toFixed(config.coin1Decimals)}, placed: ${amountPlaced.toFixed(config.coin1Decimals)}, limit: ${tradeParams.mm_liquiditySellAmount} ${config.coin1}.`);
           return false;
         }
       }
 
       if (type === 'buy') {
         if (coin2Amount > (tradeParams.mm_liquidityBuyQuoteAmount - amountPlaced)) {
-          // console.log(`Exceeded liquidity amounts to ${type}. Pending: ${coin2Amount.toFixed(config.coin2Decimals)}, placed: ${amountPlaced.toFixed(config.coin2Decimals)}, limit: ${tradeParams.mm_liquidityBuyQuoteAmount} ${config.coin2}.`);
           return false;
         }
       }
@@ -334,8 +326,6 @@ async function setPrice(type, orderBookInfo) {
       if (price - precision < orderBookInfo.highestBid) {
         price = orderBookInfo.highestBid + precision;
       }
-      // console.log('****', price, low, high);
-      // console.log(`Sell price: ${price.toFixed(config.coin2Decimals)} must be MORE than highest bid: ${orderBookInfo.highestBid}. Low: ${low}, high: ${high}.`)
     } else {
       high = targetPrice;
       low = targetPrice * (1 - tradeParams.mm_liquiditySpreadPercent/100 / 2);
@@ -345,11 +335,9 @@ async function setPrice(type, orderBookInfo) {
         output = `${config.notifyName}: Price watcher corrected price to buy not higher than ${highPrice.toFixed(config.coin2Decimals)} while placing liq-order. Low: ${low.toFixed(config.coin2Decimals)}, high: ${high.toFixed(config.coin2Decimals)} ${config.coin2}.`;
         log.log(output);
       }
-      // console.log('****', price, low, high);
       if (price + precision > orderBookInfo.lowestAsk) {
         price = orderBookInfo.lowestAsk - precision;
       }
-      // console.log(`Buy price: ${price.toFixed(config.coin2Decimals)} must be SMALLER than lowest ask: ${orderBookInfo.lowestAsk}. Low: ${low}, high: ${high}.`)
     }
 
     return {
