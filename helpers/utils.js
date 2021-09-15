@@ -1,6 +1,6 @@
-const config = require('../../modules/configReader');
-const log = require('../log');
-const Store = require('../../modules/Store');
+const config = require('../modules/configReader');
+const log = require('./log');
+const Store = require('../modules/Store');
 
 module.exports = {
   /**
