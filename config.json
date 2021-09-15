@@ -41,8 +41,7 @@
   "exchanges": [
     "Bit-Z",
     "CoinDeal",
-    "Resfinex",
-    "Atomars"
+    "Resfinex"
   ],
 
   /** Exchange to work with. Case insensitive. **/
@@ -66,10 +65,10 @@
   **/
   "clearAllOrdersInterval": 0,
 
-  /** Exchange's account API key for connection. Or login for Atomars **/
+  /** Exchange's account API key for connection **/
   "apikey": "YOUR-KEY..",
 
-  /** Exchange's account API secret for connection. Or password for Atomars **/
+  /** Exchange's account API secret for connection **/
   "apisecret": "YOUR-SECRET..",
 
   /** Exchange's account trade password. Mandatory for Bit-Z. **/
