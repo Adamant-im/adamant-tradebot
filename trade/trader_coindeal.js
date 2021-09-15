@@ -1,10 +1,10 @@
 const COINDEAL = require('./api/coindeal_api');
-const apiServer = 'https://apigateway.coindeal.com';
-// const log = require('../helpers/log');
 const $u = require('../helpers/utils');
 
 // API endpoints:
 // https://apigateway.coindeal.com
+
+const apiServer = 'https://apigateway.coindeal.com';
 
 module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
 
@@ -15,8 +15,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
       return new Promise((resolve, reject) => {
         COINDEAL.getUserAssets().then(function(data) {
           try {
-            // console.log(data);
-            let assets = JSON.parse(data);
+            let assets = data;
             if (!assets) {
               assets = [];
             }
@@ -52,10 +51,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
       return new Promise((resolve, reject) => {
         COINDEAL.getUserNowEntrustSheet(pair_.coin1, pair_.coin2).then(function(data) {
           try {
-            // console.log(data);
-            // console.log(2);
-
-            let openOrders = JSON.parse(data);
+            let openOrders = data;
             if (!openOrders) {
               openOrders = [];
             }
@@ -100,8 +96,6 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
                 coinTo: order.quoteCurrency,
               });
             });
-            // console.log(result[0]);
-            // console.log(3);
 
             resolve(result);
 
@@ -123,8 +117,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
       return new Promise((resolve, reject) => {
         COINDEAL.cancelEntrustSheet(orderId).then(function(data) {
           try {
-            // console.log(data);
-            if (JSON.parse(data).id) {
+            if (data.id) {
               log.info(`Cancelling order ${orderId}..`);
               resolve(true);
             } else {
@@ -154,7 +147,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
       pair_ = formatPairName(pair);
       return new Promise((resolve, reject) => {
         COINDEAL.stats().then(function(data2) {
-          data2 = JSON.parse(data2)[pair_.coin1 + '_' + pair_.coin2];
+          data2 = data2[pair_.coin1 + '_' + pair_.coin2];
           // console.log(data2);
           try {
             if (data2) {
@@ -207,8 +200,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
         return new Promise((resolve, reject) => {
           COINDEAL.addEntrustSheet(pair_.pair, coin1Amount, price, type).then(function(data) {
             try {
-              // console.log(data);
-              const result = JSON.parse(data);
+              const result = data;
               if (result && result.id) {
                 message = `Order placed to ${output} Order Id: ${result.id.toString()}.`;
                 log.info(message);
@@ -276,8 +268,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
       return new Promise((resolve, reject) => {
         COINDEAL.orderBook(pair_.pair).then(function(data) {
           try {
-            // console.log(data);
-            let book = JSON.parse(data);
+            let book = data;
             if (!book) {
               book = [];
             }
@@ -321,8 +312,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
     getDepositAddress(coin) {
       return new Promise((resolve, reject) => {
         COINDEAL.getDepositAddress(coin).then(function(data) {
-          // console.log(data);
-          data = JSON.parse(data);
+          data = data;
           try {
             if (data && data.items && data.items[0]) {
               resolve(data.items[0].address);

@@ -1,4 +1,3 @@
-const request = require('request');
 const axios = require('axios');
 
 const DEFAULT_HEADERS = {
@@ -39,17 +38,16 @@ function sign_api(path, data, type = 'get') {
         httpOptions = Object.assign(httpOptions, { 'formData': data });
       }
 
-      // console.log(httpOptions);
-      request(httpOptions, function(err, res, data) {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(data);
-        }
-      }).on('error', function(err) {
-        log.log(`Request to ${url} with data ${JSON.stringify(data)} failed. ${err}.`);
-        reject(null);
-      });
+      axios(httpOptions)
+          .then(function(response) {
+            const data = response.data;
+            resolve(data);
+          })
+          .catch(function(error) {
+            log.log(`Request to ${url} with data ${JSON.stringify(data)} failed. ${error}.`);
+            reject(error);
+          });
+
     } catch (err) {
       log.log(`Processing of request to ${url} with data ${JSON.stringify(data)} failed. ${err}.`);
       reject(null);
@@ -65,16 +63,16 @@ function public_api(url, data, type = 'get') {
         method: type,
         timeout: 10000,
       };
-      request(httpOptions, function(err, res, data) {
-        if (err) {
-          reject(err);
-        } else {
-          resolve(data);
-        }
-      }).on('error', function(err) {
-        log.log(`Request to ${url} failed. ${err}.`);
-        reject(null);
-      });
+      axios(httpOptions)
+          .then(function(response) {
+            const data = response.data;
+            resolve(data);
+          })
+          .catch(function(error) {
+            log.log(`Request to ${url} failed. ${error}.`);
+            reject(error);
+          });
+
     } catch (err) {
       log.log(`Processing of request to ${url} failed. ${err}.`);
       reject(null);
