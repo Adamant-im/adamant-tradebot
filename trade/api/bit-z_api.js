@@ -1,6 +1,7 @@
-const CryptoJS = require('crypto-js');
-const request = require('request');
-// const log = require('../helpers/log');
+const crypto = require('crypto');
+const axios = require('axios');
+const FormData = require('form-data');
+
 const DEFAULT_HEADERS = {
   'Content-Type': 'application/x-www-form-urlencoded',
   'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.71 Safari/537.36',
@@ -17,6 +18,7 @@ let log = {};
 // https://apidocv2.bitz.ai/en/
 
 const wrongAccountErrors = [ // https://apidoc.bit-z.com/en/Error-code/Error-code-comparison-table.html
+  -105, // Invalid api signature
   -109, // Invalid secretKey
   -111, // Current IP is not in the range of trusted IP
   -117, // The apikey expires
@@ -49,22 +51,26 @@ function market_api(path, data) {
         timeout: 10000,
         headers: DEFAULT_HEADERS,
       };
-      // log('-------------httpOptions-----------');
-      // log(httpOptions);
-      request.get(httpOptions, function(err, res, data) {
-        if (err) {
-          reject(err);
-        } else {
-          if (res.statusCode == 200) {
-            resolve(data);
-          } else {
-            reject(res.statusCode);
-          }
-        }
-      }).on('error', function(err) {
-        log.log(`Request to ${url} with data ${pars} failed. ${err}.`);
-        reject(null);
-      });
+
+      axios(httpOptions)
+          .then(function(response) {
+            try {
+              const data = response.data;
+              if (data.status === 200) {
+                resolve(data);
+              } else {
+                reject(data.status);
+              }
+            } catch (e) {
+              log.warn(`Error while processing response of request to ${url}: ${e}. Data object I've got: ${data}.`);
+              reject(`Unable to process data: ${data}`);
+            }
+          })
+          .catch(function(error) {
+            log.log(`Request to ${url} with data ${pars} failed. ${error}.`);
+            reject(error);
+          }); // axios
+
     } catch (err) {
       log.log(`Processing of request to ${url} with data ${pars} failed. ${err}.`);
       reject(null);
@@ -77,37 +83,39 @@ function sign_api(path, data) {
   data = setSign(data);
   return new Promise((resolve, reject) => {
     try {
-      const httpOptions = {
-        url: url,
-        form: data,
-        method: 'post',
-        timeout: 10000,
-        headers: DEFAULT_HEADERS,
-      };
-      // log('-------------httpOptions-----------');
-      // log(httpOptions);
-      request(httpOptions, function(err, res, data) {
-        if (err) {
-          reject(err);
-        } else {
-          if (res.statusCode == 200) {
-            resolve(data);
-            try {
-              const status = JSON.parse(data).status;
-              if (wrongAccountErrors.includes(status)) {
-                log.warn(`Bit-Z declined a request to ${url} because of wrong account data. Make sure API keys are correct, not expired, bot's IP set as trusted, trade password is set. Reply data: ${data}.`);
-              }
-            } catch (err) {
-              log.log(`Exception while processing data in sign_api() request to ${url}: ${err}`);
-            }
-          } else {
-            reject(res.statusCode);
-          }
-        }
-      }).on('error', function(err) {
-        log.log(`Request to ${url} with data ${JSON.stringify(data)} failed. ${err}.`);
-        reject(null);
+
+      const form = new FormData();
+      Object.keys(data).forEach((key) => {
+        form.append(key, data[key]);
       });
+
+      const httpOptions = {
+        timeout: 10000,
+        // headers: DEFAULT_HEADERS,
+        headers: form.getHeaders(),
+      };
+
+      axios.post(url, form, httpOptions)
+          .then(function(response) {
+            try {
+              const data = response.data;
+              if (data.status === 200) {
+                resolve(data);
+              } else if (wrongAccountErrors.includes(data.status)) {
+                reject(`Bit-Z declined a request to ${url} because of wrong account data. Make sure API keys are correct, not expired, bot's IP set as trusted, trade password is set. Reply data: ${data}.`);
+              } else {
+                reject(data.status);
+              }
+            } catch (e) {
+              log.warn(`Error while processing response of request to ${url}: ${e}. Data object I've got: ${data}.`);
+              reject(`Unable to process data: ${data}`);
+            }
+          })
+          .catch(function(error) {
+            log.log(`Request to ${url} with data ${data} failed. ${error}.`);
+            reject(error);
+          }); // axios
+
     } catch (err) {
       log.log(`Processing of request to ${url} with data ${JSON.stringify(data)} failed. ${err}.`);
       reject(null);
@@ -121,12 +129,11 @@ function setSign(params) {
   keys = keys.sort();
   let sign = '';
   for (let i = 0; i < n; i++) {
-    if (sign != '') sign = sign + '&';
+    if (sign !== '') sign = sign + '&';
     sign = sign + keys[i] + '=' + params[keys[i]];
   }
-  //
   sign = sign + config.secret_key;
-  sign = CryptoJS.MD5(sign).toString().toLowerCase();
+  sign = crypto.createHash('md5').update(sign).digest('hex').toLowerCase();
   params.sign = sign;
   return params;
 }

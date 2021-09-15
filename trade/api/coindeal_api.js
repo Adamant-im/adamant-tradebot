@@ -1,5 +1,6 @@
 const request = require('request');
-// const log = require('../helpers/log');
+const axios = require('axios');
+
 const DEFAULT_HEADERS = {
   'Accept': 'application/json',
 };
@@ -20,7 +21,7 @@ function sign_api(path, data, type = 'get') {
     pars.push(key + '=' + v);
   }
   const p = pars.join('&');
-  if (p && type != 'post') {
+  if (p && type !== 'post') {
     url = url + '?' + p;
   }
   let headersWithSign = Object.assign({ 'Authorization': setSign() }, DEFAULT_HEADERS);

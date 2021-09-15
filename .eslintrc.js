@@ -30,5 +30,6 @@ module.exports = {
     'padded-blocks': ['off'],
     'new-cap': ['off'],
     'camelcase': ['off'],
+    'eqeqeq': ['error', 'always'],
   },
 };

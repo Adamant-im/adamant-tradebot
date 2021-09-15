@@ -1,7 +1,7 @@
 const crypto = require('crypto');
 const axios = require('axios');
 
-let WEB_BASE = 'https://api.resfinex.com'; // API server like https://api.resfinex.com/
+let WEB_BASE = 'https://api.resfinex.com'; // Default, may be changed on init
 let config = {
   'apiKey': '',
   'secret_key': '',
@@ -19,7 +19,7 @@ function sign_api(path, data, type = 'get') {
     pars.push(key + '=' + v);
   }
   const queryString = pars.join('&');
-  if (queryString && type != 'post') {
+  if (queryString && type !== 'post') {
     url = url + '?' + queryString;
   }
 
@@ -90,7 +90,7 @@ function public_api(path, data, type = 'get') {
     pars.push(key + '=' + v);
   }
   const queryString = pars.join('&');
-  if (queryString && type != 'post') {
+  if (queryString && type !== 'post') {
     url = url + '?' + queryString;
   }
 

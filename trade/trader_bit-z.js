@@ -1,6 +1,4 @@
 const BITZ = require('./api/bit-z_api');
-const apiServer = 'https://apiv2.bitz.com';
-// const log = require('../helpers/log');
 const $u = require('../helpers/utils');
 
 // API endpoints:
@@ -9,6 +7,7 @@ const $u = require('../helpers/utils');
 // https://api.bitzapi.com
 // https://api.bitzoverseas.com
 // https://api.bitzspeed.com
+const apiServer = 'https://apiv2.bitz.com';
 
 module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
 
@@ -19,8 +18,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
       return new Promise((resolve, reject) => {
         BITZ.getUserAssets().then(function(data) {
           try {
-            // console.log(data);
-            let assets = JSON.parse(data).data.info;
+            let assets = data.data.info;
             if (!assets) {
               assets = [];
             }
@@ -38,14 +36,13 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
             if (nonzero) {
               result = result.filter((crypto) => crypto.free || crypto.freezed);
             }
-            // console.log(result);
             resolve(result);
           } catch (e) {
             resolve(false);
             log.warn('Error while processing getBalances() request: ' + e);
           };
         }).catch((err) => {
-          log.log(`API request getBalances(nonzero: ${nonzero}) of ${$u.getModuleName(module.id)} module failed. ${err}.`);
+          log.warn(`API request getBalances(nonzero: ${nonzero}) of ${$u.getModuleName(module.id)} module failed. ${err}`);
           resolve(undefined);
         });
       });
@@ -72,12 +69,8 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
       return new Promise((resolve, reject) => {
         BITZ.getUserNowEntrustSheet(pair_.coin1, pair_.coin2, null, page).then(function(data) {
           try {
-            // console.log(data);
-            // console.log(2);
-
-            let openOrders = JSON.parse(data).data.data;
-            const pageInfo = JSON.parse(data).data.pageInfo;
-            // console.log(pageInfo);
+            let openOrders = data.data.data;
+            const pageInfo = data.data.pageInfo;
 
             if (!openOrders) {
               openOrders = [];
@@ -119,8 +112,6 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
                 coinTo: order.coinTo,
               });
             });
-            // console.log(result[0]);
-            // console.log(3);
 
             resolve({ result, pageInfo });
 
@@ -129,7 +120,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
             log.warn('Error while processing getOpenOrders() request: ' + e);
           };
         }).catch((err) => {
-          log.log(`API request getOpenOrders(pair: ${pair}) of ${$u.getModuleName(module.id)} module failed. ${err}.`);
+          log.warn(`API request getOpenOrders(pair: ${pair}) of ${$u.getModuleName(module.id)} module failed. ${err}`);
           resolve(undefined);
         });
       });
@@ -138,8 +129,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
       return new Promise((resolve, reject) => {
         BITZ.cancelEntrustSheet(orderId).then(function(data) {
           try {
-            // console.log(data);
-            if (JSON.parse(data).data) {
+            if (data.data) {
               log.info(`Cancelling order ${orderId}..`);
               resolve(true);
             } else {
@@ -151,7 +141,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
             log.warn('Error while processing cancelOrder() request: ' + e);
           };
         }).catch((err) => {
-          log.log(`API request ${arguments.callee.name}(orderId: ${orderId}) of ${$u.getModuleName(module.id)} module failed. ${err}.`);
+          log.warn(`API request ${arguments.callee.name}(orderId: ${orderId}) of ${$u.getModuleName(module.id)} module failed. ${err}`);
           resolve(undefined);
         });
       });
@@ -160,9 +150,8 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
       pair_ = formatPairName(pair);
       return new Promise((resolve, reject) => {
         BITZ.ticker(pair_.pair).then(function(data) {
-          // console.log(data);
-          data = JSON.parse(data).data;
           try {
+            data = data.data;
             if (data) {
               resolve({
                 ask: +data.askPrice,
@@ -187,7 +176,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
             log.warn('Error while processing getRates() request: ' + e);
           };
         }).catch((err) => {
-          log.log(`API request getRates(pair: ${pair_.pair}) of ${$u.getModuleName(module.id)} module failed. ${err}.`);
+          log.warn(`API request getRates(pair: ${pair_.pair}) of ${$u.getModuleName(module.id)} module failed. ${err}`);
           resolve(undefined);
         });
       });
@@ -220,8 +209,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
         return new Promise((resolve, reject) => {
           BITZ.addEntrustSheet(pair_.pair, coin1Amount, price, type).then(function(data) {
             try {
-              // console.log(data);
-              const result = JSON.parse(data).data;
+              const result = data.data;
               if (result) {
                 message = `Order placed to ${output} Order Id: ${result.id.toString()}.`;
                 log.info(message);
@@ -243,7 +231,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
               resolve(order);
             };
           }).catch((err) => {
-            log.log(`API request BITZ.addEntrustSheet-limit(pair: ${pair_.pair}, coin1Amount: ${coin1Amount}, price: ${price}, type: ${type}) of ${$u.getModuleName(module.id)} module failed. ${err}.`);
+            log.warn(`API request BITZ.addEntrustSheet-limit(pair: ${pair_.pair}, coin1Amount: ${coin1Amount}, price: ${price}, type: ${type}) of ${$u.getModuleName(module.id)} module failed. ${err}`);
             resolve(undefined);
           });
         });
@@ -277,8 +265,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
         return new Promise((resolve, reject) => {
           BITZ.addMarketOrder(pair_.pair, size, type).then(function(data) {
             try {
-              // console.log(data);
-              const result = JSON.parse(data).data;
+              const result = data.data;
               if (result) {
                 message = `Order placed to ${output} Order Id: ${result.id.toString()}.`;
                 log.info(message);
@@ -300,7 +287,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
               resolve(order);
             };
           }).catch((err) => {
-            log.log(`API request BITZ.addEntrustSheet-market(pair: ${pair_.pair}, size: ${size}, type: ${type}) of ${$u.getModuleName(module.id)} module failed. ${err}.`);
+            log.warn(`API request BITZ.addEntrustSheet-market(pair: ${pair_.pair}, size: ${size}, type: ${type}) of ${$u.getModuleName(module.id)} module failed. ${err}`);
             resolve(undefined);
           }); ;
         });
@@ -311,8 +298,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
       return new Promise((resolve, reject) => {
         BITZ.orderBook(pair_.pair).then(function(data) {
           try {
-            // console.log(data);
-            let book = JSON.parse(data).data;
+            let book = data.data;
             if (!book) {
               book = [];
             }
@@ -348,7 +334,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
             log.warn('Error while processing orderBook() request: ' + e);
           };
         }).catch((err) => {
-          log.log(`API request getOrderBook(pair: ${pair}) of ${$u.getModuleName(module.id)} module failed. ${err}.`);
+          log.warn(`API request getOrderBook(pair: ${pair}) of ${$u.getModuleName(module.id)} module failed. ${err}`);
           resolve(undefined);
         });
       });
@@ -357,8 +343,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
       return new Promise((resolve, reject) => {
         BITZ.getDepositAddress(coin).then(function(data) {
           try {
-            // console.log(data);
-            const address = JSON.parse(data).data.wallet;
+            const address = data.data.wallet;
             if (address) {
               resolve(address);
             } else {
@@ -369,7 +354,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
             log.warn('Error while processing getDepositAddress() request: ' + e);
           };
         }).catch((err) => {
-          log.log(`API request ${arguments.callee.name}(coin: ${coin}) of ${$u.getModuleName(module.id)} module failed. ${err}.`);
+          log.warn(`API request ${arguments.callee.name}(coin: ${coin}) of ${$u.getModuleName(module.id)} module failed. ${err}`);
           resolve(undefined);
         });
       });
