@@ -86,6 +86,10 @@ const fields = {
     type: Boolean,
     default: false,
   },
+  log_level: {
+    type: String,
+    default: 'log',
+  },
   welcome_string: {
     type: String,
     default: 'Hello 😊. This is a stub. I have nothing to say. Please check my config.',
@@ -98,6 +102,13 @@ try {
     config = JSON.parse(jsonminify(fs.readFileSync('./config.test', 'utf-8')));
   } else {
     config = JSON.parse(jsonminify(fs.readFileSync('./config.json', 'utf-8')));
+  }
+
+  if (!config.node_ADM) {
+    exit(`Bot's config is wrong. ADM nodes are not set. Cannot start the Bot.`);
+  }
+  if (!config.passPhrase) {
+    exit(`Bot's config is wrong. No passPhrase. Cannot start the Bot.`);
   }
 
   let keysPair;

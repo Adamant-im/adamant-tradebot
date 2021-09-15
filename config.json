@@ -1,5 +1,4 @@
 {
-
   /** The bot's secret passphrase. Create separate ADM account for the bot.
     Bot's ADM address will correspond this passPhrase.
     **/
@@ -8,7 +7,6 @@
   /** List of nodes to fetch transactions.
       If one become unavailable, bot will choose live one.
     **/
-
   "node_ADM": [
     "http://localhost:36666",
     "https://endless.adamant.im",
@@ -26,11 +24,11 @@
   /** Choose socket connection protocol, "ws" or "wss" depending on your server **/
   "ws_type": "ws",
 
-    /** List of ADAMANT InfoServices for catching exchange rates **/
+  /** List of ADAMANT InfoServices for catching exchange rates **/
   "infoservice": [
     "https://info.adamant.im"
-  ],  
-  
+  ],
+
   /** ADAMANT accounts to accept commands from. Commands from other accounts will not be executed. **/
   "admin_accounts": [
     "U123.."
@@ -77,25 +75,29 @@
   /** Exchange's account trade password. Mandatory for Bit-Z. **/
   "apipassword": "YOUR-TRADE-PASS",
 
-    /** How to reply user in-chat, if first unknown command received. **/
-    "welcome_string": "Hi! 😊 I'm a trade and market making bot. ℹ️ Learn more on https://marketmaking.app or type **/help**.",
+  /** How to reply user in-chat, if first unknown command received. **/
+  "welcome_string": "Hi! 😊 I'm a trade and market making bot. ℹ️ Learn more on https://marketmaking.app or type **/help**.",
 
   /** Bot's name for notifications **/
-    "bot_name": "Lovely Trade Bot",
+  "bot_name": "Lovely Trade Bot",
 
   /** ADAMANT address for notifications and monitoring. Optional. **/
-    "adamant_notify": "",
+  "adamant_notify": "",
 
-    /** Slack key for notifications and monitoring. Optional. **/
-    "slack": "https://hooks.slack.com/services/...",
+  /** Slack key for notifications and monitoring. Optional. **/
+  "slack": "https://hooks.slack.com/services/...",
 
   /** If you don't want to receive "not enough balance" notifications, set this to "true" **/
-    "silent_mode": false,
+  "silent_mode": false,
+
+  /** The software will use verbosity according to log_level.
+      It can be none < error < warn < info < log.
+  **/
+  "log_level": "log"
 
   /** Port for getting debug info. 
     Do not set for live bots, use only for debugging. 
     Allows to get DBs records like http://ip:port/db?tb=incomingTxsDb 
   **/
   "api": false
-
 }
