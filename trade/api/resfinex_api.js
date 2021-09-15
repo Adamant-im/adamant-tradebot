@@ -1,6 +1,5 @@
 const crypto = require('crypto');
-const request = require('request');
-// const log = require('../helpers/log');
+const axios = require('axios');
 
 let WEB_BASE = 'https://api.resfinex.com'; // API server like https://api.resfinex.com/
 let config = {
@@ -27,7 +26,6 @@ function sign_api(path, data, type = 'get') {
   const bodyString = JSON.stringify(data);
   const signPayload = type === 'get' ? queryString : bodyString;
   const sign = setSign(config.secret_key, `${signPayload}_${nonce}_${path}`);
-  // console.log('sign string: ', `${signPayload}_${nonce}_${path}`);
 
   return new Promise((resolve, reject) => {
     try {
@@ -43,45 +41,38 @@ function sign_api(path, data, type = 'get') {
           'Signature': sign,
           'Type': 'api',
         },
-        body: type === 'get' ? undefined : bodyString,
+        data: type === 'get' ? undefined : bodyString,
       };
 
-      request(httpOptions, function(err, res, data) {
-        if (err) {
-          reject(err);
-        } else {
-
-          try {
-
-            const response = JSON.parse(data);
-            if (response) {
-              if (response.status === 'error' && response.code === 429) { // 'API Call limit rate, please try again later
-                // console.log(response);
-                log.log(`Request to ${url} with data ${bodyString} failed. Got error message: ${response.msg}.`);
-                reject(`Got error message: ${response.msg}`);
+      axios(httpOptions)
+          .then(function(response) {
+            try {
+              const data = response.data;
+              if (data) {
+                if (data.status === 'error' && data.code === 429) { // 'API Call limit rate, please try again later
+                  log.log(`Request to ${url} with data ${bodyString} failed. Got error message: ${data.msg}.`);
+                  reject(`Got error message: ${data.msg}`);
+                } else {
+                  resolve(data);
+                }
               } else {
-                resolve(data);
+                log.log(`Request to ${url} with data ${bodyString} failed. Unable to parse data: ${data}.`);
+                reject(`Unable to parse data: ${data}`);
               }
-            } else {
-              log.log(`Request to ${url} with data ${bodyString} failed. Unable to parse data: ${data}.`);
-              reject(`Unable to parse data: ${data}`);
+            } catch (e) {
+              if (e instanceof SyntaxError) {
+                log.log(`Request to ${url} with data ${bodyString} failed. Unable to parse data: ${data}. Exception: ${e}`);
+                reject(`Unable to parse data: ${data}`);
+              } else {
+                log.warn(`Error while processing response of request to ${url} with data ${bodyString}: ${e}. Data object I've got: ${data}.`);
+                reject(`Unable to process data: ${data}`);
+              }
             }
-
-          } catch (e) {
-            if (e instanceof SyntaxError) {
-              log.log(`Request to ${url} with data ${bodyString} failed. Unable to parse data: ${data}. Exception: ${e}`);
-              reject(`Unable to parse data: ${data}`);
-            } else {
-              log.warn(`Error while processing response of request to ${url} with data ${bodyString}: ${e}. Data object I've got: ${data}.`);
-              reject(`Unable to process data: ${data}`);
-            }
-          };
-
-        }
-      }).on('error', function(err) {
-        log.log(`Request to ${url} with data ${bodyString} failed. ${err}.`);
-        reject(null);
-      });
+          })
+          .catch(function(error) {
+            log.log(`Request to ${url} with data ${pars} failed. ${error}.`);
+            reject(error);
+          }); // axios
 
     } catch (err) {
       log.log(`Processing of request to ${url} with data ${bodyString} failed. ${err}.`);
@@ -110,44 +101,38 @@ function public_api(path, data, type = 'get') {
         method: type,
         timeout: 10000,
       };
-      // console.log(httpOptions);
 
-      request(httpOptions, function(err, res, data) {
-        if (err) {
-          reject(err);
-        } else {
-
-          try {
-
-            const response = JSON.parse(data);
-            if (response) {
-              if (response.status === 'error' && response.code === 429) { // 'API Call limit rate, please try again later
-                // console.log(response);
-                log.log(`Request to ${url} with data ${queryString} failed. Got error message: ${response.msg}.`);
-                reject(`Got error message: ${response.msg}`);
+      axios(httpOptions)
+          .then(function(response) {
+            try {
+              const data = response.data;
+              if (data) {
+                if (data.status === 'error' && data.code === 429) { // 'API Call limit rate, please try again later
+                  // console.log(response);
+                  log.log(`Request to ${url} with data ${queryString} failed. Got error message: ${data.msg}.`);
+                  reject(`Got error message: ${data.msg}`);
+                } else {
+                  resolve(data);
+                }
               } else {
-                resolve(data);
+                log.log(`Request to ${url} with data ${queryString} failed. Unable to parse data: ${data}.`);
+                reject(`Unable to parse data: ${data}`);
               }
-            } else {
-              log.log(`Request to ${url} with data ${queryString} failed. Unable to parse data: ${data}.`);
-              reject(`Unable to parse data: ${data}`);
-            }
+            } catch (e) {
+              if (e instanceof SyntaxError) {
+                log.log(`Request to ${url} with data ${queryString} failed. Unable to parse data: ${data}. Exception: ${e}`);
+                reject(`Unable to parse data: ${data}`);
+              } else {
+                log.warn(`Error while processing response of request to ${url} with data ${queryString}: ${e}. Data object I've got: ${data}.`);
+                reject(`Unable to process data: ${data}`);
+              }
+            };
+          })
+          .catch(function(error) {
+            log.log(`Request to ${url} with data ${queryString} failed. ${error}.`);
+            reject(error);
+          }); // axios
 
-          } catch (e) {
-            if (e instanceof SyntaxError) {
-              log.log(`Request to ${url} with data ${queryString} failed. Unable to parse data: ${data}. Exception: ${e}`);
-              reject(`Unable to parse data: ${data}`);
-            } else {
-              log.warn(`Error while processing response of request to ${url} with data ${queryString}: ${e}. Data object I've got: ${data}.`);
-              reject(`Unable to process data: ${data}`);
-            }
-          };
-
-        }
-      }).on('error', function(err) {
-        log.log(`Request to ${url} with data ${queryString} failed. ${err}.`);
-        reject(null);
-      });
     } catch (err) {
       log.log(`Request to ${url} with data ${queryString} failed. ${err}.`);
       reject(null);

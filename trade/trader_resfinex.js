@@ -1,10 +1,9 @@
 const RESFINEX = require('./api/resfinex_api');
-const apiServer = 'https://api.resfinex.com';
-// const log = require('../helpers/log');
 const $u = require('../helpers/utils');
 
 // API endpoints:
 // https://api.resfinex.com/
+const apiServer = 'https://api.resfinex.com';
 
 module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
 
@@ -15,8 +14,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
       return new Promise((resolve, reject) => {
         RESFINEX.getUserAssets().then(function(data) {
           try {
-            // console.log(data);
-            let assets = JSON.parse(data).data;
+            let assets = data.data;
             if (!assets) {
               assets = [];
             }
@@ -32,7 +30,6 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
             if (nonzero) {
               result = result.filter((crypto) => crypto.free || crypto.freezed);
             }
-            // console.log(result);
             resolve(result);
           } catch (e) {
             resolve(false);
@@ -52,7 +49,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
             // console.log(2);
             // console.log(data);
 
-            let openOrders = JSON.parse(data).data;
+            let openOrders = data.data;
             if (!openOrders) {
               openOrders = [];
             }
@@ -130,12 +127,10 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
       return new Promise((resolve, reject) => {
         RESFINEX.cancelEntrustSheet(orderId).then(function(data) {
           try {
-            // console.log(data);
-            if (JSON.parse(data).status === 'ok') {
+            if (data.status === 'ok') {
               log.info(`Cancelling order ${orderId}..`);
               resolve(true);
             } else {
-              // console.log(JSON.parse(data));
               log.info(`Order ${orderId} not found. Unable to cancel it.`);
               resolve(false);
             }
@@ -153,14 +148,11 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
       pair_ = formatPairName(pair);
       return new Promise((resolve, reject) => {
         RESFINEX.ticker(pair_.pair).then(function(data) {
-          data = JSON.parse(data).data;
-          // console.log(data);
+          data = data.data;
           data = data.filter((symbol) => symbol.pair === pair_.pair)[0];
-          // console.log(data);
           try {
             RESFINEX.orderBook(pair_.pair, 1).then(function(data2) {
-              data2 = JSON.parse(data2).data;
-              // console.log(data2);
+              data2 = data2.data;
               try {
                 if (data2) {
                   resolve({
@@ -224,8 +216,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
         return new Promise((resolve, reject) => {
           RESFINEX.addEntrustSheet(pair_.pair, coin1Amount, price, side, 'LIMIT').then(function(data) {
             try {
-              // console.log(data);
-              const result = JSON.parse(data);
+              const result = data;
               if (result.data && result.data.orderId) {
                 message = `Order placed to ${output} Order Id: ${result.data.orderId.toString()}.`;
                 log.info(message);
@@ -280,8 +271,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
         return new Promise((resolve, reject) => {
           RESFINEX.addEntrustSheet(pair_.pair, coin1Amount, '', side, 'MARKET').then(function(data) {
             try {
-              // console.log(data);
-              const result = JSON.parse(data);
+              const result = data;
               if (result.data && result.data.orderId) {
                 message = `Order placed to ${output} Order Id: ${result.data.orderId.toString()}.`;
                 log.info(message);
@@ -315,8 +305,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
       return new Promise((resolve, reject) => {
         RESFINEX.orderBook(pair_.pair).then(function(data) {
           try {
-            // console.log(data);
-            let book = JSON.parse(data).data;
+            let book = data.data;
             if (!book) {
               book = [];
             }

@@ -1,6 +1,6 @@
 const CryptoJS = require('crypto-js');
-const request = require('request');
-// const log = require('../helpers/log');
+const axios = require('axios');
+
 const DEFAULT_HEADERS = {
   'Content-Type': 'application/x-www-form-urlencoded',
   'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.71 Safari/537.36',
@@ -36,47 +36,43 @@ function api(path, r_data, do_sign, type, do_stringify) {
         method: type,
         timeout: 15000,
         headers: headersWithSign,
-        form: do_stringify ? JSON.stringify(r_data) : { data: r_data },
+        // data: do_stringify ? JSON.stringify(r_data) : { data: r_data },
+        data: r_data,
       };
 
-      // console.log("api-httpOptions:", httpOptions);
-      request(httpOptions, function(err, res, data) {
-        if (err) {
-          reject(err);
-        } else {
-
-          try {
-
-            const response = JSON.parse(data);
-            if (response) {
-              // console.log(`response.status: ${response.status}`);
-              if (response.status === 401) { // 401 Unauthorized
-                // console.log(response);
-                log.log(`Request to ${url} with data ${pars} failed. Got error message: ${response.message}.`);
-                reject(`Got error message: ${response.message}`);
+      console.log(httpOptions);
+      axios(httpOptions)
+          .then(function(response) {
+            try {
+              response = JSON.parse(response);
+              if (response) {
+                // console.log(`response.status: ${response.status}`);
+                if (response.status === 401) { // 401 Unauthorized
+                  // console.log(response);
+                  log.log(`Request to ${url} with data ${pars} failed. Got error message: ${response.message}.`);
+                  reject(`Got error message: ${response.message}`);
+                } else {
+                  resolve(data);
+                }
               } else {
-                resolve(data);
+                log.log(`Request to ${url} with data ${pars} failed. Unable to parse data: ${data}.`);
+                reject(`Unable to parse data: ${data}`);
               }
-            } else {
-              log.log(`Request to ${url} with data ${pars} failed. Unable to parse data: ${data}.`);
-              reject(`Unable to parse data: ${data}`);
+            } catch (e) {
+              if (e instanceof SyntaxError) {
+                log.log(`Request to ${url} with data ${pars} failed. Unable to parse data: ${data}. Exception: ${e}`);
+                reject(`Unable to parse data: ${data}`);
+              } else {
+                log.warn(`Error while processing response of request to ${url} with data ${pars}: ${e}. Data object I've got: ${data}.`);
+                reject(`Unable to process data: ${data}`);
+              }
             }
-
-          } catch (e) {
-            if (e instanceof SyntaxError) {
-              log.log(`Request to ${url} with data ${pars} failed. Unable to parse data: ${data}. Exception: ${e}`);
-              reject(`Unable to parse data: ${data}`);
-            } else {
-              log.warn(`Error while processing response of request to ${url} with data ${pars}: ${e}. Data object I've got: ${data}.`);
-              reject(`Unable to process data: ${data}`);
-            }
-          };
-
-        }
-      }).on('error', function(err) {
-        log.log(`Request to ${url} with data ${pars} failed. ${err}.`);
-        reject(null);
-      });
+          })
+          .catch(function(error) {
+            log.log(`Request to ${url} with data ${pars} failed. ${error}.`);
+            reject(null);
+            // reject(error);
+          });
     } catch (err) {
       log.log(`Processing of request to ${url} with data ${pars} failed. ${err}.`);
       reject(null);

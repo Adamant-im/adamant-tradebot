@@ -9,6 +9,7 @@
     "lint:fixrule": "npx eslint -f visualstudio --no-eslintrc --fix --env node,es2021,commonjs --parser-options=ecmaVersion:12 --rule",
     "start": "node app.js dev",
     "start:dev": "node app.js dev",
+    "clear": "node app.js dev clear_db",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [
