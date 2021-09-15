@@ -118,9 +118,8 @@ try {
     exit(`Bot's config is wrong. Invalid passPhrase. Error: ${e}. Cannot start the Bot.`);
   }
   const address = keys.createAddressFromPublicKey(keyPair.publicKey);
-  // config.keyPair = keyPair;
-  // config.publicKey = keyPair.publicKey.toString('hex');
-  config.publicKey = keyPair.publicKey;
+  config.keyPair = keyPair;
+  config.publicKey = keyPair.publicKey.toString('hex');
   config.address = address;
   config.version = require('../package.json').version;
 

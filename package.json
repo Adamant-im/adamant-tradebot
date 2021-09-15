@@ -46,7 +46,7 @@
   "author": "Aleksei Lebedev <devs@adamant.im> (https://adamant.im)",
   "license": "GPL-3.0",
   "dependencies": {
-    "adamant-api": "^0.5.3",
+    "adamant-api": "^1.1.0",
     "axios": "0.21.4",
     "express": "^4.17.1",
     "form-data": "^4.0.0",

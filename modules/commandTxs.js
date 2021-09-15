@@ -1885,7 +1885,7 @@ async function balances() {
 function version() {
   return {
     msgNotify: ``,
-    msgSendBack: `I am running on _adamant-tradebot_ software version _${Store.version}_. Revise code on ADAMANT's GitHub.`,
+    msgSendBack: `I am running on _adamant-tradebot_ software version _${config.version}_. Revise code on ADAMANT's GitHub.`,
     notifyType: 'log',
   };
 }

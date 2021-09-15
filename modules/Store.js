@@ -12,8 +12,6 @@ const AdmAddress = keys.createAddressFromPublicKey(AdmKeysPair.publicKey);
 const ethData = api.eth.keys(config.passPhrase);
 
 module.exports = {
-  version,
-  botName: AdmAddress,
   user: {
     ADM: {
       passPhrase: config.passPhrase,

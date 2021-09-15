@@ -8,8 +8,7 @@ const txParser = require('./modules/incomingTxsParser');
 
 // Socket connection
 const api = require('./modules/api');
-api.socket.initSocket({ socket: config.socket, wsType: config.ws_type,
-  onNewMessage: txParser, admAddress: Store.user.ADM.address });
+api.socket.initSocket({ socket: config.socket, wsType: config.ws_type, onNewMessage: txParser, admAddress: config.address });
 
 setTimeout(init, 5000);
 
@@ -35,7 +34,7 @@ function init() {
         require('./trade/mm_liquidity_provider').run();
         require('./trade/mm_price_watcher').run();
         // require('./trade/mm_orderbook_builder').test();
-        notify(`*${config.notifyName} started* for address _${Store.user.ADM.address}_ (ver. ${Store.version}).`, 'info');
+        notify(`*${config.notifyName} started* for address _${config.address}_ (ver. ${config.version}).`, 'info');
       });
     }
 
