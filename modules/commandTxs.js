@@ -1803,11 +1803,9 @@ async function balances() {
         }
       }
       if (crypto.btc) {
-        console.log(crypto);
         totalBTC += crypto.btc;
       } else {
         value = Store.mathEqual(crypto.code, 'BTC', crypto.total, true).outAmount;
-        console.log(value);
         if (value) {
           totalBTC += value;
         }
