@@ -8,7 +8,7 @@ module.exports = async (tx, itx) => {
   const { incomingTxsDb } = db;
   incomingTxsDb.db
       .find({
-        sender: tx.senderId,
+        senderId: tx.senderId,
         type: 'unknown',
         date: { $gt: ($u.unix() - 24 * 3600 * 1000) }, // last 24h
       }).sort({ date: -1 }).toArray((err, docs) => {

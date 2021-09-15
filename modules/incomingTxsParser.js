@@ -1,76 +1,92 @@
 const db = require('./DB');
 const log = require('../helpers/log');
-const $u = require('../helpers/utils');
+const notify = require('../helpers/notify');
+const utils = require('../helpers/utils');
 const api = require('./api');
 const config = require('./configReader');
+const constants = require('../helpers/const');
+const transferTxs = require('./transferTxs');
 const commandTxs = require('./commandTxs');
 const unknownTxs = require('./unknownTxs');
-const transferTxs = require('./transferTxs');
-const notify = require('../helpers/notify');
+const Store = require('./Store');
 
-const historyTxs = {};
+const processedTxs = {}; // cache for processed transactions
 
 module.exports = async (tx) => {
 
-  if (!tx) {
+  // do not process one Tx twice: first check in cache, then check in DB
+  if (processedTxs[tx.id]) {
+    if (!processedTxs[tx.id].height) {
+      await updateProcessedTx(tx, null, true); // update height of Tx and last processed block
+    }
     return;
   }
-
-  if (historyTxs[tx.id]) { // do not process one tx twice
-    return;
-  }
-
   const { incomingTxsDb } = db;
-  const checkedTx = await incomingTxsDb.findOne({ txid: tx.id });
-  if (checkedTx !== null) {
+  const knownTx = await incomingTxsDb.findOne({ txid: tx.id });
+  if (knownTx !== null) {
+    if (!knownTx.height || !processedTxs[tx.id]) {
+      await updateProcessedTx(tx, knownTx, knownTx.height && processedTxs[tx.id]); // update height of Tx and last processed block
+    }
     return;
   };
 
-  log.info(`New incoming transaction: ${tx.id}`);
+  log.log(`Processing new incoming transaction ${tx.id} from ${tx.recipientId} via ${tx.height ? 'REST' : 'socket'}…`);
 
-  let msg = '';
-  const chat = tx.asset.chat;
+  let decryptedMessage = '';
+  const chat = tx.asset ? tx.asset.chat : '';
   if (chat) {
-    msg = api.decodeMsg(chat.message, tx.senderPublicKey, config.passPhrase, chat.own_message).trim();
+    decryptedMessage = api.decodeMsg(chat.message, tx.senderPublicKey, config.passPhrase, chat.own_message).trim();
   }
 
-  if (msg === '') {
-    msg = 'NONE';
-  }
-
-  let type = 'unknown';
-  if (msg.includes('_transaction') || tx.amount > 0) {
-    type = 'transfer'; // just for special message
-  } else if (msg.startsWith('/')) {
-    type = 'command';
+  let messageDirective = 'unknown';
+  if (decryptedMessage.includes('_transaction') || tx.amount > 0) {
+    messageDirective = 'transfer';
+  } else if (decryptedMessage.startsWith('/')) {
+    messageDirective = 'command';
   }
 
   const spamerIsNotyfy = await incomingTxsDb.findOne({
-    sender: tx.senderId,
+    senderId: tx.senderId,
     isSpam: true,
-    date: { $gt: ($u.unix() - 24 * 3600 * 1000) }, // last 24h
+    date: { $gt: (utils.unix() - 24 * 3600 * 1000) }, // last 24h
   });
 
   const itx = new incomingTxsDb({
     _id: tx.id,
     txid: tx.id,
-    date: $u.unix(),
-    block_id: tx.blockId,
-    encrypted_content: msg,
+    date: utils.unix(),
+    timestamp: tx.timestamp,
+    amount: tx.amount,
+    fee: tx.fee,
+    type: messageDirective,
+    senderId: tx.senderId,
+    senderPublicKey: tx.senderPublicKey,
+    recipientPublicKey: tx.recipientPublicKey,
+    messageDirective, // command, transfer or unknown
+    encrypted_content: decryptedMessage,
     spam: false,
-    sender: tx.senderId,
-    type, // command, transfer or unknown
     isProcessed: false,
+    // these will be undefined, when we get Tx via socket. Actually we don't need them, store them for a reference
+    blockId: tx.blockId,
+    height: tx.height,
+    block_timestamp: tx.block_timestamp,
+    confirmations: tx.confirmations,
+    // these will be undefined, when we get Tx via REST
+    relays: tx.relays,
+    receivedAt: tx.receivedAt,
     isNonAdmin: false,
   });
 
+  let msgSendBack; let msgNotify;
+  const admTxDescription = `Income ADAMANT Tx: ${constants.ADM_EXPLORER_URL}/tx/${tx.id} from ${tx.senderId}`;
+
   const countRequestsUser = (await incomingTxsDb.find({
-    sender: tx.senderId,
-    date: { $gt: ($u.unix() - 24 * 3600 * 1000) }, // last 24h
+    senderId: tx.senderId,
+    date: { $gt: (utils.unix() - 24 * 3600 * 1000) }, // last 24h
   })).length;
 
-  if (countRequestsUser > 100000 || spamerIsNotyfy) { // 100 000 per 24h is a limit for accepting commands. Just don't want to remove this check.
-    itx.update({
+  if (countRequestsUser > 100000 || spamerIsNotyfy) { // 100000 per 24h is a limit for accepting commands, otherwise user will be considered as spammer
+    await itx.update({
       isProcessed: true,
       isSpam: true,
     });
@@ -89,26 +105,54 @@ module.exports = async (tx) => {
   }
 
   await itx.save();
-  if (historyTxs[tx.id]) {
-    return;
-  }
-  historyTxs[tx.id] = $u.unix();
+  await updateProcessedTx(tx, itx, false);
 
   if (itx.isSpam && !spamerIsNotyfy) {
-    notify(`${config.notifyName} notifies _${tx.senderId}_ is a spammer or talks too much. Income ADAMANT Tx: https://explorer.adamant.im/tx/${tx.id}.`, 'warn');
-    $u.sendAdmMsg(tx.senderId, `I’ve _banned_ you. You’ve sent too much transactions to me.`);
+    msgNotify = `${config.notifyName} notifies _${tx.senderId}_ is a spammer or talks too much. ${admTxDescription}.`;
+    msgSendBack = `I’ve _banned_ you. No, really. **Don’t send any transfers as they will not be processed**. Come back tomorrow but less talk, more deal.`;
+    notify(msgNotify, 'warn');
+    api.sendMessage(config.passPhrase, tx.senderId, msgSendBack).then((response) => {
+      if (!response.success) {
+        log.warn(`Failed to send ADM message '${msgSendBack}' to ${tx.senderId}. ${response.errorMessage}.`);
+      }
+    });
     return;
   }
 
-  switch (type) {
+  switch (messageDirective) {
     case ('transfer'):
       transferTxs(itx, tx);
       break;
     case ('command'):
-      commandTxs(msg, tx, itx);
+      commandTxs(decryptedMessage, tx, itx);
       break;
     default:
       unknownTxs(tx, itx);
       break;
   }
+
 };
+
+async function updateProcessedTx(tx, itx, updateDb) {
+
+  processedTxs[tx.id] = {
+    updated: utils.unix(),
+    height: tx.height,
+  };
+
+  if (updateDb && !itx) {
+    itx = await db.incomingTxsDb.findOne({ txid: tx.id });
+  }
+
+  if (updateDb && itx) {
+    await itx.update({
+      blockId: tx.blockId,
+      height: tx.height,
+      block_timestamp: tx.block_timestamp,
+      confirmations: tx.confirmations,
+    }, true);
+  }
+
+  await Store.updateLastProcessedBlockHeight(tx.height);
+
+}

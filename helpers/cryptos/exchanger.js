@@ -1,10 +1,7 @@
-const api = require('../../modules/api');
 const config = require('../../modules/configReader');
 const log = require('../log');
-const db = require('../../modules/DB');
 const constants = require('../const');
 const utils = require('../utils');
-const axios = require('axios');
 const adm_utils = require('./adm_utils');
 
 module.exports = {
