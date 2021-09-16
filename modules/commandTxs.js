@@ -449,7 +449,7 @@ async function enable(params) {
         }
         coin = coin.toUpperCase();
 
-        if (!utils.isHasTicker(coin)) {
+        if (!exchangerUtils.hasTicker(coin)) {
           return {
             msgNotify: '',
             msgSendBack: `I don't know currency ${coin}. Example: */enable pw 0.1—0.2 USDT* or */enable pw 0.5 USDT 1%*.`,
@@ -1632,7 +1632,6 @@ async function make(params, tx, confirmation) {
                   log.warn(`Failed to send ADM message '${msgSendBack}' to ${tx.senderId}. ${response.errorMessage}.`);
                 }
               });
-          
             }, 2000);
           };
           await showRatesAfterOrder(exchangeRatesBefore, priceString, actionString);
@@ -1688,6 +1687,8 @@ async function calc(params) {
   const amount = +params[0];
   const inCurrency = params[1].toUpperCase().trim();
   const outCurrency = params[3].toUpperCase().trim();
+  const pair = inCurrency + '/' + outCurrency;
+  const pair2 = outCurrency + '/' + inCurrency;
 
   if (!utils.isPositiveOrZeroNumber(amount)) {
     output = `Wrong amount: _${params[0]}_. Command works like this: */calc 2.05 BTC in USD*.`;

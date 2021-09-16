@@ -16,7 +16,7 @@ module.exports = class admCoin extends baseCoin {
     this.account.keyPair = config.keyPair;
     this.account.address = config.address;
     this.getBalance().then((balance) => {
-      log.log(`Initial ${this.token} balance: ${balance ? balance.toFixed(constants.PRINT_DECIMALS) : 'unable to receive'}`)
+      log.log(`Initial ${this.token} balance: ${balance ? balance.toFixed(constants.PRINT_DECIMALS) : 'unable to receive'}`);
     });
   }
 
