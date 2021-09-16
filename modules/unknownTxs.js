@@ -1,11 +1,14 @@
 const utils = require('../helpers/utils');
 const db = require('./DB');
 const config = require('./configReader');
+const log = require('../helpers/log');
 const api = require('./api');
 
 module.exports = async (tx, itx) => {
 
   if (itx.isProcessed) return;
+  log.log(`Processing unknownTx from ${tx.recipientId} (transaction ${tx.id})…`);
+
   const { incomingTxsDb } = db;
   incomingTxsDb.db
       .find({
@@ -60,8 +63,8 @@ function getRnd(collectionNum) {
 const collection = [
   // 0 collection
   [
-    'Do you wanna beer 🍺? I want to have it aslo, but now is the trade time.',
-    'Do you wanna trade Ethers? Say **/balances** to see what you have in your account 🤑.',
+    'Do you wanna beer 🍺? I want to have it also, but now is the trade time.',
+    'Do you wanna trade Ethers? Say **/balances** to see what assets you have in account 🤑.',
     'Aaaaghr…! 😱 Check out ₿ rates with **/rates BTC** command right now!',
     'I can tell how to use me. ℹ️ Just say **/help**.',
     'I am just kiddin! 😛',
