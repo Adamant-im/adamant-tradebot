@@ -1,4 +1,5 @@
 const utils = require('../helpers/utils');
+const exchangerUtils = require('../helpers/cryptos/exchanger');
 const config = require('../modules/configReader');
 const log = require('../helpers/log');
 const notify = require('../helpers/notify');
