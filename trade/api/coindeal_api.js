@@ -1,4 +1,5 @@
 const axios = require('axios');
+const FormData = require('form-data');
 
 const DEFAULT_HEADERS = {
   'Accept': 'application/json',
@@ -27,32 +28,59 @@ function sign_api(path, data, type = 'get') {
 
   return new Promise((resolve, reject) => {
     try {
-      let httpOptions = {
-        url: url,
-        method: type,
-        timeout: 10000,
-        headers: headersWithSign,
-      };
-      if (type === 'post') {
-        headersWithSign = Object.assign(headersWithSign, { 'Content-Type': 'multipart/form-data' });
-        httpOptions = Object.assign(httpOptions, { 'formData': data });
+
+      let httpOptions;
+
+      if (type === 'get') {
+
+        httpOptions = {
+          url: url,
+          method: type,
+          timeout: 10000,
+          headers: headersWithSign,
+        };
+
+        axios(httpOptions)
+            .then(function(response) {
+              const data = response.data;
+              resolve(data);
+            })
+            .catch(function(error) {
+              // We can get 404 with data
+              if (error.response && typeof error.response.data === 'object' && Object.keys(error.response.data).length !== 0) {
+                resolve(error.response.data);
+              } else {
+                log.log(`Request to ${url} with data ${JSON.stringify(data)} failed. ${error}.`);
+                reject(error);
+              }
+            });
+      } else { // post
+        const form = new FormData();
+        Object.keys(data).forEach((key) => {
+          form.append(key, data[key]);
+        });
+
+        headersWithSign = Object.assign(headersWithSign, form.getHeaders());
+        httpOptions = {
+          timeout: 10000,
+          headers: headersWithSign,
+        };
+
+        axios.post(url, form, httpOptions)
+            .then(function(response) {
+              const data = response.data;
+              resolve(data);
+            })
+            .catch(function(error) {
+              // We can get 404 with data
+              if (error.response && typeof error.response.data === 'object' && Object.keys(error.response.data).length !== 0) {
+                resolve(error.response.data);
+              } else {
+                log.log(`Request to ${url} with data ${JSON.stringify(data)} failed. ${error}.`);
+                reject(error);
+              }
+            });
       }
-
-      axios(httpOptions)
-          .then(function(response) {
-            const data = response.data;
-            resolve(data);
-          })
-          .catch(function(error) {
-            // We can get 404 with data
-            if (error.response && typeof error.response.data === 'object' && Object.keys(error.response.data).length !== 0) {
-              resolve(error.response.data);
-            } else {
-              log.log(`Request to ${url} with data ${JSON.stringify(data)} failed. ${error}.`);
-              reject(error);
-            }
-          });
-
     } catch (err) {
       log.log(`Processing of request to ${url} with data ${JSON.stringify(data)} failed. ${err}.`);
       reject(null);

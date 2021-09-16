@@ -881,7 +881,7 @@ async function fill(params) {
     type = params[0].trim();
   }
 
-  if ( (type === 'buy' && amountName === 'amount') || (type === 'sell' && amountName === 'quote') || (amount === undefined && quote === undefined)) {
+  if ( !amount || !amountName || (type === 'buy' && amountName === 'amount') || (type === 'sell' && amountName === 'quote')) {
     output = 'Buy should follow with _quote_, sell with _amount_.';
     return {
       msgNotify: ``,
