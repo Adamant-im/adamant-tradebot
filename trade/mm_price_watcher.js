@@ -393,19 +393,21 @@ async function setPriceRange() {
 
       const deltaLow = Math.abs(lowPrice - previousLowPrice);
       const deltaLowPercent = deltaLow / ( (lowPrice + previousLowPrice) / 2 ) * 100;
+      const directionLow = lowPrice > previousLowPrice ? 'increased' : 'decreased';
       const deltaHigh = Math.abs(highPrice - previousHighPrice);
       const deltaHighPercent = deltaHigh / ( (highPrice + previousHighPrice) / 2 ) * 100;
+      const directionHigh = highPrice > previousHighPrice ? 'increased' : 'decreased';
 
       let changedByStringLow; let changedByStringHigh;
       if (deltaLowPercent < 0.01) {
         changedByStringLow = `(no changes)`;
       } else {
-        changedByStringLow = `(changed by ${deltaLowPercent.toFixed(2)}%)`;
+        changedByStringLow = `(${directionLow} by ${deltaLowPercent.toFixed(2)}%)`;
       }
       if (deltaHighPercent < 0.01) {
         changedByStringHigh = `(no changes)`;
       } else {
-        changedByStringHigh = `(changed by ${deltaHighPercent.toFixed(2)}%)`;
+        changedByStringHigh = `(${directionHigh} by ${deltaHighPercent.toFixed(2)}%)`;
       }
 
       if (deltaLowPercent > warningPercent || deltaHighPercent > warningPercent) {
