@@ -15,7 +15,9 @@ module.exports = class admCoin extends baseCoin {
     this.account.passPhrase = config.passPhrase;
     this.account.keyPair = config.keyPair;
     this.account.address = config.address;
-    this.getBalance().then((balance) => log.log(`Initial ${this.token} balance: ${balance ? balance.toFixed(constants.PRINT_DECIMALS) : 'unable to receive'}`));
+    this.getBalance().then((balance) => {
+      log.log(`Initial ${this.token} balance: ${balance ? balance.toFixed(constants.PRINT_DECIMALS) : 'unable to receive'}`)
+    });
   }
 
   get FEE() {
@@ -51,7 +53,7 @@ module.exports = class admCoin extends baseCoin {
 
   /**
    * Returns balance in ADM from cache, if it's up to date. If not, makes an API request and updates cached data.
-   * @return {Number} or outdated cached value, if unable to fetch data; it may be undefined also
+   * @return {Promise<Number>} or outdated cached value, if unable to fetch data; it may be undefined also
    */
   async getBalance() {
     const cached = this.cache.getData('balance');

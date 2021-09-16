@@ -121,6 +121,7 @@ try {
   config.keyPair = keyPair;
   config.publicKey = keyPair.publicKey.toString('hex');
   config.address = address;
+  config.notifyName = `${config.bot_name} (${config.address})`;
   config.version = require('../package.json').version;
 
   config.supported_exchanges = config.exchanges.join(', ');

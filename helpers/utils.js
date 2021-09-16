@@ -1,6 +1,7 @@
 const config = require('../modules/configReader');
 const log = require('./log');
 const Store = require('../modules/Store');
+const { SAT, EPOCH } = require('./const');
 
 module.exports = {
   /**
