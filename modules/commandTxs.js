@@ -1,6 +1,7 @@
 const fs = require('fs');
 const Store = require('../modules/Store');
-const $u = require('../helpers/utils');
+const utils = require('../helpers/utils');
+const exchangerUtils = require('../helpers/cryptos/exchanger');
 const config = require('./configReader');
 const log = require('../helpers/log');
 const notify = require('../helpers/notify');
@@ -18,41 +19,47 @@ const pendingConfirmation = {
 let previousBalances = {};
 const previousOrders = {};
 
-module.exports = async (cmd, tx, itx) => {
-
-  if (itx && itx.isProcessed) return;
-  log.info('Got new command Tx to process: ' + cmd);
+module.exports = async (commandMsg, tx, itx) => {
   try {
-    let res = [];
-    const group = cmd
+
+    log.log(`Processing '${commandMsg}' command from ${tx.recipientId} (transaction ${tx.id})…`);
+    const group = commandMsg
         .trim()
         .replace(/    /g, ' ')
         .replace(/   /g, ' ')
         .replace(/  /g, ' ')
         .split(' ');
-    const methodName = group.shift().trim().toLowerCase().replace('\/', '');
-    const m = commands[methodName];
-    if (m) {
-      res = await m(group, tx);
+    const commandName = group.shift().trim().toLowerCase().replace('\/', '');
+    const command = commands[commandName];
+
+    let commandResult = '';
+    if (command) {
+      commandResult = await command(group, tx);
     } else {
-      res.msgSendBack = `I don’t know */${methodName}* command. ℹ️ You can start with **/help**.`;
+      commandResult = `I don’t know */${commandName}* command. ℹ️ You can start with **/help**.`;
     }
-    if (!tx) {
-      return res.msgSendBack;
+
+    if (commandResult.msgNotify) {
+      notify(commandResult.msgNotify, commandResult.notifyType);
     }
-    if (tx) {
-      if (itx) itx.update({ isProcessed: true }, true);
-      if (res.msgNotify) {
-        notify(res.msgNotify, res.notifyType);
-      }
-      if (res.msgSendBack) {
-        $u.sendAdmMsg(tx.senderId, res.msgSendBack);
-      }
-      saveConfig();
+
+    if (commandResult.msgSendBack) {
+      api.sendMessage(config.passPhrase, tx.senderId, commandResult).then((response) => {
+      if (!response.success) {
+        log.warn(`Failed to send ADM message '${commandResult}' to ${tx.senderId}. ${response.errorMessage}.`);
+        }
+      });
     }
+
+    if (itx) {
+      itx.update({ isProcessed: true }, true);
+    }
+
+    saveConfig();
+
   } catch (e) {
     tx = tx || {};
-    log.error('Error while processing command ' + cmd + ' from senderId ' + tx.senderId + '. Tx Id: ' + tx.id + '. Error: ' + e);
+    log.error(`Error while processing ${commandMsg} command from ${tx.recipientId} (transaction ${tx.id}). Error: ${e.toString()}`);
   }
 };
 
@@ -81,7 +88,7 @@ function y(params, tx) {
       };
     }
   } catch (e) {
-    log.error(`Error in y()-confirmation of ${$u.getModuleName(module.id)} module: ` + e);
+    log.error(`Error in y()-confirmation of ${utils.getModuleName(module.id)} module: ` + e);
   }
   pendingConfirmation.command = '';
 }
@@ -216,7 +223,6 @@ async function enable(params) {
     } else if (type === 'liq') {
 
       const spreadString = params[1];
-      // console.log(spreadString);
 
       if (!spreadString || (spreadString.slice(-1) !== '%')) {
         return {
@@ -226,7 +232,6 @@ async function enable(params) {
         };
       }
       const spreadValue = +spreadString.slice(0, -1);
-      // console.log(spreadValue);
       if (!spreadValue || spreadValue === Infinity || spreadValue <= 0 || spreadValue > 80) {
         return {
           msgNotify: '',
@@ -237,7 +242,6 @@ async function enable(params) {
 
       const coin1 = params[3].toUpperCase();
       const coin2 = params[5].toUpperCase();
-      // console.log(coin1, coin2);
 
       if (
         !coin1 || !coin2 || coin1 === coin2 ||
@@ -249,11 +253,8 @@ async function enable(params) {
           notifyType: 'log',
         };
       }
-      // console.log(coin1, coin2, "good");
 
       const coin1Amount = +params[2];
-      // console.log(coin1Amount);
-
       if (!coin1Amount || coin1Amount === Infinity || coin1Amount <= 0) {
         return {
           msgNotify: '',
@@ -261,11 +262,8 @@ async function enable(params) {
           notifyType: 'log',
         };
       }
-      // console.log(coin1Amount, "good");
 
       const coin2Amount = +params[4];
-      // console.log(coin2Amount);
-
       if (!coin2Amount || coin2Amount === Infinity || coin2Amount <= 0) {
         return {
           msgNotify: '',
@@ -273,17 +271,13 @@ async function enable(params) {
           notifyType: 'log',
         };
       }
-      // console.log(coin2Amount, "good");
 
       let trend = params[6];
-      // console.log(trend);
-
       if (!trend) {
         trend = 'middle';
       }
 
       trend = trend.toLowerCase(); ;
-
       if ((!['middle', 'downtrend', 'uptrend'].includes(trend))) {
         return {
           msgNotify: '',
@@ -291,7 +285,6 @@ async function enable(params) {
           notifyType: 'log',
         };
       }
-      // console.log(trend, "good");
 
       if (coin1 === config.coin1) {
         tradeParams.mm_liquiditySellAmount = coin1Amount;
@@ -300,7 +293,6 @@ async function enable(params) {
         tradeParams.mm_liquiditySellAmount = coin2Amount;
         tradeParams.mm_liquidityBuyQuoteAmount = coin1Amount;
       }
-      // console.log(tradeParams.mm_liquiditySellAmount, tradeParams.mm_liquidityBuyQuoteAmount);
 
       tradeParams.mm_liquidityTrend = trend;
       tradeParams.mm_liquiditySpreadPercent = spreadValue;
@@ -331,9 +323,7 @@ async function enable(params) {
       let pwLowPrice; let pwHighPrice; let pwMidPrice; let pwDeviationPercent; let pwSource; let pwSourcePolicy;
 
       if (params[1].indexOf('@') > -1) {
-
         // watch pair@exchange
-
         [pair, exchange] = params[1].split('@');
 
         if (!pair || pair.length < 3 || !exchange || exchange.length < 3) {
@@ -358,7 +348,7 @@ async function enable(params) {
           };
         }
 
-        pairObj = $u.getPairObject(pair, false);
+        pairObj = utils.getPairObject(pair, false);
 
         if (!pairObj.isPairParsed) {
           return {
@@ -437,10 +427,8 @@ async function enable(params) {
         infoString = `based on ${pwSource} with ${pwSourcePolicy} policy and ${pwDeviationPercent.toFixed(2)}% deviation`;
 
       } else {
-
         // watch price in coin
-
-        rangeOrValue = $u.parseRangeOrValue(params[1]);
+        rangeOrValue = utils.parseRangeOrValue(params[1]);
         if (!rangeOrValue.isRange && !rangeOrValue.isValue) {
           return {
             msgNotify: '',
@@ -459,7 +447,7 @@ async function enable(params) {
         }
         coin = coin.toUpperCase();
 
-        if (!$u.isHasTicker(coin)) {
+        if (!utils.isHasTicker(coin)) {
           return {
             msgNotify: '',
             msgSendBack: `I don't know currency ${coin}. Example: */enable pw 0.1—0.2 USDT* or */enable pw 0.5 USDT 1%*.`,
@@ -529,7 +517,7 @@ async function enable(params) {
 
         let priceInfoString = '';
 
-        pairObj = $u.getPairObject(config.pair, false);
+        pairObj = utils.getPairObject(config.pair, false);
 
         const currencies = Store.currencies;
         const res = Object
@@ -585,7 +573,7 @@ async function enable(params) {
     }
 
   } catch (e) {
-    log.error(`Error in enable() of ${$u.getModuleName(module.id)} module: ` + e);
+    log.error(`Error in enable() of ${utils.getModuleName(module.id)} module: ` + e);
   }
 
   return {
@@ -812,13 +800,9 @@ async function clear(params) {
   } else {
 
     if (purposes === 'unk') {
-
       clearedInfo = await orderCollector.clearUnknownOrders(pair, doForce);
-
     } else {
-
       clearedInfo = await orderCollector.clearOrders(purposes, pair, doForce);
-
     }
 
     if (clearedInfo.totalOrders) {
@@ -878,7 +862,7 @@ async function fill(params) {
 
   let output = '';
   let type;
-  const pairObj = $u.getPairObject(params[0]);
+  const pairObj = utils.getPairObject(params[0]);
   const pair = pairObj.pair;
   const coin1 = pairObj.coin1;
   const coin2 = pairObj.coin2;
@@ -986,8 +970,8 @@ async function fill(params) {
   let price = low;
   let total = 0; let coin1Amount = 0; let coin2Amount = 0;
   for (let i=0; i < count; i++) {
-    price += $u.randomDeviation(step, deviation);
-    coin1Amount = $u.randomDeviation(orderAmount, deviation);
+    price += utils.randomDeviation(step, deviation);
+    coin1Amount = utils.randomDeviation(orderAmount, deviation);
     total += coin1Amount;
 
     // Checks if total or price exceeded
@@ -1014,15 +998,12 @@ async function fill(params) {
       coin1Amount = coin1Amount;
       coin2Amount = coin1Amount * price;
     }
-    // console.log(price, coin1Amount, total);
     orderList.push({
       price: price,
       amount: coin1Amount,
       altAmount: coin2Amount,
     });
   }
-
-  // console.log(orderList, orderList.length);
 
   // Place orders
   let total1 = 0; let total2 = 0;
@@ -1042,7 +1023,7 @@ async function fill(params) {
   let notPlacedString = '';
   if (placedOrders > 0) {
     if (notPlacedOrders) notPlacedString = ` ${notPlacedOrders} orders missed because of errors, check log file for details.`;
-    output = `${placedOrders} orders to ${type} ${$u.formatNumber(+total1.toFixed(coin1Decimals), false)} ${coin1} for ${$u.formatNumber(+total2.toFixed(coin2Decimals), false)} ${coin2}.${notPlacedString}`;
+    output = `${placedOrders} orders to ${type} ${utils.formatNumber(+total1.toFixed(coin1Decimals), false)} ${coin1} for ${utils.formatNumber(+total2.toFixed(coin2Decimals), false)} ${coin2}.${notPlacedString}`;
   } else {
     output = `No orders were placed. Check log file for details.`;
   }
@@ -1166,7 +1147,7 @@ function getBuySellParams(params, type) {
     }
   }
 
-  const pairObj = $u.getPairObject(params[0]);
+  const pairObj = utils.getPairObject(params[0]);
   const pair = pairObj.pair;
   const coin1 = pairObj.coin1;
   const coin2 = pairObj.coin2;
@@ -1233,7 +1214,6 @@ async function buy_sell(params, type) {
 
 function params() {
 
-  // console.log(tradeParams);
   let output = `I am set to work with ${config.pair} pair on ${config.exchangeName}. Current trading settings:`;
   output += '\n\n' + JSON.stringify(tradeParams, null, 3); ;
 
@@ -1268,7 +1248,7 @@ async function rates(params) {
     params[0] = config.pair;
   }
 
-  const pairObj = $u.getPairObject(params[0], true);
+  const pairObj = utils.getPairObject(params[0], true);
   const pair = pairObj.pair;
   const coin1 = pairObj.coin1;
   const coin2 = pairObj.coin2;
@@ -1282,13 +1262,15 @@ async function rates(params) {
       notifyType: 'log',
     };
   }
-  const currencies = Store.currencies;
+
   const res = Object
-      .keys(Store.currencies)
-      .filter((t) => t.startsWith(coin1 + '/'))
+      .keys(exchangerUtils.currencies)
+      .filter((t) => t.startsWith(coin + '/'))
       .map((t) => {
-        const p = `${coin1}/**${t.replace(coin1 + '/', '')}**`;
-        return `${p}: ${currencies[t]}`;
+        const quoteCoin = t.replace(coin + '/', '');
+        const pair = `${coin}/**${quoteCoin}**`;
+        const rate = utils.formatNumber(exchangerUtils.currencies[t].toFixed(constants.PRECISION_DECIMALS));
+        return `${pair}: ${rate}`;
       })
       .join(', ');
 
@@ -1332,7 +1314,7 @@ async function deposit(params) {
 
   let output = '';
 
-  const pairObj = $u.getPairObject(params[0], true);
+  const pairObj = utils.getPairObject(params[0], true);
   const pair = pairObj.pair;
   const coin1 = pairObj.coin1;
 
@@ -1368,7 +1350,7 @@ async function stats(params) {
 
   let output = '';
 
-  const pairObj = $u.getPairObject(params[0]);
+  const pairObj = utils.getPairObject(params[0]);
   const pair = pairObj.pair;
   const coin1 = pairObj.coin1;
   const coin2 = pairObj.coin2;
@@ -1389,13 +1371,13 @@ async function stats(params) {
 
     let volume_Coin2 = '';
     if (exchangeRates.volume_Coin2) {
-      volume_Coin2 = ` & ${$u.formatNumber(+exchangeRates.volume_Coin2.toFixed(coin2Decimals), true)} ${coin2}`;
+      volume_Coin2 = ` & ${utils.formatNumber(+exchangeRates.volume_Coin2.toFixed(coin2Decimals), true)} ${coin2}`;
     }
     output += `${config.exchangeName} 24h stats for ${pair} pair:`;
     let delta = exchangeRates.high-exchangeRates.low;
     let average = (exchangeRates.high+exchangeRates.low)/2;
     let deltaPercent = delta/average * 100;
-    output += `\nVol: ${$u.formatNumber(+exchangeRates.volume.toFixed(coin1Decimals), true)} ${coin1}${volume_Coin2}.`;
+    output += `\nVol: ${utils.formatNumber(+exchangeRates.volume.toFixed(coin1Decimals), true)} ${coin1}${volume_Coin2}.`;
     output += `\nLow: ${exchangeRates.low.toFixed(coin2Decimals)}, high: ${exchangeRates.high.toFixed(coin2Decimals)}, delta: _${(delta).toFixed(coin2Decimals)}_ ${coin2} (${(deltaPercent).toFixed(2)}%).`;
     delta = exchangeRates.ask-exchangeRates.bid;
     average = (exchangeRates.ask+exchangeRates.bid)/2;
@@ -1414,17 +1396,17 @@ async function stats(params) {
     } else {
       output += '\n\n' + `Market making stats for ${pair} pair:` + '\n';
       if (ordersByType.coin1AmountTotalDayCount !== 0) {
-        output += `24h: ${ordersByType.coin1AmountTotalDayCount} orders with ${$u.formatNumber(+ordersByType.coin1AmountTotalDay.toFixed(coin1Decimals), true)} ${coin1} and ${$u.formatNumber(+ordersByType.coin2AmountTotalDay.toFixed(coin2Decimals), true)} ${coin2}`;
+        output += `24h: ${ordersByType.coin1AmountTotalDayCount} orders with ${utils.formatNumber(+ordersByType.coin1AmountTotalDay.toFixed(coin1Decimals), true)} ${coin1} and ${utils.formatNumber(+ordersByType.coin2AmountTotalDay.toFixed(coin2Decimals), true)} ${coin2}`;
       } else {
         output += `24h: no orders`;
       }
       if (ordersByType.coin1AmountTotalMonthCount > ordersByType.coin1AmountTotalDayCount) {
-        output += `, 30d: ${ordersByType.coin1AmountTotalMonthCount} orders with ${$u.formatNumber(+ordersByType.coin1AmountTotalMonth.toFixed(coin1Decimals), true)} ${coin1} and ${$u.formatNumber(+ordersByType.coin2AmountTotalMonth.toFixed(coin2Decimals), true)} ${coin2}`;
+        output += `, 30d: ${ordersByType.coin1AmountTotalMonthCount} orders with ${utils.formatNumber(+ordersByType.coin1AmountTotalMonth.toFixed(coin1Decimals), true)} ${coin1} and ${utils.formatNumber(+ordersByType.coin2AmountTotalMonth.toFixed(coin2Decimals), true)} ${coin2}`;
       } else if (ordersByType.coin1AmountTotalMonthCount === 0) {
         output += `30d: no orders`;
       }
       if (ordersByType.coin1AmountTotalAllCount > ordersByType.coin1AmountTotalMonthCount) {
-        output += `, all time: ${ordersByType.coin1AmountTotalAllCount} orders with ${$u.formatNumber(+ordersByType.coin1AmountTotalAll.toFixed(coin1Decimals), true)} ${coin1} and ${$u.formatNumber(+ordersByType.coin2AmountTotalAll.toFixed(coin2Decimals), true)} ${coin2}`;
+        output += `, all time: ${ordersByType.coin1AmountTotalAllCount} orders with ${utils.formatNumber(+ordersByType.coin1AmountTotalAll.toFixed(coin1Decimals), true)} ${coin1} and ${utils.formatNumber(+ordersByType.coin2AmountTotalAll.toFixed(coin2Decimals), true)} ${coin2}`;
       }
       output += '.';
     }
@@ -1444,7 +1426,7 @@ async function orders(params) {
 
   let output = '';
 
-  const pairObj = $u.getPairObject(params[0]);
+  const pairObj = utils.getPairObject(params[0]);
   const pair = pairObj.pair;
 
   if (!pair || !pair.length) {
@@ -1533,9 +1515,7 @@ async function orders(params) {
 }
 
 async function make(params, tx, confirmation) {
-
   // make price 1.1 — buy/sell to achieve target price of 1.1 COIN2
-
   try {
 
     const param = (params[0] || '').trim();
@@ -1553,7 +1533,7 @@ async function make(params, tx, confirmation) {
 
       let priceInfoString = '';
 
-      const pairObj = $u.getPairObject(config.pair, false);
+      const pairObj = utils.getPairObject(config.pair, false);
       const pair = pairObj.pair;
       const coin1 = pairObj.coin1;
       const coin2Decimals = pairObj.coin2Decimals;
@@ -1608,8 +1588,8 @@ async function make(params, tx, confirmation) {
          and users/bot can add more orders while filling these orders
          Moreover, we should place counter-order to set new spread
       */
-      const reliabilityKoef = $u.randomValue(1.05, 1.1);
-      const orderBookInfo = $u.getOrderBookInfo(await traderapi.getOrderBook(config.pair),
+      const reliabilityKoef = utils.randomValue(1.05, 1.1);
+      const orderBookInfo = utils.getOrderBookInfo(await traderapi.getOrderBook(config.pair),
           tradeParams.mm_liquiditySpreadPercent, targetPrice);
       orderBookInfo.amountTargetPrice *= reliabilityKoef;
       orderBookInfo.amountTargetPriceQuote *= reliabilityKoef;
@@ -1645,7 +1625,7 @@ async function make(params, tx, confirmation) {
               msgSendBack = `Making ${priceString}: Successfully placed an order to **${actionString}**.\n\n${priceInfoString}`;
               notifyType = 'log';
               notify(msgNotify, notifyType);
-              $u.sendAdmMsg(tx.senderId, msgSendBack);
+              utils.sendAdmMsg(tx.senderId, msgSendBack);
 
             }, 2000);
           };
@@ -1683,14 +1663,14 @@ async function make(params, tx, confirmation) {
     };
 
   } catch (e) {
-    log.error(`Error in make() of ${$u.getModuleName(module.id)} module: ` + e);
+    log.error(`Error in make() of ${utils.getModuleName(module.id)} module: ` + e);
   }
 
 }
 
-async function calc(arr) {
+async function calc(params) {
 
-  if (arr.length !== 4) {
+  if (params.length !== 4) {
     return {
       msgNotify: ``,
       msgSendBack: 'Wrong arguments. Command works like this: */calc 2.05 BTC in USDT*.',
@@ -1699,42 +1679,39 @@ async function calc(arr) {
   }
 
   let output = '';
-  const amount = +arr[0];
-  const inCurrency = arr[1].toUpperCase().trim();
-  const outCurrency = arr[3].toUpperCase().trim();
-  const pair = inCurrency + '/' + outCurrency;
-  const pair2 = outCurrency + '/' + inCurrency;
+  const amount = +params[0];
+  const inCurrency = params[1].toUpperCase().trim();
+  const outCurrency = params[3].toUpperCase().trim();
 
-  if (!amount || amount === Infinity) {
-    output = `It seems amount "*${amount}*" for *${inCurrency}* is not a number. Command works like this: */calc 2.05 BTC in USDT*.`;
+  if (!utils.isPositiveOrZeroNumber(amount)) {
+    output = `Wrong amount: _${params[0]}_. Command works like this: */calc 2.05 BTC in USD*.`;
     return {
       msgNotify: ``,
       msgSendBack: `${output}`,
       notifyType: 'log',
     };
   }
-  if (!$u.isHasTicker(inCurrency)) {
+  if (!exchangerUtils.hasTicker(inCurrency)) {
     output = `I don’t have rates of crypto *${inCurrency}* from Infoservice. Made a typo? Try */calc 2.05 BTC in USDT*.`;
   }
-  if (!$u.isHasTicker(outCurrency)) {
+  if (!exchangerUtils.hasTicker(outCurrency)) {
     output = `I don’t have rates of crypto *${outCurrency}* from Infoservice. Made a typo? Try */calc 2.05 BTC in USDT*.`;
   }
 
   let result;
   if (!output) {
-    result = Store.mathEqual(inCurrency, outCurrency, amount, true).outAmount;
-    if (amount <= 0 || result <= 0 || !result) {
-      output = `I didn’t understand amount for *${inCurrency}*. Command works like this: */calc 2.05 BTC in USDT*.`;
+    result = exchangerUtils.convertCryptos(inCurrency, outCurrency, amount).outAmount;
+    if (!utils.isPositiveOrZeroNumber(result)) {
+      output = `Unable to calc _${params[0]}_ ${inCurrency} in ${outCurrency}.`;
       return {
         msgNotify: ``,
         msgSendBack: `${output}`,
         notifyType: 'log',
       };
     }
-    if ($u.isFiat(outCurrency)) {
-      result = +result.toFixed(2);
-    }
-    output = `Global market value of ${$u.formatNumber(amount)} ${inCurrency} equals **${$u.formatNumber(result)} ${outCurrency}**.`;
+
+    const precision = exchangerUtils.isFiat(outCurrency) ? 2 : constants.PRECISION_DECIMALS;
+    output = `Global market value of ${utils.formatNumber(amount)} ${inCurrency} equals ${utils.formatNumber(result.toFixed(precision), true)} ${outCurrency}.`;
   } else {
     output = '';
   }
@@ -1748,13 +1725,13 @@ async function calc(arr) {
   if (exchangeRates) {
     askValue = exchangeRates.ask * amount;
     bidValue = exchangeRates.bid * amount;
-    output += `${config.exchangeName} value of ${$u.formatNumber(amount)} ${inCurrency}:\nBid: **${$u.formatNumber(bidValue.toFixed(8))} ${outCurrency}**, ask: **${$u.formatNumber(askValue.toFixed(8))} ${outCurrency}**.`;
+    output += `${config.exchangeName} value of ${utils.formatNumber(amount)} ${inCurrency}:\nBid: **${utils.formatNumber(bidValue.toFixed(8))} ${outCurrency}**, ask: **${utils.formatNumber(askValue.toFixed(8))} ${outCurrency}**.`;
   } else {
     exchangeRates = await traderapi.getRates(pair2);
     if (exchangeRates) {
       askValue = amount / exchangeRates.ask;
       bidValue = amount / exchangeRates.bid;
-      output += `${config.exchangeName} value of ${$u.formatNumber(amount)} ${inCurrency}:\nBid: **${$u.formatNumber(bidValue.toFixed(8))} ${outCurrency}**, ask: **${$u.formatNumber(askValue.toFixed(8))} ${outCurrency}**.`;
+      output += `${config.exchangeName} value of ${utils.formatNumber(amount)} ${inCurrency}:\nBid: **${utils.formatNumber(bidValue.toFixed(8))} ${outCurrency}**, ask: **${utils.formatNumber(askValue.toFixed(8))} ${outCurrency}**.`;
     } else {
       output += `Unable to get ${config.exchangeName} rates for ${pair}.`;
     }
@@ -1781,11 +1758,11 @@ async function balances() {
     output = `${config.exchangeName} balances:\n`;
     balances.forEach((crypto) => {
 
-      output += `${$u.formatNumber(+(crypto.total).toFixed(8), true)} _${crypto.code}_`;
+      output += `${utils.formatNumber(+(crypto.total).toFixed(8), true)} _${crypto.code}_`;
       if (crypto.total !== crypto.free) {
-        output += ` (${$u.formatNumber(+crypto.free.toFixed(8), true)} available`;
+        output += ` (${utils.formatNumber(+crypto.free.toFixed(8), true)} available`;
         if (crypto.freezed > 0) {
-          output += ` & ${$u.formatNumber(+crypto.freezed.toFixed(8), true)} frozen`;
+          output += ` & ${utils.formatNumber(+crypto.freezed.toFixed(8), true)} frozen`;
         }
         output += ')';
       }
@@ -1795,7 +1772,7 @@ async function balances() {
       if (crypto.usd) {
         totalUSD += crypto.usd;
       } else {
-        value = Store.mathEqual(crypto.code, 'USD', crypto.total, true).outAmount;
+        value = exchangerUtils.convertCryptos(crypto.code, 'USD', crypto.total).outAmount;
         if (value) {
           totalUSD += value;
         } else {
@@ -1805,14 +1782,14 @@ async function balances() {
       if (crypto.btc) {
         totalBTC += crypto.btc;
       } else {
-        value = Store.mathEqual(crypto.code, 'BTC', crypto.total, true).outAmount;
+        value = exchangerUtils.convertCryptos(crypto.code, 'BTC', crypto.total).outAmount;
         if (value) {
           totalBTC += value;
         }
       }
     });
 
-    output += `Total holdings ~ ${$u.formatNumber(+totalUSD.toFixed(2), true)} _USD_ or ${$u.formatNumber(totalBTC.toFixed(8), true)} _BTC_`;
+    output += `Total holdings ~ ${utils.formatNumber(+totalUSD.toFixed(2), true)} _USD_ or ${utils.formatNumber(totalBTC.toFixed(8), true)} _BTC_`;
     if (unknownCryptos.length) {
       output += `. Note: I didn't count unknown cryptos ${unknownCryptos.join(', ')}.`;
     }
@@ -1829,8 +1806,7 @@ async function balances() {
 
   }
 
-
-  const diff = $u.difference(balances, previousBalances);
+  const diff = utils.difference(balances, previousBalances);
   if (diff) {
     if (diff[0]) {
       output += '\nChanges:\n';
@@ -1857,14 +1833,14 @@ async function balances() {
           deltaCoin2 = delta;
           signCoin2 = sign;
         }
-        output += `_${crypto.code}_: ${sign}${$u.formatNumber(+(delta).toFixed(8), true)}`;
+        output += `_${crypto.code}_: ${sign}${utils.formatNumber(+(delta).toFixed(8), true)}`;
         output += '\n';
       });
 
-      output += `Total holdings ${signUSD}${$u.formatNumber(+deltaUSD.toFixed(2), true)} _USD_ or ${signBTC}${$u.formatNumber(deltaBTC.toFixed(8), true)} _BTC_`;
+      output += `Total holdings ${signUSD}${utils.formatNumber(+deltaUSD.toFixed(2), true)} _USD_ or ${signBTC}${utils.formatNumber(deltaBTC.toFixed(8), true)} _BTC_`;
       if (deltaCoin1 && deltaCoin2 && (signCoin1 !== signCoin2)) {
         const price = deltaCoin2 / deltaCoin1;
-        output += `\n${signCoin1 === '+' ? 'I\'ve bought' : 'I\'ve sold'} ${$u.formatNumber(+deltaCoin1.toFixed(config.coin1Decimals), true)} _${config.coin1}_ at ${$u.formatNumber(price.toFixed(config.coin2Decimals), true)} _${config.coin2}_ price.`;
+        output += `\n${signCoin1 === '+' ? 'I\'ve bought' : 'I\'ve sold'} ${utils.formatNumber(+deltaCoin1.toFixed(config.coin1Decimals), true)} _${config.coin1}_ at ${utils.formatNumber(price.toFixed(config.coin2Decimals), true)} _${config.coin2}_ price.`;
       }
 
     } else {

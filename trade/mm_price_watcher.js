@@ -315,11 +315,11 @@ async function setPriceRange() {
 
       if (tradeParams.mm_priceWatcherSourcePolicy === 'strict') {
 
-        l = Store.mathEqual(pairObj.coin2, config.coin2, orderBook.bids[0].price, true).outAmount;
-        h = Store.mathEqual(pairObj.coin2, config.coin2, orderBook.asks[0].price, true).outAmount;
+        l = exchangerUtils.convertCryptos(pairObj.coin2, config.coin2, orderBook.bids[0].price).outAmount;
+        h = exchangerUtils.convertCryptos(pairObj.coin2, config.coin2, orderBook.asks[0].price).outAmount;
 
         if (!l || l <= 0 || !h || h <= 0) {
-          errorSettingPriceRange(`Wrong results of Store.mathEqual function: l=${l}, h=${h}.`);
+          errorSettingPriceRange(`Wrong results of exchangerUtils.convertCryptos function: l=${l}, h=${h}.`);
           return false;
         }
 
@@ -334,16 +334,16 @@ async function setPriceRange() {
           return false;
         }
 
-        l = Store.mathEqual(pairObj.coin2, config.coin2, orderBookInfo.smartBid, true).outAmount;
-        h = Store.mathEqual(pairObj.coin2, config.coin2, orderBookInfo.smartAsk, true).outAmount;
+        l = exchangerUtils.convertCryptos(pairObj.coin2, config.coin2, orderBookInfo.smartBid).outAmount;
+        h = exchangerUtils.convertCryptos(pairObj.coin2, config.coin2, orderBookInfo.smartAsk).outAmount;
 
         if (!l || l <= 0 || !h || h <= 0) {
-          errorSettingPriceRange(`Wrong results of Store.mathEqual function: l=${l}, h=${h}.`);
+          errorSettingPriceRange(`Wrong results of exchangerUtils.convertCryptos function: l=${l}, h=${h}.`);
           return false;
         }
 
-        const l_strict = Store.mathEqual(pairObj.coin2, config.coin2, orderBook.bids[0].price, true).outAmount;
-        const h_strict = Store.mathEqual(pairObj.coin2, config.coin2, orderBook.asks[0].price, true).outAmount;
+        const l_strict = exchangerUtils.convertCryptos(pairObj.coin2, config.coin2, orderBook.bids[0].price).outAmount;
+        const h_strict = exchangerUtils.convertCryptos(pairObj.coin2, config.coin2, orderBook.asks[0].price).outAmount;
 
         log.log(`Got a reference price range for ${pair} at ${exchange} exchange: smart from ${l} to ${h}, strict from ${l_strict} to ${h_strict}.`);
 
@@ -362,14 +362,14 @@ async function setPriceRange() {
 
       // Price range is set in some coin
 
-      l = Store.mathEqual(tradeParams.mm_priceWatcherSource, config.coin2,
-          tradeParams.mm_priceWatcherLowPriceInSourceCoin, true).outAmount;
-      h = Store.mathEqual(tradeParams.mm_priceWatcherSource, config.coin2,
-          tradeParams.mm_priceWatcherHighPriceInSourceCoin, true).outAmount;
+      l = exchangerUtils.convertCryptos(tradeParams.mm_priceWatcherSource, config.coin2,
+          tradeParams.mm_priceWatcherLowPriceInSourceCoin).outAmount;
+      h = exchangerUtils.convertCryptos(tradeParams.mm_priceWatcherSource, config.coin2,
+          tradeParams.mm_priceWatcherHighPriceInSourceCoin).outAmount;
 
       if (!l || l <= 0 || !h || h <= 0) {
 
-        errorSettingPriceRange(`Wrong results of Store.mathEqual function: l=${l}, h=${h}.`);
+        errorSettingPriceRange(`Wrong results of exchangerUtils.convertCryptos function: l=${l}, h=${h}.`);
         return false;
 
       } else {
