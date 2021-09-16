@@ -70,8 +70,13 @@ function sign_api(path, data, type = 'get') {
             }
           })
           .catch(function(error) {
-            log.log(`Request to ${url} with data ${pars} failed. ${error}.`);
-            reject(error);
+            // 'Order not found' goes here as it returns 404
+            if (error.response && typeof error.response.data === 'object' && Object.keys(error.response.data).length !== 0) {
+              resolve(error.response.data);
+            } else {
+              log.log(`Request to ${url} with data ${pars} failed. ${error}.`);
+              reject(error);
+            }
           }); // axios
 
     } catch (err) {
@@ -129,8 +134,13 @@ function public_api(path, data, type = 'get') {
             };
           })
           .catch(function(error) {
-            log.log(`Request to ${url} with data ${queryString} failed. ${error}.`);
-            reject(error);
+            // We can get 404 with data
+            if (error.response && typeof error.response.data === 'object' && Object.keys(error.response.data).length !== 0) {
+              resolve(error.response.data);
+            } else {
+              log.log(`Request to ${url} with data ${queryString} failed. ${error}.`);
+              reject(error);
+            }
           }); // axios
 
     } catch (err) {

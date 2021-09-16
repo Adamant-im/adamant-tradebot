@@ -44,8 +44,13 @@ function sign_api(path, data, type = 'get') {
             resolve(data);
           })
           .catch(function(error) {
-            log.log(`Request to ${url} with data ${JSON.stringify(data)} failed. ${error}.`);
-            reject(error);
+            // We can get 404 with data
+            if (error.response && typeof error.response.data === 'object' && Object.keys(error.response.data).length !== 0) {
+              resolve(error.response.data);
+            } else {
+              log.log(`Request to ${url} with data ${JSON.stringify(data)} failed. ${error}.`);
+              reject(error);
+            }
           });
 
     } catch (err) {
@@ -69,8 +74,13 @@ function public_api(url, data, type = 'get') {
             resolve(data);
           })
           .catch(function(error) {
-            log.log(`Request to ${url} failed. ${error}.`);
-            reject(error);
+            // We can get 404 with data
+            if (error.response && typeof error.response.data === 'object' && Object.keys(error.response.data).length !== 0) {
+              resolve(error.response.data);
+            } else {
+              log.log(`Request to ${url} failed. ${error}.`);
+              reject(error);
+            }
           });
 
     } catch (err) {
