@@ -6,7 +6,6 @@ const tradeParams = require('./settings/tradeParams_' + config.exchange);
 const traderapi = require('./trader_' + config.exchange)(config.apikey, config.apisecret, config.apipassword, log);
 const db = require('../modules/DB');
 const orderUtils = require('./orderUtils');
-const Store = require('../modules/Store');
 
 let lastNotifyBalancesTimestamp = 0;
 let lastNotifyPriceTimestamp = 0;

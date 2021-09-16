@@ -1,17 +1,17 @@
 const constants = require('../helpers/const');
 const fs = require('fs');
-const Store = require('../modules/Store');
 const utils = require('../helpers/utils');
 const exchangerUtils = require('../helpers/cryptos/exchanger');
 const config = require('./configReader');
 const log = require('../helpers/log');
 const notify = require('../helpers/notify');
+const api = require('./api');
+
 const tradeParams = require('../trade/settings/tradeParams_' + config.exchange);
 const traderapi = require('../trade/trader_' + config.exchange)(config.apikey, config.apisecret, config.apipassword, log);
 const orderCollector = require('../trade/orderCollector');
 const orderStats = require('../trade/orderStats');
 const orderUtils = require('../trade/orderUtils');
-const api = require('./api');
 
 const timeToConfirm = 1000 * 60 * 10; // 10 minutes to confirm
 const pendingConfirmation = {
@@ -521,9 +521,9 @@ async function enable(params) {
 
         pairObj = utils.getPairObject(config.pair, false);
 
-        const currencies = Store.currencies;
+        const currencies = exchangerUtils.currencies;
         const res = Object
-            .keys(Store.currencies)
+            .keys(currencies)
             .filter((t) => t.startsWith(pairObj.coin1 + '/'))
             .map((t) => {
               const p = `${pairObj.coin1}/**${t.replace(pairObj.coin1 + '/', '')}**`;
@@ -1540,9 +1540,9 @@ async function make(params, tx, confirmation) {
       const coin1 = pairObj.coin1;
       const coin2Decimals = pairObj.coin2Decimals;
 
-      const currencies = Store.currencies;
+      const currencies = exchangerUtils.currencies;
       const res = Object
-          .keys(Store.currencies)
+          .keys(currencies)
           .filter((t) => t.startsWith(coin1 + '/'))
           .map((t) => {
             const p = `${coin1}/**${t.replace(coin1 + '/', '')}**`;
