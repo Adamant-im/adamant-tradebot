@@ -1,4 +1,4 @@
-const $u = require('../helpers/utils');
+const utils = require('../helpers/utils');
 const config = require('../modules/configReader');
 const log = require('../helpers/log');
 const notify = require('../helpers/notify');
@@ -81,7 +81,7 @@ module.exports = {
     for (const order of orderBookOrders) {
       try {
 
-        if (order.dateTill < $u.unix()) {
+        if (order.dateTill < utils.unix()) {
 
           orderBookOrdersCount -= 1;
           const cancelReq = await traderapi.cancelOrder(order._id, order.type, order.pair);
@@ -98,7 +98,7 @@ module.exports = {
 
         }
       } catch (e) {
-        log.error(`Error in closeOrderBookOrders() of ${$u.getModuleName(module.id)} module: ` + e);
+        log.error(`Error in closeOrderBookOrders() of ${utils.getModuleName(module.id)} module: ` + e);
       }
     };
 
@@ -135,7 +135,7 @@ module.exports = {
 
       let output = '';
       let orderParamsString = '';
-      const pairObj = $u.getPairObject(config.pair);
+      const pairObj = utils.getPairObject(config.pair);
 
       if (!price) {
         if ((Date.now()-lastNotifyPriceTimestamp > HOUR) && priceReq.message) {
@@ -170,8 +170,8 @@ module.exports = {
         const { ordersDb } = db;
         const order = new ordersDb({
           _id: orderReq.orderid,
-          date: $u.unix(),
-          dateTill: $u.unix() + lifeTime,
+          date: utils.unix(),
+          dateTill: utils.unix() + lifeTime,
           purpose: 'ob', // ob: dynamic order book order
           type: type,
           // targetType: type,
@@ -195,7 +195,7 @@ module.exports = {
       }
 
     } catch (e) {
-      log.error(`Error in placeOrderBookOrder() of ${$u.getModuleName(module.id)} module: ` + e);
+      log.error(`Error in placeOrderBookOrder() of ${utils.getModuleName(module.id)} module: ` + e);
     }
 
   },
@@ -281,7 +281,7 @@ async function setPrice(type, position, orderList) {
     }
 
     // Put orders between current orders, but not with the same price
-    const precision = $u.getPrecision(config.coin2Decimals);
+    const precision = utils.getPrecision(config.coin2Decimals);
     // console.log(`ob precision: ${precision}, before: low ${low}, high ${high}`);
     if (low + precision < high) {
       low += precision;
@@ -291,7 +291,7 @@ async function setPrice(type, position, orderList) {
     }
     // console.log(`ob precision: ${precision}, after: low ${low}, high ${high}`);
 
-    let price = $u.randomValue(low, high);
+    let price = utils.randomValue(low, high);
 
     const pw = require('./mm_price_watcher');
     if (tradeParams.mm_isPriceWatcherActive && pw.getIsPriceActual()) {
@@ -302,13 +302,13 @@ async function setPrice(type, position, orderList) {
 
       if (type === 'sell') {
         if (price < lowPrice) {
-          price = lowPrice * $u.randomValue(1, 1.21);
+          price = lowPrice * utils.randomValue(1, 1.21);
           output = `${config.notifyName}: Price watcher corrected price to sell not lower than ${lowPrice.toFixed(config.coin2Decimals)} while placing ob-order. Low: ${low.toFixed(config.coin2Decimals)}, high: ${high.toFixed(config.coin2Decimals)} ${config.coin2}.`;
           log.log(output);
         }
       } else {
         if (price > highPrice) {
-          price = highPrice * $u.randomValue(0.79, 1);
+          price = highPrice * utils.randomValue(0.79, 1);
           output = `${config.notifyName}: Price watcher corrected price to buy not higher than ${highPrice.toFixed(config.coin2Decimals)} while placing ob-order. Low: ${low.toFixed(config.coin2Decimals)}, high: ${high.toFixed(config.coin2Decimals)} ${config.coin2}.`;
           log.log(output);
         }
@@ -320,7 +320,7 @@ async function setPrice(type, position, orderList) {
     };
 
   } catch (e) {
-    log.error(`Error in setPrice() of ${$u.getModuleName(module.id)} module: ` + e);
+    log.error(`Error in setPrice() of ${utils.getModuleName(module.id)} module: ` + e);
   }
 
 
@@ -332,24 +332,24 @@ function setAmount() {
     log.warn(`Params mm_maxAmount or mm_minAmount are not set. Check ${config.exchangeName} config.`);
     return false;
   }
-  return $u.randomValue(tradeParams.mm_minAmount, tradeParams.mm_maxAmount);
+  return utils.randomValue(tradeParams.mm_minAmount, tradeParams.mm_maxAmount);
 
 }
 
 function setPosition(orderCount) {
   const maxPosition = Math.min(orderCount, tradeParams.mm_orderBookHeight);
-  return $u.randomValue(2, maxPosition, true);
+  return utils.randomValue(2, maxPosition, true);
 }
 
 function setLifeTime(position) {
 
   const positionKoef = Math.sqrt(position/1.5);
   const lifetimeMax = tradeParams.mm_orderBookOrdersCount * LIFETIME_KOEF * 1000;
-  const orderLifeTime = Math.round($u.randomValue(LIFETIME_MIN, lifetimeMax, false) * positionKoef);
+  const orderLifeTime = Math.round(utils.randomValue(LIFETIME_MIN, lifetimeMax, false) * positionKoef);
   // console.log(orderLifeTime);
   return orderLifeTime;
 }
 
 function setPause() {
-  return $u.randomValue(INTERVAL_MIN, INTERVAL_MAX, true);
+  return utils.randomValue(INTERVAL_MIN, INTERVAL_MAX, true);
 }

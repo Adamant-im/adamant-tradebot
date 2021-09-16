@@ -1,5 +1,5 @@
 const BITZ = require('./api/bit-z_api');
-const $u = require('../helpers/utils');
+const utils = require('../helpers/utils');
 
 // API endpoints:
 // https://apiv2.bitz.com
@@ -42,7 +42,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
             log.warn('Error while processing getBalances() request: ' + e);
           };
         }).catch((err) => {
-          log.warn(`API request getBalances(nonzero: ${nonzero}) of ${$u.getModuleName(module.id)} module failed. ${err}`);
+          log.warn(`API request getBalances(nonzero: ${nonzero}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
           resolve(undefined);
         });
       });
@@ -120,7 +120,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
             log.warn('Error while processing getOpenOrders() request: ' + e);
           };
         }).catch((err) => {
-          log.warn(`API request getOpenOrders(pair: ${pair}) of ${$u.getModuleName(module.id)} module failed. ${err}`);
+          log.warn(`API request getOpenOrders(pair: ${pair}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
           resolve(undefined);
         });
       });
@@ -141,7 +141,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
             log.warn('Error while processing cancelOrder() request: ' + e);
           };
         }).catch((err) => {
-          log.warn(`API request ${arguments.callee.name}(orderId: ${orderId}) of ${$u.getModuleName(module.id)} module failed. ${err}`);
+          log.warn(`API request ${arguments.callee.name}(orderId: ${orderId}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
           resolve(undefined);
         });
       });
@@ -176,7 +176,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
             log.warn('Error while processing getRates() request: ' + e);
           };
         }).catch((err) => {
-          log.warn(`API request getRates(pair: ${pair_.pair}) of ${$u.getModuleName(module.id)} module failed. ${err}`);
+          log.warn(`API request getRates(pair: ${pair_.pair}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
           resolve(undefined);
         });
       });
@@ -231,7 +231,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
               resolve(order);
             };
           }).catch((err) => {
-            log.warn(`API request BITZ.addEntrustSheet-limit(pair: ${pair_.pair}, coin1Amount: ${coin1Amount}, price: ${price}, type: ${type}) of ${$u.getModuleName(module.id)} module failed. ${err}`);
+            log.warn(`API request BITZ.addEntrustSheet-limit(pair: ${pair_.pair}, coin1Amount: ${coin1Amount}, price: ${price}, type: ${type}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
             resolve(undefined);
           });
         });
@@ -287,7 +287,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
               resolve(order);
             };
           }).catch((err) => {
-            log.warn(`API request BITZ.addEntrustSheet-market(pair: ${pair_.pair}, size: ${size}, type: ${type}) of ${$u.getModuleName(module.id)} module failed. ${err}`);
+            log.warn(`API request BITZ.addEntrustSheet-market(pair: ${pair_.pair}, size: ${size}, type: ${type}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
             resolve(undefined);
           }); ;
         });
@@ -334,7 +334,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
             log.warn('Error while processing orderBook() request: ' + e);
           };
         }).catch((err) => {
-          log.warn(`API request getOrderBook(pair: ${pair}) of ${$u.getModuleName(module.id)} module failed. ${err}`);
+          log.warn(`API request getOrderBook(pair: ${pair}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
           resolve(undefined);
         });
       });
@@ -354,7 +354,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
             log.warn('Error while processing getDepositAddress() request: ' + e);
           };
         }).catch((err) => {
-          log.warn(`API request ${arguments.callee.name}(coin: ${coin}) of ${$u.getModuleName(module.id)} module failed. ${err}`);
+          log.warn(`API request ${arguments.callee.name}(coin: ${coin}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
           resolve(undefined);
         });
       });

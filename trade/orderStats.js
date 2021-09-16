@@ -1,5 +1,5 @@
 const db = require('../modules/DB');
-const $u = require('../helpers/utils');
+const utils = require('../helpers/utils');
 const config = require('../modules/configReader');
 const orderUtils = require('./orderUtils');
 const log = require('../helpers/log');
@@ -10,8 +10,8 @@ module.exports = {
 
     const { ordersDb } = db;
 
-    const day = $u.unix() - 24 * 3600 * 1000;
-    const month = $u.unix() - 30 * 24 * 3600 * 1000;
+    const day = utils.unix() - 24 * 3600 * 1000;
+    const month = utils.unix() - 30 * 24 * 3600 * 1000;
 
     stats = (await ordersDb.aggregate([
       { $group: {
@@ -146,7 +146,7 @@ module.exports = {
       }
 
     } catch (e) {
-      log.error(`Error in ordersByType(${pair}) of ${$u.getModuleName(module.id)}: ${e}.`);
+      log.error(`Error in ordersByType(${pair}) of ${utils.getModuleName(module.id)}: ${e}.`);
     }
 
     return ordersByType;

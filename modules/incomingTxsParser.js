@@ -100,7 +100,12 @@ module.exports = async (tx) => {
       isNonAdmin: true,
     });
     if (config.notify_non_admins) {
-      $u.sendAdmMsg(tx.senderId, `I won't execute your commands as you are not an admin. Connect with my master.`);
+      const notAdminMsg = `I won't execute your commands as you are not an admin. Connect with my master.`;
+      api.sendMessage(config.passPhrase, tx.senderId, notAdminMsg).then((response) => {
+        if (!response.success) {
+          log.warn(`Failed to send ADM message '${notAdminMsg}' to ${tx.senderId}. ${response.errorMessage}.`);
+        }
+      });
     }
   }
 

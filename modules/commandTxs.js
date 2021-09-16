@@ -1627,8 +1627,12 @@ async function make(params, tx, confirmation) {
               msgSendBack = `Making ${priceString}: Successfully placed an order to **${actionString}**.\n\n${priceInfoString}`;
               notifyType = 'log';
               notify(msgNotify, notifyType);
-              utils.sendAdmMsg(tx.senderId, msgSendBack);
-
+              api.sendMessage(config.passPhrase, tx.senderId, msgSendBack).then((response) => {
+                if (!response.success) {
+                  log.warn(`Failed to send ADM message '${msgSendBack}' to ${tx.senderId}. ${response.errorMessage}.`);
+                }
+              });
+          
             }, 2000);
           };
           await showRatesAfterOrder(exchangeRatesBefore, priceString, actionString);

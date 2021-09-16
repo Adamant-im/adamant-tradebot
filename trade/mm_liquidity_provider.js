@@ -1,4 +1,4 @@
-const $u = require('../helpers/utils');
+const utils = require('../helpers/utils');
 const config = require('../modules/configReader');
 const log = require('../helpers/log');
 const notify = require('../helpers/notify');
@@ -57,7 +57,7 @@ module.exports = {
         exchange: config.exchange,
       });
 
-      const orderBookInfo = $u.getOrderBookInfo(await traderapi.getOrderBook(config.pair),
+      const orderBookInfo = utils.getOrderBookInfo(await traderapi.getOrderBook(config.pair),
           tradeParams.mm_liquiditySpreadPercent);
 
       if (!orderBookInfo) {
@@ -68,7 +68,7 @@ module.exports = {
       liquidityOrders = await orderUtils.updateOrders(liquidityOrders, config.pair); // update orders which partially filled or not found
       liquidityOrders = await this.closeLiquidityOrders(liquidityOrders, orderBookInfo); // close orders which expired or out of spread
 
-      const liquidityStats = $u.getOrdersStats(liquidityOrders);
+      const liquidityStats = utils.getOrdersStats(liquidityOrders);
 
       let amountPlaced;
       do {
@@ -89,7 +89,7 @@ module.exports = {
       log.info(`Liquidity stats: opened ${liquidityStats.bidsCount} bids-buy orders for ${liquidityStats.bidsTotalQuoteAmount.toFixed(config.coin2Decimals)} of ${tradeParams.mm_liquidityBuyQuoteAmount} ${config.coin2} and ${liquidityStats.asksCount} asks-sell orders with ${liquidityStats.asksTotalAmount.toFixed(config.coin1Decimals)} of ${tradeParams.mm_liquiditySellAmount} ${config.coin1}.`);
 
     } catch (e) {
-      log.error(`Error in updateLiquidity() of ${$u.getModuleName(module.id)} module: ` + e);
+      log.error(`Error in updateLiquidity() of ${utils.getModuleName(module.id)} module: ` + e);
     }
 
   },
@@ -98,7 +98,7 @@ module.exports = {
     const updatedLiquidityOrders = [];
     for (const order of liquidityOrders) {
       try {
-        if (order.dateTill < $u.unix()) {
+        if (order.dateTill < utils.unix()) {
 
           const cancelReq = await traderapi.cancelOrder(order._id, order.type, order.pair);
           if (cancelReq !== undefined) {
@@ -112,7 +112,7 @@ module.exports = {
             log.log(`Request to close expired liq-order with id=${order._id} failed. Will try next time, keeping this order in the DB for now.`);
           }
 
-        } else if ($u.isOrderOutOfSpread(order, orderBookInfo)) {
+        } else if (utils.isOrderOutOfSpread(order, orderBookInfo)) {
 
           const cancelReq = await traderapi.cancelOrder(order._id, order.type, order.pair);
           if (cancelReq !== undefined) {
@@ -130,7 +130,7 @@ module.exports = {
           updatedLiquidityOrders.push(order);
         }
       } catch (e) {
-        log.error(`Error in closeLiquidityOrders() of ${$u.getModuleName(module.id)} module: ` + e);
+        log.error(`Error in closeLiquidityOrders() of ${utils.getModuleName(module.id)} module: ` + e);
       }
     }
     return updatedLiquidityOrders;
@@ -158,7 +158,7 @@ module.exports = {
 
       let output = '';
       let orderParamsString = '';
-      const pairObj = $u.getPairObject(config.pair);
+      const pairObj = utils.getPairObject(config.pair);
 
       orderParamsString = `type=${type}, pair=${config.pair}, price=${price}, coin1Amount=${coin1Amount}, coin2Amount=${coin2Amount}`;
       if (!type || !price || !coin1Amount || !coin2Amount) {
@@ -200,8 +200,8 @@ module.exports = {
         const { ordersDb } = db;
         const order = new ordersDb({
           _id: orderReq.orderid,
-          date: $u.unix(),
-          dateTill: $u.unix() + lifeTime,
+          date: utils.unix(),
+          dateTill: utils.unix() + lifeTime,
           purpose: 'liq', // liq: liquidity & spread
           type: type,
           // targetType: type,
@@ -233,7 +233,7 @@ module.exports = {
       }
 
     } catch (e) {
-      log.error(`Error in placeLiquidityOrder() of ${$u.getModuleName(module.id)} module: ` + e);
+      log.error(`Error in placeLiquidityOrder() of ${utils.getModuleName(module.id)} module: ` + e);
     }
 
   },
@@ -304,7 +304,7 @@ async function setPrice(type, orderBookInfo) {
         break;
     }
 
-    const precision = $u.getPrecision(config.coin2Decimals);
+    const precision = utils.getPrecision(config.coin2Decimals);
     let price; let lowPrice = 0; let highPrice = 0;
 
     const pw = require('./mm_price_watcher');
@@ -316,7 +316,7 @@ async function setPrice(type, orderBookInfo) {
     if (type === 'sell') {
       low = targetPrice;
       high = targetPrice * (1 + tradeParams.mm_liquiditySpreadPercent/100 / 2);
-      price = $u.randomValue(low, high);
+      price = utils.randomValue(low, high);
       if (lowPrice && price < lowPrice) {
         price = lowPrice;
         output = `${config.notifyName}: Price watcher corrected price to sell not lower than ${lowPrice.toFixed(config.coin2Decimals)} while placing liq-order. Low: ${low.toFixed(config.coin2Decimals)}, high: ${high.toFixed(config.coin2Decimals)} ${config.coin2}.`;
@@ -328,7 +328,7 @@ async function setPrice(type, orderBookInfo) {
     } else {
       high = targetPrice;
       low = targetPrice * (1 - tradeParams.mm_liquiditySpreadPercent/100 / 2);
-      price = $u.randomValue(low, high);
+      price = utils.randomValue(low, high);
       if (highPrice && price > highPrice) {
         price = highPrice;
         output = `${config.notifyName}: Price watcher corrected price to buy not higher than ${highPrice.toFixed(config.coin2Decimals)} while placing liq-order. Low: ${low.toFixed(config.coin2Decimals)}, high: ${high.toFixed(config.coin2Decimals)} ${config.coin2}.`;
@@ -344,7 +344,7 @@ async function setPrice(type, orderBookInfo) {
     };
 
   } catch (e) {
-    log.error(`Error in setPrice() of ${$u.getModuleName(module.id)} module: ` + e);
+    log.error(`Error in setPrice() of ${utils.getModuleName(module.id)} module: ` + e);
   }
 
 }
@@ -366,13 +366,13 @@ function setAmount(type, price) {
     max = tradeParams.mm_liquidityBuyQuoteAmount / price / 2;
   }
 
-  return $u.randomValue(min, max);
+  return utils.randomValue(min, max);
 }
 
 function setLifeTime() {
-  return $u.randomValue(LIFETIME_MIN, LIFETIME_MAX, true);
+  return utils.randomValue(LIFETIME_MIN, LIFETIME_MAX, true);
 }
 
 function setPause() {
-  return $u.randomValue(INTERVAL_MIN, INTERVAL_MAX, true);
+  return utils.randomValue(INTERVAL_MIN, INTERVAL_MAX, true);
 }

@@ -1,5 +1,5 @@
 const RESFINEX = require('./api/resfinex_api');
-const $u = require('../helpers/utils');
+const utils = require('../helpers/utils');
 
 // API endpoints:
 // https://api.resfinex.com/
@@ -36,7 +36,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
             log.warn('Error while processing getBalances() request: ' + e);
           };
         }).catch((err) => {
-          log.log(`API request getBalances(nonzero: ${nonzero}) of ${$u.getModuleName(module.id)} module failed. ${err}.`);
+          log.log(`API request getBalances(nonzero: ${nonzero}) of ${utils.getModuleName(module.id)} module failed. ${err}.`);
           resolve(undefined);
         });
       });
@@ -114,7 +114,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
             log.warn('Error while processing getOpenOrders() request: ' + e);
           };
         }).catch((err) => {
-          log.log(`API request getOpenOrders(pair: ${pair}) of ${$u.getModuleName(module.id)} module failed. ${err}.`);
+          log.log(`API request getOpenOrders(pair: ${pair}) of ${utils.getModuleName(module.id)} module failed. ${err}.`);
           resolve(undefined);
         });
       });
@@ -139,7 +139,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
             log.warn('Error while processing cancelOrder() request: ' + e);
           };
         }).catch((err) => {
-          log.log(`API request ${arguments.callee.name}(orderId: ${orderId}) of ${$u.getModuleName(module.id)} module failed. ${err}.`);
+          log.log(`API request ${arguments.callee.name}(orderId: ${orderId}) of ${utils.getModuleName(module.id)} module failed. ${err}.`);
           resolve(undefined);
         });
       });
@@ -172,7 +172,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
                 log.warn('Error while processing getRates() orderBook() request: ' + e);
               };
             }).catch((err) => {
-              log.log(`API request getRates(pair: ${pair_.pair}) of ${$u.getModuleName(module.id)} module failed. ${err}.`);
+              log.log(`API request getRates(pair: ${pair_.pair}) of ${utils.getModuleName(module.id)} module failed. ${err}.`);
               resolve(undefined);
             });
           } catch (e) {
@@ -180,7 +180,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
             log.warn('Error while processing getRates() ticker() request: ' + e);
           };
         }).catch((err) => {
-          log.log(`API request getRates(pair: ${pair_.pair}) of ${$u.getModuleName(module.id)} module failed. ${err}.`);
+          log.log(`API request getRates(pair: ${pair_.pair}) of ${utils.getModuleName(module.id)} module failed. ${err}.`);
           resolve(undefined);
         });
       });
@@ -238,7 +238,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
               resolve(order);
             };
           }).catch((err) => {
-            log.log(`API request RESFINEX.addEntrustSheet-limit(pair: ${pair_.pair}, coin1Amount: ${coin1Amount}, price: ${price}, side: ${side}, 'LIMIT') of ${$u.getModuleName(module.id)} module failed. ${err}.`);
+            log.log(`API request RESFINEX.addEntrustSheet-limit(pair: ${pair_.pair}, coin1Amount: ${coin1Amount}, price: ${price}, side: ${side}, 'LIMIT') of ${utils.getModuleName(module.id)} module failed. ${err}.`);
             resolve(undefined);
           });
         });
@@ -293,7 +293,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
               resolve(order);
             };
           }).catch((err) => {
-            log.log(`API request RESFINEX.addEntrustSheet-market(pair: ${pair_.pair}, coin1Amount: ${coin1Amount}, '', side: ${side}, 'MARKET') of ${$u.getModuleName(module.id)} module failed. ${err}.`);
+            log.log(`API request RESFINEX.addEntrustSheet-market(pair: ${pair_.pair}, coin1Amount: ${coin1Amount}, '', side: ${side}, 'MARKET') of ${utils.getModuleName(module.id)} module failed. ${err}.`);
             resolve(undefined);
           });
         });
@@ -341,7 +341,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
             log.warn('Error while processing orderBook() request: ' + e);
           };
         }).catch((err) => {
-          log.log(`API request getOrderBook(pair: ${pair}) of ${$u.getModuleName(module.id)} module failed. ${err}.`);
+          log.log(`API request getOrderBook(pair: ${pair}) of ${utils.getModuleName(module.id)} module failed. ${err}.`);
           resolve(undefined);
         });
       });

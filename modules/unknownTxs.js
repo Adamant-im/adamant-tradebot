@@ -1,6 +1,7 @@
-const $u = require('../helpers/utils');
+const utils = require('../helpers/utils');
 const db = require('./DB');
 const config = require('./configReader');
+const api = require('./api');
 
 module.exports = async (tx, itx) => {
 
@@ -10,9 +11,9 @@ module.exports = async (tx, itx) => {
       .find({
         senderId: tx.senderId,
         type: 'unknown',
-        date: { $gt: ($u.unix() - 24 * 3600 * 1000) }, // last 24h
+        date: { $gt: (utils.unix() - 24 * 3600 * 1000) }, // last 24h
       }).sort({ date: -1 }).toArray((err, docs) => {
-        const twoHoursAgo = $u.unix() - 2 * 3600 * 1000;
+        const twoHoursAgo = utils.unix() - 2 * 3600 * 1000;
         let countMsgs = docs.length;
         if (!docs[1] || twoHoursAgo > docs[1].date) {
           countMsgs = 1;
@@ -40,7 +41,11 @@ module.exports = async (tx, itx) => {
         } else {
           msg = getRnd(5);
         }
-        $u.sendAdmMsg(tx.senderId, msg);
+        api.sendMessage(config.passPhrase, tx.senderId, msg).then((response) => {
+          if (!response.success) {
+            log.warn(`Failed to send ADM message '${msg}' to ${tx.senderId}. ${response.errorMessage}.`);
+          }
+        });
         itx.update({ isProcessed: true }, true);
       });
 

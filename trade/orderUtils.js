@@ -1,4 +1,4 @@
-const $u = require('../helpers/utils');
+const utils = require('../helpers/utils');
 const config = require('../modules/configReader');
 const log = require('../helpers/log');
 const traderapi = require('./trader_' + config.exchange)(config.apikey, config.apisecret, config.apipassword, log);
@@ -20,7 +20,7 @@ module.exports = {
         const { ordersDb } = db;
         const order = new ordersDb({
           _id: orderReq.orderid,
-          date: $u.unix(),
+          date: utils.unix(),
           purpose: purpose,
           type: orderType,
           exchange: config.exchange,
@@ -46,7 +46,7 @@ module.exports = {
       }
 
     } catch (e) {
-      log.error(`Error in addOrder() of ${$u.getModuleName(module.id)} module: ` + e);
+      log.error(`Error in addOrder() of ${utils.getModuleName(module.id)} module: ` + e);
     }
 
     return orderReq;
@@ -148,7 +148,7 @@ module.exports = {
       }
 
     } catch (e) {
-      log.error(`Error in updateOrders() of ${$u.getModuleName(module.id)} module: ` + e);
+      log.error(`Error in updateOrders() of ${utils.getModuleName(module.id)} module: ` + e);
     }
 
     return updatedOrders;

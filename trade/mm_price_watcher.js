@@ -1,4 +1,4 @@
-const $u = require('../helpers/utils');
+const utils = require('../helpers/utils');
 const config = require('../modules/configReader');
 const log = require('../helpers/log');
 const notify = require('../helpers/notify');
@@ -24,7 +24,7 @@ let isPriceActual = false;
 let setPriceRangeCount = 0;
 let pwExchange; let pwExchangeApi;
 
-log.log(`Module ${$u.getModuleName(module.id)} is loaded.`);
+log.log(`Module ${utils.getModuleName(module.id)} is loaded.`);
 
 module.exports = {
   getLowPrice() {
@@ -112,8 +112,8 @@ module.exports = {
 
         if (targetPrice) {
 
-          const orderBookInfo = $u.getOrderBookInfo(orderBook, tradeParams.mm_liquiditySpreadPercent, targetPrice);
-          const reliabilityKoef = $u.randomValue(1.05, 1.1);
+          const orderBookInfo = utils.getOrderBookInfo(orderBook, tradeParams.mm_liquiditySpreadPercent, targetPrice);
+          const reliabilityKoef = utils.randomValue(1.05, 1.1);
           orderBookInfo.amountTargetPrice *= reliabilityKoef;
           orderBookInfo.amountTargetPriceQuote *= reliabilityKoef;
 
@@ -129,7 +129,7 @@ module.exports = {
       }
 
     } catch (e) {
-      log.error(`Error in reviewPrices() of ${$u.getModuleName(module.id)} module: ` + e);
+      log.error(`Error in reviewPrices() of ${utils.getModuleName(module.id)} module: ` + e);
     }
 
   },
@@ -138,7 +138,7 @@ module.exports = {
     const updatedPwOrders = [];
     for (const order of pwOrders) {
       try {
-        if (order.dateTill < $u.unix()) {
+        if (order.dateTill < utils.unix()) {
 
           const cancelReq = await traderapi.cancelOrder(order._id, order.type, order.pair);
           if (cancelReq !== undefined) {
@@ -156,7 +156,7 @@ module.exports = {
           updatedPwOrders.push(order);
         }
       } catch (e) {
-        log.error(`Error in closePriceWatcherOrders() of ${$u.getModuleName(module.id)} module: ` + e);
+        log.error(`Error in closePriceWatcherOrders() of ${utils.getModuleName(module.id)} module: ` + e);
       }
     }
     return updatedPwOrders;
@@ -174,7 +174,7 @@ module.exports = {
 
       let output = '';
       let orderParamsString = '';
-      const pairObj = $u.getPairObject(config.pair);
+      const pairObj = utils.getPairObject(config.pair);
 
       orderParamsString = `type=${type}, pair=${config.pair}, price=${price}, coin1Amount=${coin1Amount}, coin2Amount=${coin2Amount}`;
       if (!type || !price || !coin1Amount || !coin2Amount) {
@@ -203,8 +203,8 @@ module.exports = {
         const { ordersDb } = db;
         const order = new ordersDb({
           _id: orderReq.orderid,
-          date: $u.unix(),
-          dateTill: $u.unix() + lifeTime,
+          date: utils.unix(),
+          dateTill: utils.unix() + lifeTime,
           purpose: 'pw', // pw: price watcher order
           type: type,
           // targetType: type,
@@ -231,7 +231,7 @@ module.exports = {
       }
 
     } catch (e) {
-      log.error(`Error in placePriceWatcherOrder() of ${$u.getModuleName(module.id)} module: ` + e);
+      log.error(`Error in placePriceWatcherOrder() of ${utils.getModuleName(module.id)} module: ` + e);
     }
 
   },
@@ -282,11 +282,11 @@ async function isEnoughCoins(coin1, coin2, amount1, amount2, type) {
 }
 
 function setLifeTime() {
-  return $u.randomValue(LIFETIME_MIN, LIFETIME_MAX, true);
+  return utils.randomValue(LIFETIME_MIN, LIFETIME_MAX, true);
 }
 
 function setPause() {
-  return $u.randomValue(INTERVAL_MIN, INTERVAL_MAX, true);
+  return utils.randomValue(INTERVAL_MIN, INTERVAL_MAX, true);
 }
 
 async function setPriceRange() {
@@ -303,7 +303,7 @@ async function setPriceRange() {
 
       const pair = tradeParams.mm_priceWatcherSource.split('@')[0];
       const exchange = tradeParams.mm_priceWatcherSource.split('@')[1];
-      const pairObj = $u.getPairObject(pair, false);
+      const pairObj = utils.getPairObject(pair, false);
 
       // let exchangeapi = require('./trader_' + exchange.toLowerCase())(null, null, null, log, true);
       module.exports.setPwExchangeApi(exchange);
@@ -327,7 +327,7 @@ async function setPriceRange() {
 
       } else {
 
-        const orderBookInfo = $u.getOrderBookInfo(orderBook, 0, false);
+        const orderBookInfo = utils.getOrderBookInfo(orderBook, 0, false);
         // console.log(orderBookInfo);
         if (!orderBookInfo || !orderBookInfo.smartAsk || !orderBookInfo.smartBid) {
           errorSettingPriceRange(`Unable to calculate the orderBookInfo for ${pair} at ${exchange} exchange.`);
@@ -349,8 +349,8 @@ async function setPriceRange() {
 
       }
 
-      lowPrice = l * $u.randomValue(1 - tradeParams.mm_priceWatcherDeviationPercent/100, 1) * $u.randomValue(0.99, 1.005);
-      highPrice = h * $u.randomValue(1, 1 + tradeParams.mm_priceWatcherDeviationPercent/100) * $u.randomValue(0.995, 1.01);
+      lowPrice = l * utils.randomValue(1 - tradeParams.mm_priceWatcherDeviationPercent/100, 1) * utils.randomValue(0.99, 1.005);
+      highPrice = h * utils.randomValue(1, 1 + tradeParams.mm_priceWatcherDeviationPercent/100) * utils.randomValue(0.995, 1.01);
       if (lowPrice >= highPrice) {
         lowPrice = l;
         highPrice = h;
@@ -374,8 +374,8 @@ async function setPriceRange() {
 
       } else {
 
-        lowPrice = l * $u.randomValue(0.98, 1.01);
-        highPrice = h * $u.randomValue(0.99, 1.02);
+        lowPrice = l * utils.randomValue(0.98, 1.01);
+        highPrice = h * utils.randomValue(0.99, 1.02);
         if (lowPrice >= highPrice) {
           lowPrice = l;
           highPrice = h;
@@ -421,7 +421,7 @@ async function setPriceRange() {
 
   } catch (e) {
 
-    errorSettingPriceRange(`Error in setPriceRange() of ${$u.getModuleName(module.id)} module: ${e}.`);
+    errorSettingPriceRange(`Error in setPriceRange() of ${utils.getModuleName(module.id)} module: ${e}.`);
     return false;
 
   }
@@ -454,7 +454,7 @@ function errorSettingPriceRange(errorMessage) {
     }
 
   } catch (e) {
-    log.error(`Error in errorSettingPriceRange() of ${$u.getModuleName(module.id)} module: ` + e);
+    log.error(`Error in errorSettingPriceRange() of ${utils.getModuleName(module.id)} module: ` + e);
   }
 
 }

@@ -73,7 +73,7 @@ module.exports = {
           }
 
         } catch (e) {
-          log.error(`Error in for (const order: ${order._id} of ordersToClear) of ${$u.getModuleName(module.id)}: ${e}.`);
+          log.error(`Error in for (const order: ${order._id} of ordersToClear) of ${utils.getModuleName(module.id)}: ${e}.`);
         }
 
       };
@@ -148,7 +148,7 @@ module.exports = {
             }
 
           } catch (e) {
-            log.error(`Error in for (const order: ${order.orderid} of openOrders) of ${$u.getModuleName(module.id)}: ${e}.`);
+            log.error(`Error in for (const order: ${order.orderid} of openOrders) of ${utils.getModuleName(module.id)}: ${e}.`);
           }
 
         };
@@ -216,7 +216,7 @@ module.exports = {
             }
 
           } catch (e) {
-            log.error(`Error in for (const order: ${order.orderid} of openOrders) of ${$u.getModuleName(module.id)}: ${e}.`);
+            log.error(`Error in for (const order: ${order.orderid} of openOrders) of ${utils.getModuleName(module.id)}: ${e}.`);
           }
 
         };

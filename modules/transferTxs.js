@@ -1,4 +1,4 @@
-const $u = require('../helpers/utils');
+const utils = require('../helpers/utils');
 const notify = require('../helpers/notify');
 const config = require('./configReader');
 
@@ -11,6 +11,10 @@ module.exports = async (itx, tx) => {
   await itx.update({ isProcessed: true }, true);
 
   notify(msgNotify, notifyType);
-  $u.sendAdmMsg(tx.senderId, msgSendBack);
+  api.sendMessage(config.passPhrase, tx.senderId, msgSendBack).then((response) => {
+    if (!response.success) {
+      log.warn(`Failed to send ADM message '${msgSendBack}' to ${tx.senderId}. ${response.errorMessage}.`);
+    }
+  });
 
 };

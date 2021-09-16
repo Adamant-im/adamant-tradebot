@@ -1,4 +1,4 @@
-const $u = require('../helpers/utils');
+const utils = require('../helpers/utils');
 const config = require('../modules/configReader');
 const log = require('../helpers/log');
 const notify = require('../helpers/notify');
@@ -51,7 +51,7 @@ module.exports = {
 
       let output = '';
       let orderParamsString = '';
-      const pairObj = $u.getPairObject(config.pair);
+      const pairObj = utils.getPairObject(config.pair);
 
       if (!price) {
         if ((Date.now()-lastNotifyPriceTimestamp > HOUR) && priceReq.message) {
@@ -94,7 +94,7 @@ module.exports = {
           const order = new ordersDb({
             _id: order1.orderid,
             crossOrderId: null,
-            date: $u.unix(),
+            date: utils.unix(),
             purpose: 'mm', // Market making
             mmOrderAction: priceReq.mmCurrentAction,
             type: crossType(type),
@@ -141,7 +141,7 @@ module.exports = {
           const order = new ordersDb({
             _id: order1.orderid,
             crossOrderId: null,
-            date: $u.unix(),
+            date: utils.unix(),
             purpose: 'mm', // Market making
             mmOrderAction: priceReq.mmCurrentAction,
             type: type,
@@ -169,7 +169,7 @@ module.exports = {
       }
 
     } catch (e) {
-      log.error(`Error in executeMmOrder() of ${$u.getModuleName(module.id)} module: ` + e);
+      log.error(`Error in executeMmOrder() of ${utils.getModuleName(module.id)} module: ` + e);
     }
 
   },
@@ -269,13 +269,13 @@ async function setPrice(type, pair, coin1Amount) {
 
   try {
 
-    const precision = $u.getPrecision(config.coin2Decimals);
+    const precision = utils.getPrecision(config.coin2Decimals);
     const smallSpread = precision * 15; // if spread is small and should do market making less careful
     let output = '';
 
     let ask_high; let bid_low; let price;
     const orderBook = await traderapi.getOrderBook(config.pair);
-    const orderBookInfo = $u.getOrderBookInfo(orderBook, tradeParams.mm_liquiditySpreadPercent);
+    const orderBookInfo = utils.getOrderBookInfo(orderBook, tradeParams.mm_liquiditySpreadPercent);
     if (!orderBookInfo) {
       log.warn(`${config.notifyName}: Order books are empty for ${config.pair}, or temporary API error. Unable to set a price while placing mm-order.`);
       return {
@@ -425,7 +425,7 @@ async function setPrice(type, pair, coin1Amount) {
 
       let amountInSpread; let amountInConfig; let amountMaxAllowed; let firstOrderAmount;
       // fill not more, than liquidity amount * allowedAmountKoef
-      const allowedAmountKoef = tradeParams.mm_isLiquidityActive ? $u.randomValue(0.5, 0.8) : $u.randomValue(0.2, 0.5);
+      const allowedAmountKoef = tradeParams.mm_isLiquidityActive ? utils.randomValue(0.5, 0.8) : utils.randomValue(0.2, 0.5);
 
       if (type === 'sell') {
 
@@ -512,14 +512,14 @@ async function setPrice(type, pair, coin1Amount) {
       if (isCareful) {
         if (interval > smallSpread) {
           // 1-25% of spread
-          deltaPercent = $u.randomValue(0.01, 0.25);
+          deltaPercent = utils.randomValue(0.01, 0.25);
         } else {
           // 5-35% of spread
-          deltaPercent = $u.randomValue(0.05, 0.35);
+          deltaPercent = utils.randomValue(0.05, 0.35);
         }
       } else {
         // 1-45% of spread
-        deltaPercent = $u.randomValue(0.01, 0.45);
+        deltaPercent = utils.randomValue(0.01, 0.45);
       }
 
       if (type === 'buy') {
@@ -546,7 +546,7 @@ async function setPrice(type, pair, coin1Amount) {
     } // if (mmCurrentAction === 'executeInSpread')
 
   } catch (e) {
-    log.error(`Error in setPrice() of ${$u.getModuleName(module.id)} module: ` + e);
+    log.error(`Error in setPrice() of ${utils.getModuleName(module.id)} module: ` + e);
   }
 
 }
