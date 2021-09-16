@@ -47,13 +47,14 @@
   "license": "GPL-3.0",
   "dependencies": {
     "adamant-api": "^1.1.0",
-    "axios": "0.21.4",
+    "axios": "^0.21.4",
     "express": "^4.17.1",
     "form-data": "^4.0.0",
     "jsonminify": "^0.4.1",
     "mongodb": "^4.1.2"
   },
   "devDependencies": {
+    "@babel/core": "^7.15.5",
     "@babel/eslint-parser": "^7.15.4",
     "@babel/plugin-transform-runtime": "^7.15.0",
     "@babel/preset-env": "^7.15.6",
