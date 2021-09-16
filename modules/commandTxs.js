@@ -1878,8 +1878,8 @@ function version() {
 }
 
 function saveConfig() {
-  const str = 'module.exports = ' + JSON.stringify(tradeParams, null, 2).replaceAll('"', '\'').replaceAll('\n\}', ',\n};\n');
-  fs.writeFileSync('./trade/settings/tradeParams_' + config.exchange + '.js', str);
+  const toSave = 'module.exports = ' + JSON.stringify(tradeParams, null, 2).replace(/"/g, '\'').replace(/\n\}/g, ',\n};\n');
+  fs.writeFileSync('./trade/settings/tradeParams_' + config.exchange + '.js', toSave);
 }
 
 const commands = {
