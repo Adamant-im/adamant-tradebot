@@ -750,6 +750,10 @@ async function clear(params) {
       purposes = 'unk';
       purposeString = `unknown`;
     }
+    if (['mm'].includes(param.toLowerCase())) {
+      purposes = ['mm'];
+      purposeString = `market making`;
+    }
     if (['tb'].includes(param.toLowerCase())) {
       purposes = ['tb'];
       purposeString = `trade bot`;
