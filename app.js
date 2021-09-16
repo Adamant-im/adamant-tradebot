@@ -18,6 +18,7 @@ function init() {
       console.log('Clearing database…');
       db.systemDb.db.drop();
       db.incomingTxsDb.db.drop();
+      db.ordersDb.db.drop();
       notify(`*${config.notifyName}: database cleared*. Manually stop the Bot now.`, 'info');
     } else {
       checker();
