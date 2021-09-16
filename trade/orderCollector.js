@@ -26,7 +26,7 @@ module.exports = {
      */
   async clearOrders(purposes, pair, doForce = false) {
 
-    // console.log(`clearOrders(${purposes}, ${pair}, ${doForce})..`);
+    // console.log(`clearOrders(${purposes}, ${pair}, ${doForce})…`);
 
     const { ordersDb } = db;
     let ordersToClear;
@@ -98,7 +98,7 @@ module.exports = {
      */
   async clearUnknownOrders(pair, doForce = false) {
 
-    // console.log(`clearOrders(${purposes}, ${pair}, ${doForce})..`);
+    // console.log(`clearOrders(${purposes}, ${pair}, ${doForce})…`);
 
     const { ordersDb } = db;
     let dbOrders;
@@ -179,7 +179,7 @@ module.exports = {
      */
   async clearAllOrders(pair, doForce = false) {
 
-    // console.log(`clearAllOrders(${pair}, ${doForce})..`);
+    // console.log(`clearAllOrders(${pair}, ${doForce})…`);
     // First, close orders which are in bot's database
     // 'all' = ['mm', 'tb', 'ob', 'liq', 'pw']
     const clearedInfo = await this.clearOrders('all', pair, doForce);
@@ -253,7 +253,7 @@ setInterval(() => {
 if (config.clearAllOrdersInterval) {
   setInterval(() => {
 
-    log.info(`Clearing all Unknown opened orders every ${config.clearAllOrdersInterval} minutes as set in config..`);
+    log.info(`Clearing all Unknown opened orders every ${config.clearAllOrdersInterval} minutes as set in config…`);
     module.exports.clearUnknownOrders(config.pair);
 
   }, config.clearAllOrdersInterval * 60 * 1000);

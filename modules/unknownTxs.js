@@ -25,9 +25,9 @@ module.exports = async (tx, itx) => {
         } else if (countMsgs === 2) {
           msg = 'OK. It seems you don’t speak English󠁧󠁢󠁥󠁮. Contact my master and ask him to teach me 🎓 your native language. But note, it will take some time because I am not a genius 🤓.';
         } else if (countMsgs === 3) {
-          msg = 'Hm.. Contact _not me_, but my master. No, I don’t know how to reach him. ADAMANT is so much anonymous 🤪.';
+          msg = 'Hm… Contact _not me_, but my master. No, I don’t know how to reach him. ADAMANT is so much anonymous 🤪.';
         } else if (countMsgs === 4) {
-          msg = 'I see.. You just wanna talk 🗣️. I am not the best at talking.';
+          msg = 'I see… You just wanna talk 🗣️. I am not the best at talking.';
         } else if (countMsgs < 10) {
           msg = getRnd(0);
         } else if (countMsgs < 20) {
@@ -62,11 +62,11 @@ const collection = [
   [
     'Do you wanna beer 🍺? I want to have it aslo, but now is the trade time.',
     'Do you wanna trade Ethers? Say **/balances** to see what you have in your account 🤑.',
-    'Aaaaghr..! 😱 Check out ₿ rates with **/rates BTC** command right now!',
+    'Aaaaghr…! 😱 Check out ₿ rates with **/rates BTC** command right now!',
     'I can tell how to use me. ℹ️ Just say **/help**.',
     'I am just kiddin! 😛',
     'I’d like to work with you 🈺.',
-    'Ok, let see.. What about trading ADM? 🉐',
+    'Ok, let see… What about trading ADM? 🉐',
     'ADAMANT is cool 😎, isn’t it?',
     'People do know me. I am decent. 😎 Ask somebody to confirm.',
     'I am really good 👌 at trading deal.',
@@ -87,7 +87,7 @@ const collection = [
   // 1 collection
   [
     'Do you know what is ‘биток’?',
-    'Yeah.. my English was born in cold ❄️ Russian village. I know. But my masters are good in programming 👨‍💻.',
+    'Yeah… my English was born in cold ❄️ Russian village. I know. But my masters are good in programming 👨‍💻.',
     'I am working for ADAMANT for some time already. I have to admit guys feed me good. 🥪',
     'I love ADAMANT 💓. The team is doing all the best.',
     'Да не барыга я! Зарабатываю как могу. 😬',
@@ -95,7 +95,7 @@ const collection = [
     'To pick up Emoji 😄, press Win + . on Windows, Cmd + Ctrl + Space on Mac, or use keyboard on iPhone and Android.',
     'My mama told not to talk with strangers 🤐.',
     'Are you a girl or a boy? I am comfortable with girls 👧.',
-    'Have you heard ADAMANT on Binance already? ..I am not 🙃.',
+    'Have you heard ADAMANT on Binance already? …I am not 🙃.',
     'When Binance? 😲',
     'No, no. It is not good.',
     'D’oh! 😖',
@@ -113,14 +113,14 @@ const collection = [
     'No, I am not. 🙅‍♂️',
     'I am not a scammer! 😠',
     '1 ADM for 10 Ethers! 🤑 Deal! Buterin will understand soon who is the daddy.',
-    '🔫 Гони бабло! 💰 ..sorry for my native.',
-    'Это у вас навар адский. А у меня.. это комиссия за честную работу. 😬',
-    'Ландон из э капитал оф грейт брит.. блять, я перебрал.. 🤣',
+    '🔫 Гони бабло! 💰 …sorry for my native.',
+    'Это у вас навар адский. А у меня… это комиссия за честную работу. 😬',
+    'Ландон из э капитал оф грейт брит… блять, я перебрал… 🤣',
     '❤️ Love is everything.',
-    'Hey.. You disturb me! 💻 I am working!',
+    'Hey… You disturb me! 💻 I am working!',
     'It seems you are good in talking 🗣️ only.',
     'OK. I better call you now 🤙',
-    'I am not a motherf.. how do you know such words, little? 👿',
+    'I am not a motherf… how do you know such words, little? 👿',
     'Do you know Satoshi 🤝 is my close friend?',
     'Are you programming in 1С? Try it! ПроцессорВывода = Новый ПроцессорВыводаРезультатаКомпоновкиДанныхВТабличныйДокумент;',
     '👨‍💻',
@@ -135,7 +135,7 @@ const collection = [
     'My patience is over 😑.',
     'You want a ban I think 🤨',
     'Just give me some money! 💱',
-    'I am tired of you.. ',
+    'I am tired of you… ',
     'Booooooring! 💤',
     '💱 Stop talking, go working?',
     'To ADAMANT! 🥂',
@@ -154,10 +154,10 @@ const collection = [
   ],
   // 4 collection
   [
-    'Shut up.. 🤐',
+    'Shut up… 🤐',
     'I better find another trader 📱',
     'You want to be banned 🚫 for sure!',
-    'Ok.. I understood. Come back tomorrow.',
+    'Ok… I understood. Come back tomorrow.',
     'Who is it behind you? A real Satoshi!? 😮',
     'Can with you that the not so?',
     'Do you know this code entry called ‘shit’? Check out in ADAMANT’s Github by yourself.',
@@ -167,9 +167,9 @@ const collection = [
     'I am here to trade, not to speak 😐',
     'While you talk, others make money.',
     'А-а-а-а-а-а! АДАМАНТ пампят! 😱',
-    'Шоколотье, сомелье, залупэ.. Привет Чиверсу 🤘',
+    'Шоколотье, сомелье, залупэ… Привет Чиверсу 🤘',
     'Делаем ставки. 🍽️ Макафи съест свой член?',
-    'Ban-ban-ban.. 🚫',
+    'Ban-ban-ban… 🚫',
     'АСТАНАВИТЕСЬ!',
     'Ё и Е — разные буквы. Не путай, инглишь-спикер!',
   ],

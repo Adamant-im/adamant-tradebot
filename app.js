@@ -15,7 +15,7 @@ function init() {
   require('./server');
   try {
     if (doClearDB) {
-      console.log('Clearing database..');
+      console.log('Clearing database…');
       db.systemDb.db.drop();
       db.incomingTxsDb.db.drop();
       notify(`*${config.notifyName}: database cleared*. Manually stop the Bot now.`, 'info');
