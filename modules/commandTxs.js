@@ -1,3 +1,4 @@
+const constants = require('../helpers/const');
 const fs = require('fs');
 const Store = require('../modules/Store');
 const utils = require('../helpers/utils');
@@ -10,6 +11,7 @@ const traderapi = require('../trade/trader_' + config.exchange)(config.apikey, c
 const orderCollector = require('../trade/orderCollector');
 const orderStats = require('../trade/orderStats');
 const orderUtils = require('../trade/orderUtils');
+const api = require('./api');
 
 const timeToConfirm = 1000 * 60 * 10; // 10 minutes to confirm
 const pendingConfirmation = {
@@ -44,9 +46,9 @@ module.exports = async (commandMsg, tx, itx) => {
     }
 
     if (commandResult.msgSendBack) {
-      api.sendMessage(config.passPhrase, tx.senderId, commandResult).then((response) => {
-      if (!response.success) {
-        log.warn(`Failed to send ADM message '${commandResult}' to ${tx.senderId}. ${response.errorMessage}.`);
+      api.sendMessage(config.passPhrase, tx.senderId, commandResult.msgSendBack).then((response) => {
+        if (!response.success) {
+          log.warn(`Failed to send ADM message '${commandResult.msgSendBack}' to ${tx.senderId}. ${response.errorMessage}.`);
         }
       });
     }
@@ -1265,10 +1267,10 @@ async function rates(params) {
 
   const res = Object
       .keys(exchangerUtils.currencies)
-      .filter((t) => t.startsWith(coin + '/'))
+      .filter((t) => t.startsWith(coin1 + '/'))
       .map((t) => {
-        const quoteCoin = t.replace(coin + '/', '');
-        const pair = `${coin}/**${quoteCoin}**`;
+        const quoteCoin = t.replace(coin1 + '/', '');
+        const pair = `${coin1}/**${quoteCoin}**`;
         const rate = utils.formatNumber(exchangerUtils.currencies[t].toFixed(constants.PRECISION_DECIMALS));
         return `${pair}: ${rate}`;
       })
