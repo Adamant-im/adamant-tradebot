@@ -145,7 +145,7 @@ try {
   console.info(`The bot ${address} successfully read a config-file${isDev ? ' (dev)' : ''}.`);
 
 } catch (e) {
-  console.error('Error reading config: ' + e);
+  exit('Error reading config: ' + e);
 }
 
 function exit(msg) {
