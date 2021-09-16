@@ -23,13 +23,13 @@ module.exports = {
   async test() {
     console.log('==========================');
     console.log('**************before');
-    const pw = require('./mm_price_watcher');
-    console.log(`isPriceActual: ${pw.getIsPriceActual()}`);
-    // let req = await traderapi.cancelOrder('ADM_USDT');
+    // const pw = require('./mm_price_watcher');
+    // console.log(`isPriceActual: ${pw.getIsPriceActual()}`);
+    let req = await traderapi.cancelOrder('ADM_USDT');
     // let exchangeapi = require('./trader_' + 'atomars')(null, null, null, log, true);
     // let req = await exchangeapi.getOrderBook('ADM/USDT');
-    const pw2 = require('./mm_price_watcher');
-    console.log(`isPriceActual: ${pw2.getIsPriceActual()}`);
+    // const pw2 = require('./mm_price_watcher');
+    // console.log(`isPriceActual: ${pw2.getIsPriceActual()}`);
 
     console.log('**************after:');
     // console.log(req);

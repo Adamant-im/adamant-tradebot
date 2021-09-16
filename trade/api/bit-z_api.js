@@ -59,7 +59,7 @@ function market_api(path, data) {
               if (data.status === 200) {
                 resolve(data);
               } else {
-                reject(data.status);
+                resolve(data); // f. e., it may return -103, if no order found
               }
             } catch (e) {
               log.warn(`Error while processing response of request to ${url}: ${e}. Data object I've got: ${data}.`);
@@ -104,7 +104,7 @@ function sign_api(path, data) {
               } else if (wrongAccountErrors.includes(data.status)) {
                 reject(`Bit-Z declined a request to ${url} because of wrong account data. Make sure API keys are correct, not expired, bot's IP set as trusted, trade password is set. Reply data: ${data}.`);
               } else {
-                reject(data.status);
+                resolve(data); // f. e., it may return -103, if no order found
               }
             } catch (e) {
               log.warn(`Error while processing response of request to ${url}: ${e}. Data object I've got: ${data}.`);
