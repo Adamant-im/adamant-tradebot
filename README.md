@@ -68,28 +68,7 @@ npm i
 nano config.json
 ```
 
-Parameters:
-
-* `exchange` <string> Exchange to work with. Available values see above. Case insensitive, obligatory.
-* `pair` <string> Pair to with on the exchange. Obligatory.
-* `coin1Decimals` <number>  Meaningful decimals for output of coin1 amounts. Default is 8.
-* `coin2Decimals` <number>  Meaningful decimals for output of coin2 amounts. Default is 8.
-* `clearAllOrdersInterval` <number> Interval in minutes to clear all opened orders. Default is 0 (disabled).
-* `apikey` <string> Exchange's account API key (username/login for some exchanges) for connection. Obligatory.
-* `apisecret` <string> Exchange's account API secret (password for some exchanges) for connection. Obligatory.
-* `apipassword` <string> Exchange's account trade password. If needed for exchange.
-* `passPhrase` <string> The bot's secret phrase for accepting commands. Obligatory. Bot's ADM address will correspond this passPhrase.
-* `admin_accounts` <string, array> ADAMANT accounts to accept commands from. Commands from other accounts will not be executed. At lease one account.
-* `notify_non_admins` <boolean> Notify non-admins that they are not admins. If false, bot will be silent.
-* `node_ADM` <string, array> List of nodes for API work, obligatorily
-* `infoservice` <string, array> List of [ADAMANT InfoServices](https://github.com/Adamant-im/adamant-currencyinfo-services) for catching exchange rates, recommended
-* `slack` <string> Token for Slack alerts for the bot’s administrator. No alerts if not set.
-* `adamant_notify` <string> ADM address for the bot’s administrator. Recommended.
-* `silent_mode` <boolean> Enable if you don't want to receive "not enough balance" and "unable to execute cross-order" notifications. Default is "false".
-* `socket` <boolean> If to use WebSocket connection. Recommended for better user experience.
-* `ws_type` <string> Choose socket connection, "ws" or "wss" depending on your server.
-* `bot_name` <string> Bot's name for notifications.
-* `welcome_string` <string> How to reply user in-chat, if unknown command received.
+Parameters: see comments in `config.json`.
 
 ## Launching
 
