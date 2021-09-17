@@ -12,8 +12,14 @@ const apiServer = 'https://apiv2.bitz.com';
 module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
 
   BITZ.setConfig(apiServer, apiKey, secretKey, pwd, log, publicOnly);
+  let markets;
 
   return {
+    get markets() {
+      if (module.exports.markets) {
+        return module.exports.markets;
+      }
+    },
     features() {
       return {
         markets: true,
@@ -365,7 +371,10 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
         });
       });
     },
-    getMarkets() {
+    async getMarkets() {
+      if (module.exports.markets) {
+        return module.exports.markets;
+      }
       return new Promise((resolve, reject) => {
         BITZ.symbolList().then(function(data) {
           try {
@@ -387,6 +396,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
               };
             });
 
+            module.exports.markets = result;
             resolve(result);
           } catch (e) {
             resolve(false);
