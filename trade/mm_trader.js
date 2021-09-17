@@ -4,7 +4,6 @@ const log = require('../helpers/log');
 const notify = require('../helpers/notify');
 const tradeParams = require('./settings/tradeParams_' + config.exchange);
 const traderapi = require('./trader_' + config.exchange)(config.apikey, config.apisecret, config.apipassword, log);
-traderapi.getMarkets(); // initialize markets
 const db = require('../modules/DB');
 const orderCollector = require('./orderCollector');
 

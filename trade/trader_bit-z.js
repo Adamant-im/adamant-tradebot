@@ -9,28 +9,68 @@ const utils = require('../helpers/utils');
 // https://api.bitzspeed.com
 const apiServer = 'https://apiv2.bitz.com';
 const exchangeName = 'Bit-Z';
+let gettingMarkets = false;
 
 module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
 
   BITZ.setConfig(apiServer, apiKey, secretKey, pwd, log, publicOnly);
-  // Must be initialized with getMarkets();
+
+  // Fulfill markets on initialization
   let markets;
+  if (!markets && !gettingMarkets) {
+    getMarkets();
+  }
+
+  function getMarkets() {
+    gettingMarkets = true;
+    if (module.exports.markets) {
+      return module.exports.markets;
+    }
+    return new Promise((resolve, reject) => {
+      BITZ.symbolList().then(function(data) {
+        try {
+          let markets = data.data;
+          if (!markets) {
+            markets = {};
+          }
+          const result = {};
+          Object.keys(markets).forEach((market) => {
+            const pairFormatted = `${markets[market].coinFrom.toUpperCase()}/${markets[market].coinTo.toUpperCase()}`;
+            result[pairFormatted] = {
+              pairPlain: markets[market].name,
+              coin1: markets[market].coinFrom.toUpperCase(),
+              coin2: markets[market].coinTo.toUpperCase(),
+              coin1Decimals: Number(markets[market].numberFloat),
+              coin2Decimals: Number(markets[market].priceFloat),
+              coin1MinTrade: Number(markets[market].minTrade),
+              coin1MaxTrade: Number(markets[market].maxTrade),
+            };
+          });
+
+          if (Object.keys(result).length > 0) {
+            module.exports.markets = result;
+            log.log(`Received info about ${Object.keys(result).length} markets on ${exchangeName} exchange.`);
+          }
+          resolve(result);
+        } catch (e) {
+          resolve(false);
+          log.warn('Error while processing getMarkets() request: ' + e);
+        };
+      }).catch((err) => {
+        log.warn(`API request getMarkets() of ${utils.getModuleName(module.id)} module failed. ${err}`);
+        resolve(undefined);
+      }).finally(() => {
+        gettingMarkets = false;
+      });
+    });
+  }
 
   return {
     get markets() {
-      if (module.exports.markets) {
-        return module.exports.markets;
-      } else {
-        return this.getMarkets();
-      }
+      return module.exports.markets;
     },
     marketInfo(pair) {
-      if (module.exports.markets) {
-        return module.exports.markets[pair];
-      } else {
-        this.getMarkets();
-        return undefined;
-      }
+      return module.exports.markets[pair];
     },
     features() {
       return {
@@ -383,46 +423,6 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
           };
         }).catch((err) => {
           log.warn(`API request ${arguments.callee.name}(coin: ${coin}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
-          resolve(undefined);
-        });
-      });
-    },
-    async getMarkets() {
-      if (module.exports.markets) {
-        return module.exports.markets;
-      }
-      return new Promise((resolve, reject) => {
-        BITZ.symbolList().then(function(data) {
-          try {
-            let markets = data.data;
-            if (!markets) {
-              markets = {};
-            }
-            const result = {};
-            Object.keys(markets).forEach((market) => {
-              const pairFormatted = `${markets[market].coinFrom.toUpperCase()}/${markets[market].coinTo.toUpperCase()}`;
-              result[pairFormatted] = {
-                pairPlain: markets[market].name,
-                coin1: markets[market].coinFrom.toUpperCase(),
-                coin2: markets[market].coinTo.toUpperCase(),
-                coin1Decimals: Number(markets[market].numberFloat),
-                coin2Decimals: Number(markets[market].priceFloat),
-                coin1MinTrade: Number(markets[market].minTrade),
-                coin1MaxTrade: Number(markets[market].maxTrade),
-              };
-            });
-
-            if (Object.keys(result).length > 0) {
-              module.exports.markets = result;
-              log.log(`Received info about ${Object.keys(result).length} markets on ${exchangeName} exchange.`);
-            }
-            resolve(result);
-          } catch (e) {
-            resolve(false);
-            log.warn('Error while processing getMarkets() request: ' + e);
-          };
-        }).catch((err) => {
-          log.warn(`API request getMarkets() of ${utils.getModuleName(module.id)} module failed. ${err}`);
           resolve(undefined);
         });
       });
