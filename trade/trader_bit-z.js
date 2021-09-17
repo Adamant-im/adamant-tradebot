@@ -8,16 +8,28 @@ const utils = require('../helpers/utils');
 // https://api.bitzoverseas.com
 // https://api.bitzspeed.com
 const apiServer = 'https://apiv2.bitz.com';
+const exchangeName = 'Bit-Z';
 
 module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
 
   BITZ.setConfig(apiServer, apiKey, secretKey, pwd, log, publicOnly);
+  // Must be initialized with getMarkets();
   let markets;
 
   return {
     get markets() {
       if (module.exports.markets) {
         return module.exports.markets;
+      } else {
+        return this.getMarkets();
+      }
+    },
+    marketInfo(pair) {
+      if (module.exports.markets) {
+        return module.exports.markets[pair];
+      } else {
+        this.getMarkets();
+        return undefined;
       }
     },
     features() {
@@ -196,6 +208,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
 
     placeOrder(orderType, pair, price, coin1Amount, limit = 1, coin2Amount, pairObj) {
 
+      pair = pair.toUpperCase();
       const pair_ = formatPairName(pair);
       let output = '';
       let message;
@@ -203,16 +216,19 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
 
       const type = (orderType === 'sell') ? 2 : 1;
 
-      if (pairObj) { // Set precision (decimals)
-        if (coin1Amount) {
-          coin1Amount = (+coin1Amount).toFixed(pairObj.coin1Decimals);
-        }
-        if (coin2Amount) {
-          coin2Amount = (+coin2Amount).toFixed(pairObj.coin2Decimals);
-        }
-        if (price) {
-          price = (+price).toFixed(pairObj.coin2Decimals);
-        }
+      if (!this.marketInfo(pair)) {
+        log.warn(`Unable to place an order on ${exchangeName} exchange. I don't have info about market ${pair}.`);
+        return undefined;
+      }
+
+      if (coin1Amount) {
+        coin1Amount = (+coin1Amount).toFixed(this.marketInfo(pair).coin1Decimals);
+      }
+      if (coin2Amount) {
+        coin2Amount = (+coin2Amount).toFixed(this.marketInfo(pair).coin2Decimals);
+      }
+      if (price) {
+        price = (+price).toFixed(this.marketInfo(pair).coin2Decimals);
       }
 
       if (limit) { // Limit order
@@ -397,6 +413,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
             });
 
             module.exports.markets = result;
+            log.log(`Received info about ${Object.keys(result).length} markets on ${exchangeName} exchange.`);
             resolve(result);
           } catch (e) {
             resolve(false);
