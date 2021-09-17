@@ -27,7 +27,7 @@ module.exports = {
     // console.log(`isPriceActual: ${pw.getIsPriceActual()}`);
     // console.log(await traderapi.getBalances());
     // const markets = await traderapi.getMarkets();
-    console.log(traderapi.markets['ADM/USDT']);
+    console.log(traderapi.markets['KOM/USDT']);
     // console.log((await traderapi.getMarkets())['ADM/USDT']);
     // console.log((await traderapi.getMarkets())['ADM/USDT']);
     const traderapi2 = require('./trader_' + config.exchange)(config.apikey, config.apisecret, config.apipassword, log);
@@ -36,7 +36,7 @@ module.exports = {
 
     setTimeout(() => {
       console.log(1111);
-      console.log(traderapi2.markets['ADM/USDT']);
+      console.log(traderapi2.markets['KOM/USDT']);
     }, 2000);
     // let req = await traderapi.cancelOrder('vi+OVTPuS4WCp06z');
     // let exchangeapi = require('./trader_' + 'atomars')(null, null, null, log, true);

@@ -1,19 +1,15 @@
-const BITZ = require('./api/bit-z_api');
+const P2PB2B = require('./api/p2pb2b_api');
 const utils = require('../helpers/utils');
 
 // API endpoints:
-// https://apiv2.bitz.com
-// https://apiv2.bit-z.pro
-// https://api.bitzapi.com
-// https://api.bitzoverseas.com
-// https://api.bitzspeed.com
-const apiServer = 'https://apiv2.bitz.com';
-const exchangeName = 'Bit-Z';
+// https://api.p2pb2b.io
+const apiServer = 'https://api.p2pb2b.io';
+const exchangeName = 'P2PB2B';
 let gettingMarkets = false;
 
 module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
 
-  BITZ.setConfig(apiServer, apiKey, secretKey, pwd, log, publicOnly);
+  P2PB2B.setConfig(apiServer, apiKey, secretKey, pwd, log, publicOnly);
 
   // Fulfill markets on initialization
   let markets;
@@ -27,23 +23,29 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
       return module.exports.markets;
     }
     return new Promise((resolve, reject) => {
-      BITZ.symbolList().then(function(data) {
+      P2PB2B.markets().then(function(data) {
         try {
-          let markets = data.data;
+          let markets = data.result;
           if (!markets) {
             markets = {};
           }
           const result = {};
           Object.keys(markets).forEach((market) => {
-            const pairFormatted = `${markets[market].coinFrom.toUpperCase()}/${markets[market].coinTo.toUpperCase()}`;
+            const pairFormatted = `${markets[market].stock.toUpperCase()}/${markets[market].money.toUpperCase()}`;
             result[pairFormatted] = {
               pairPlain: markets[market].name,
-              coin1: markets[market].coinFrom.toUpperCase(),
-              coin2: markets[market].coinTo.toUpperCase(),
-              coin1Decimals: Number(markets[market].numberFloat),
-              coin2Decimals: Number(markets[market].priceFloat),
-              coin1MinAmount: Number(markets[market].minTrade),
-              coin1MaxAmount: Number(markets[market].maxTrade),
+              coin1: markets[market].stock.toUpperCase(),
+              coin2: markets[market].money.toUpperCase(),
+              coin1Decimals: Number(markets[market].precision.stock),
+              coin2Decimals: Number(markets[market].precision.money),
+              // If the limit is 0, then this limit does not apply to this market
+              coin1Precision: Number(markets[market].limits.step_size), // ~ if !== 0, utils.getPrecision(3) = 0.001
+              coin2Precision: Number(markets[market].limits.tick_size),
+              coin1MinAmount: Number(markets[market].limits.min_amount),
+              coin1MaxAmount: Number(markets[market].limits.max_amount),
+              coin2MinPrice: Number(markets[market].limits.min_price),
+              coin2MaxPrice: Number(markets[market].limits.max_price),
+              minTrade: Number(markets[market].limits.min_total), // in coin2
             };
           });
 
@@ -80,7 +82,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
     },
     getBalances(nonzero = true) {
       return new Promise((resolve, reject) => {
-        BITZ.getUserAssets().then(function(data) {
+        P2PB2B.getUserAssets().then(function(data) {
           try {
             let assets = data.data.info;
             if (!assets) {
@@ -131,7 +133,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
     getOpenOrdersPage(pair, page = 1) {
       pair_ = formatPairName(pair);
       return new Promise((resolve, reject) => {
-        BITZ.getUserNowEntrustSheet(pair_.coin1, pair_.coin2, null, page).then(function(data) {
+        P2PB2B.getUserNowEntrustSheet(pair_.coin1, pair_.coin2, null, page).then(function(data) {
           try {
             let openOrders = data.data.data;
             const pageInfo = data.data.pageInfo;
@@ -191,7 +193,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
     },
     cancelOrder(orderId) {
       return new Promise((resolve, reject) => {
-        BITZ.cancelEntrustSheet(orderId).then(function(data) {
+        P2PB2B.cancelEntrustSheet(orderId).then(function(data) {
           try {
             if (data.data) {
               log.info(`Cancelling order ${orderId}…`);
@@ -213,7 +215,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
     getRates(pair) {
       pair_ = formatPairName(pair);
       return new Promise((resolve, reject) => {
-        BITZ.ticker(pair_.pair).then(function(data) {
+        P2PB2B.ticker(pair_.pair).then(function(data) {
           try {
             data = data.data;
             if (data) {
@@ -275,7 +277,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
         output = `${orderType} ${coin1Amount} ${pair_.coin1.toUpperCase()} at ${price} ${pair_.coin2.toUpperCase()}.`;
 
         return new Promise((resolve, reject) => {
-          BITZ.addEntrustSheet(pair_.pair, coin1Amount, price, type).then(function(data) {
+          P2PB2B.addEntrustSheet(pair_.pair, coin1Amount, price, type).then(function(data) {
             try {
               const result = data.data;
               if (result) {
@@ -331,7 +333,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
         }
 
         return new Promise((resolve, reject) => {
-          BITZ.addMarketOrder(pair_.pair, size, type).then(function(data) {
+          P2PB2B.addMarketOrder(pair_.pair, size, type).then(function(data) {
             try {
               const result = data.data;
               if (result) {
@@ -364,7 +366,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
     getOrderBook(pair) {
       const pair_ = formatPairName(pair);
       return new Promise((resolve, reject) => {
-        BITZ.orderBook(pair_.pair).then(function(data) {
+        P2PB2B.orderBook(pair_.pair).then(function(data) {
           try {
             let book = data.data;
             if (!book) {
@@ -409,7 +411,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
     },
     getDepositAddress(coin) {
       return new Promise((resolve, reject) => {
-        BITZ.getDepositAddress(coin).then(function(data) {
+        P2PB2B.getDepositAddress(coin).then(function(data) {
           try {
             const address = data.data.wallet;
             if (address) {
@@ -441,5 +443,15 @@ function formatPairName(pair) {
     pair,
     coin1: coin1.toLowerCase(),
     coin2: coin2.toLowerCase(),
+  };
+}
+
+function deformatPairName(pair) {
+  const [coin1, coin2] = pair.split('_');
+  pair = `${coin1}/${coin2}`;
+  return {
+    pair: pair.toUpperCase(),
+    coin1: coin1.toUpperCase(),
+    coin2: coin2.toUpperCase(),
   };
 }

@@ -1,6 +1,6 @@
 {
   "name": "adamant-tradebot",
-  "version": "4.0.1",
+  "version": "4.1.0",
   "description": "ADAMANT Trading and Market Making bot",
   "main": "index.js",
   "scripts": {
@@ -36,6 +36,7 @@
     "coindeal",
     "resfinex",
     "atomars",
+    "p2pb2b",
     "spread",
     "liquidity",
     "target price",

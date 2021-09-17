@@ -41,7 +41,8 @@
   "exchanges": [
     "Bit-Z",
     "CoinDeal",
-    "Resfinex"
+    "Resfinex",
+    "P2PB2B"
   ],
 
   /** Exchange to work with. Case insensitive. **/
