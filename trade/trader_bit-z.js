@@ -412,8 +412,10 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
               };
             });
 
-            module.exports.markets = result;
-            log.log(`Received info about ${Object.keys(result).length} markets on ${exchangeName} exchange.`);
+            if (Object.keys(result).length > 0) {
+              module.exports.markets = result;
+              log.log(`Received info about ${Object.keys(result).length} markets on ${exchangeName} exchange.`);
+            }
             resolve(result);
           } catch (e) {
             resolve(false);
