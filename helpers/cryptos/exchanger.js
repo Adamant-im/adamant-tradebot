@@ -8,6 +8,7 @@ const adm_utils = require('./adm_utils');
 module.exports = {
 
   currencies: undefined,
+  markets: {},
 
   async updateCryptoRates() {
 

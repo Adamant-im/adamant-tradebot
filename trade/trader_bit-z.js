@@ -14,6 +14,12 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
   BITZ.setConfig(apiServer, apiKey, secretKey, pwd, log, publicOnly);
 
   return {
+    features() {
+      return {
+        markets: true,
+        depositAddress: true,
+      };
+    },
     getBalances(nonzero = true) {
       return new Promise((resolve, reject) => {
         BITZ.getUserAssets().then(function(data) {
@@ -358,7 +364,39 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
           resolve(undefined);
         });
       });
+    },
+    getMarkets() {
+      return new Promise((resolve, reject) => {
+        BITZ.symbolList().then(function(data) {
+          try {
+            let markets = data.data;
+            if (!markets) {
+              markets = {};
+            }
+            const result = {};
+            Object.keys(markets).forEach((market) => {
+              const pairFormatted = `${markets[market].coinFrom.toUpperCase()}/${markets[market].coinTo.toUpperCase()}`;
+              result[pairFormatted] = {
+                pairPlain: markets[market].name,
+                coin1: markets[market].coinFrom.toUpperCase(),
+                coin2: markets[market].coinTo.toUpperCase(),
+                coin1Decimals: Number(markets[market].numberFloat),
+                coin2Decimals: Number(markets[market].priceFloat),
+                coin1MinTrade: Number(markets[market].minTrade),
+                coin1MaxTrade: Number(markets[market].maxTrade),
+              };
+            });
 
+            resolve(result);
+          } catch (e) {
+            resolve(false);
+            log.warn('Error while processing getMarkets() request: ' + e);
+          };
+        }).catch((err) => {
+          log.warn(`API request getMarkets() of ${utils.getModuleName(module.id)} module failed. ${err}`);
+          resolve(undefined);
+        });
+      });
     },
   };
 };

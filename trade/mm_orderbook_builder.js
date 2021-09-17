@@ -25,8 +25,10 @@ module.exports = {
     console.log('**************before');
     // const pw = require('./mm_price_watcher');
     // console.log(`isPriceActual: ${pw.getIsPriceActual()}`);
-    console.log(await traderapi.getBalances());
-    let req = await traderapi.cancelOrder('mzt+vi+OVTPuS4WCp06z');
+    // console.log(await traderapi.getBalances());
+    const markets = await traderapi.getMarkets();
+    console.log(markets);
+    // let req = await traderapi.cancelOrder('mzt+vi+OVTPuS4WCp06z');
     // let exchangeapi = require('./trader_' + 'atomars')(null, null, null, log, true);
     // let req = await exchangeapi.getOrderBook('ADM/USDT');
     // const pw2 = require('./mm_price_watcher');
