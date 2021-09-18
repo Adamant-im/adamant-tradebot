@@ -204,7 +204,7 @@ const EXCHANGE_API = {
   ticker: function(pair) {
     const data = {};
     data.market = pair;
-    return publicRequest('/Market/ticker', data);
+    return publicRequest('/public/ticker', data);
   },
 
   /**
