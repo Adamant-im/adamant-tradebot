@@ -82,21 +82,19 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
     },
     getBalances(nonzero = true) {
       return new Promise((resolve, reject) => {
-        P2PB2B.getUserAssets().then(function(data) {
+        P2PB2B.getBalances().then(function(data) {
           try {
-            let assets = data.data.info;
+            let assets = data.result;
             if (!assets) {
-              assets = [];
+              assets = {};
             }
             let result = [];
-            assets.forEach((crypto) => {
+            Object.keys(assets).forEach((crypto) => {
               result.push({
-                code: crypto.name.toUpperCase(),
-                free: +crypto.over,
-                freezed: +crypto.lock,
-                total: +crypto.num,
-                btc: +crypto.btc,
-                usd: +crypto.usd,
+                code: crypto.toUpperCase(),
+                free: +assets[crypto].available,
+                freezed: +assets[crypto].freeze,
+                total: +assets[crypto].available + +assets[crypto].freeze,
               });
             });
             if (nonzero) {

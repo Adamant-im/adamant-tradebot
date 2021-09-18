@@ -1,10 +1,8 @@
 const crypto = require('crypto');
 const axios = require('axios');
-const FormData = require('form-data');
 
 const DEFAULT_HEADERS = {
-  'Content-Type': 'application/x-www-form-urlencoded',
-  'User-Agent': 'Mozilla/5.0 (Windows NT 6.1; WOW64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/39.0.2171.71 Safari/537.36',
+  'Content-Type': 'application/json',
 };
 
 let WEB_BASE = ''; // To be set in setConfig()
@@ -35,7 +33,7 @@ const wrongAccountErrors = [ // https://github.com/P2pb2b-team/p2pb2b-api-docs/b
   -100015, // Incorrect transaction password
 ];
 
-function market_api(path, data) {
+function publicRequest(path, data) {
   let url = `${WEB_BASE}${path}`;
   const pars = [];
   for (const key in data) {
@@ -79,26 +77,36 @@ function market_api(path, data) {
   });
 }
 
-function sign_api(path, data) {
+function protectedRequest(path, data) {
   const url = `${WEB_BASE}${path}`;
-  data = setSign(data);
+
   return new Promise((resolve, reject) => {
     try {
 
-      const form = new FormData();
-      Object.keys(data).forEach((key) => {
-        form.append(key, data[key]);
-      });
-
-      const httpOptions = {
-        timeout: 10000,
-        // headers: DEFAULT_HEADERS,
-        headers: form.getHeaders(),
+      data = {
+        request: `${WEB_BASE_PREFIX}${path}`,
+        nonce: Date.now(),
       };
 
-      axios.post(url, form, httpOptions)
+      const headers = {
+        'Content-Type': 'application/json',
+        'X-TXC-APIKEY': config.apiKey,
+        'X-TXC-PAYLOAD': getPayload(getBody(data)),
+        'X-TXC-SIGNATURE': getSignature(getPayload(getBody(data))),
+      };
+
+      const httpOptions = {
+        url,
+        method: 'post',
+        timeout: 10000,
+        data,
+        headers,
+      };
+
+      axios(httpOptions)
           .then(function(response) {
             try {
+              // console.log('response', response);
               const data = response.data;
               if (data.status === 200) {
                 resolve(data);
@@ -113,6 +121,7 @@ function sign_api(path, data) {
             }
           })
           .catch(function(error) {
+            // console.log('error', error);
             log.log(`Request to ${url} with data ${data} failed. ${error}.`);
             reject(error);
           }); // axios
@@ -124,27 +133,32 @@ function sign_api(path, data) {
   });
 }
 
-function setSign(params) {
-  let keys = Object.keys(params);
-  const n = keys.length;
-  keys = keys.sort();
-  let sign = '';
-  for (let i = 0; i < n; i++) {
-    if (sign !== '') sign = sign + '&';
-    sign = sign + keys[i] + '=' + params[keys[i]];
-  }
-  sign = sign + config.secret_key;
-  sign = crypto.createHash('md5').update(sign).digest('hex').toLowerCase();
-  params.sign = sign;
-  return params;
-}
+const buildData = (data) => {
+  return {
+    ...data,
+    request: endpoint,
+    nonce: parseInt(Date.now() / 1000).toString(),
+  };
+};
+
+const getBody = (data) => {
+  return JSON.stringify(data);
+};
+
+const getPayload = (body) => {
+  return new Buffer.from(body).toString('base64');
+};
+
+const getSignature = (payload) => {
+  return crypto.createHmac('sha512', config.secret_key).update(payload).digest('hex');
+};
 
 function getSignBaseParams() {
-  const timestamp = Math.round(new Date().getTime() / 1000) + '';
+  // const timestamp = Math.round(new Date().getTime() / 1000) + '';
   return {
-    'apiKey': config.apiKey,
-    'timeStamp': timestamp,
-    'nonce': timestamp.substr(-6),
+    // 'apiKey': config.apiKey,
+    // 'timeStamp': timestamp,
+    // 'nonce': timestamp.substr(-6),
   };
 }
 
@@ -171,12 +185,12 @@ const EXCHANGE_API = {
 
   /**
      * ------------------------------------------------------------------
-     * 个人资产 (Get user open orders)
+     * @return {Object} List of user balances for all currencies
      * ------------------------------------------------------------------
      */
-  getUserAssets: function() {
+  getBalances: function() {
     const data = getSignBaseParams();
-    return sign_api('/Assets/getUserAssets', data);
+    return protectedRequest('/account/balances', data);
   },
   /**
      * ------------------------------------------------------------------
@@ -201,7 +215,7 @@ const EXCHANGE_API = {
       data.pageSize = 100;
     }
 
-    return sign_api('/Trade/getUserNowEntrustSheet', data);
+    return protectedRequest('/Trade/getUserNowEntrustSheet', data);
   },
   /**
      * ------------------------------------------------------------------
@@ -221,7 +235,7 @@ const EXCHANGE_API = {
 
     data.pageSize = 100;
 
-    return sign_api('/Trade/getUserHistoryEntrustSheet', data);
+    return protectedRequest('/Trade/getUserHistoryEntrustSheet', data);
   },
   /**
      * ------------------------------------------------------------------
@@ -239,7 +253,7 @@ const EXCHANGE_API = {
     data.number = amount;
     data.type = type;
     data.tradePwd = config.tradePwd;// #
-    return sign_api('/Trade/addEntrustSheet', data);
+    return protectedRequest('/Trade/addEntrustSheet', data);
   },
   /**
      * ------------------------------------------------------------------
@@ -255,7 +269,7 @@ const EXCHANGE_API = {
     data.total = total;
     data.type = type;
     data.tradePwd = config.tradePwd;// #
-    return sign_api('/Trade/MarketTrade', data);
+    return protectedRequest('/Trade/MarketTrade', data);
   },
   /**
      * ------------------------------------------------------------------
@@ -268,7 +282,7 @@ const EXCHANGE_API = {
     const data = getSignBaseParams();
     data.coin = coin.toLowerCase();
     if (type) data.type = type;
-    return sign_api('/Trade/getCoinAddress', data);
+    return protectedRequest('/Trade/getCoinAddress', data);
   },
   /**
      * ------------------------------------------------------------------
@@ -279,7 +293,7 @@ const EXCHANGE_API = {
   getEntrustSheetInfo: function(entrustSheetId) {
     const data = getSignBaseParams();
     data.entrustSheetId = entrustSheetId;
-    return sign_api('/Trade/getEntrustSheetInfo', data);
+    return protectedRequest('/Trade/getEntrustSheetInfo', data);
   },
   /**
      * ------------------------------------------------------------------
@@ -290,7 +304,7 @@ const EXCHANGE_API = {
   cancelEntrustSheet: function(entrustSheetId) {
     const data = getSignBaseParams();
     data.entrustSheetId = entrustSheetId;
-    return sign_api('/Trade/cancelEntrustSheet', data);
+    return protectedRequest('/Trade/cancelEntrustSheet', data);
   },
   /**
      * ------------------------------------------------------------------
@@ -301,7 +315,7 @@ const EXCHANGE_API = {
   cancelAllEntrustSheet: function(ids) {
     const data = getSignBaseParams();
     data.ids = ids;
-    return sign_api('/Trade/cancelAllEntrustSheet', data);
+    return protectedRequest('/Trade/cancelAllEntrustSheet', data);
   },
 
 
@@ -314,7 +328,7 @@ const EXCHANGE_API = {
   ticker: function(symbol) {
     const data = {};
     data.symbol = symbol;
-    return market_api('/Market/ticker', data);
+    return publicRequest('/Market/ticker', data);
   },
   /**
      * ------------------------------------------------------------------
@@ -323,7 +337,7 @@ const EXCHANGE_API = {
      */
   tickerall: function() {
     const data = {};
-    return market_api('/Market/tickerall', data);
+    return publicRequest('/Market/tickerall', data);
   },
   /**
      * ------------------------------------------------------------------
@@ -334,7 +348,7 @@ const EXCHANGE_API = {
   orders: function(symbol) {
     const data = {};
     data.symbol = symbol;
-    return market_api('/Market/order', data);
+    return publicRequest('/Market/order', data);
   },
   /**
      * ------------------------------------------------------------------
@@ -345,7 +359,7 @@ const EXCHANGE_API = {
   orderBook: function(symbol) {
     const data = {};
     data.symbol = symbol;
-    return market_api('/Market/depth', data);
+    return publicRequest('/Market/depth', data);
   },
 
   /**
@@ -354,7 +368,7 @@ const EXCHANGE_API = {
    */
   markets: function() {
     const data = {};
-    return market_api('/public/markets', data);
+    return publicRequest('/public/markets', data);
   },
 
 
