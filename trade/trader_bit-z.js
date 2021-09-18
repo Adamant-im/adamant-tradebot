@@ -74,8 +74,9 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
     },
     features() {
       return {
-        markets: true,
-        depositAddress: true,
+        getMarkets: true,
+        placeMarketOrder: true,
+        getDepositAddress: true,
       };
     },
     getBalances(nonzero = true) {

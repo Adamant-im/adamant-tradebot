@@ -150,7 +150,7 @@ const EXCHANGE_API = {
   },
 
   /**
-   * Query unexecuted orders
+   * Query account active orders
    * @param {String} pair required
    * @param {Number} limit min 1, default 50, max 100
    * @param {Number} offset min 0, default 0, max 10000

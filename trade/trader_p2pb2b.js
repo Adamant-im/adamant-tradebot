@@ -38,6 +38,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
               coin2: markets[market].money.toUpperCase(),
               coin1Decimals: Number(markets[market].precision.stock),
               coin2Decimals: Number(markets[market].precision.money),
+              // Not necessary
               // If the limit is 0, then this limit does not apply to this market
               coin1Precision: Number(markets[market].limits.step_size), // ~ if !== 0, utils.getPrecision(3) = 0.001
               coin2Precision: Number(markets[market].limits.tick_size),
@@ -76,8 +77,9 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
     },
     features() {
       return {
-        markets: true,
-        depositAddress: false,
+        getMarkets: true,
+        placeMarketOrder: false,
+        getDepositAddress: false,
       };
     },
 
