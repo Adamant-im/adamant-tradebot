@@ -31,7 +31,7 @@ module.exports = {
     // const traderapi2 = require('./trader_' + config.exchange)(config.apikey, config.apisecret, config.apipassword, log);
 
     // console.log(await traderapi.getOpenOrders('KOM/USDT'));
-    console.log(await traderapi.getOrderBook('KOM/USDT'));
+    // console.log(await traderapi.getOrderBook('KOM/USDT'));
 
     // console.log((await traderapi.getMarkets())['ADM/USDT']);
     // console.log((await traderapi2.getMarkets())['ADM/USDT']);
