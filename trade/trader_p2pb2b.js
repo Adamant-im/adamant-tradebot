@@ -348,7 +348,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
               bids: new Array(),
               asks: new Array(),
             };
-            book.asks.forEach((crypto) => { // ["0.0108","6991.7021","75.5103"]
+            book.asks.forEach((crypto) => {
               result.asks.push({
                 amount: +crypto[1],
                 price: +crypto[0],

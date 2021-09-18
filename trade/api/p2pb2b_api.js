@@ -220,7 +220,7 @@ const EXCHANGE_API = {
     data.market = pair;
     if (limit) data.limit = limit;
     if (interval) data.interval = interval;
-    return publicRequest('/depth/result', data);
+    return publicRequest('/public/depth/result', data);
   },
 
   /**
