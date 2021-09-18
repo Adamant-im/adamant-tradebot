@@ -87,7 +87,7 @@ module.exports = {
                     isClosed: true,
                   }, true);
                   isLifeOrder = false;
-                  log.info(`Updating (closing) ${dbOrder.purpose}-order with params: id=${dbOrder._id}, type=${dbOrder.type}, pair=${dbOrder.pair}, price=${dbOrder.price}, coin1Amount=${dbOrder.coin1Amount}, coin2Amount=${dbOrder.coin2Amount}: order is closed.`);
+                  log.log(`Updating (closing) ${dbOrder.purpose}-order with params: id=${dbOrder._id}, type=${dbOrder.type}, pair=${dbOrder.pair}, price=${dbOrder.price}, coin1Amount=${dbOrder.coin1Amount}, coin2Amount=${dbOrder.coin2Amount}: order is closed.`);
                   break;
                 case 'filled':
                   await dbOrder.update({
@@ -95,7 +95,7 @@ module.exports = {
                     isFilled: true,
                   }, true);
                   isLifeOrder = false;
-                  log.info(`Updating (closing) ${dbOrder.purpose}-order with params: id=${dbOrder._id}, type=${dbOrder.type}, pair=${dbOrder.pair}, price=${dbOrder.price}, coin1Amount=${dbOrder.coin1Amount}, coin2Amount=${dbOrder.coin2Amount}: order is filled.`);
+                  log.log(`Updating (closing) ${dbOrder.purpose}-order with params: id=${dbOrder._id}, type=${dbOrder.type}, pair=${dbOrder.pair}, price=${dbOrder.price}, coin1Amount=${dbOrder.coin1Amount}, coin2Amount=${dbOrder.coin2Amount}: order is filled.`);
                   break;
                 case 'part_filled':
                   isLifeOrder = true;
@@ -105,7 +105,7 @@ module.exports = {
                       isFilled: true,
                       coin1Amount: exchangeOrder.amountLeft,
                     }, true);
-                    log.info(`Updating ${dbOrder.purpose}-order with params: id=${dbOrder._id}, type=${dbOrder.type}, pair=${dbOrder.pair}, price=${dbOrder.price}, coin1Amount=${prev_amount}, coin2Amount=${dbOrder.coin2Amount}: order is partly filled. Amount left: ${dbOrder.coin1Amount}.`);
+                    log.log(`Updating ${dbOrder.purpose}-order with params: id=${dbOrder._id}, type=${dbOrder.type}, pair=${dbOrder.pair}, price=${dbOrder.price}, coin1Amount=${prev_amount}, coin2Amount=${dbOrder.coin2Amount}: order is partly filled. Amount left: ${dbOrder.coin1Amount}.`);
                   }
                   break;
                 default:
@@ -127,7 +127,7 @@ module.exports = {
 
             const cancelReq = await traderapi.cancelOrder(dbOrder._id, dbOrder.type, dbOrder.pair);
             if (cancelReq !== undefined) {
-              log.info(`Updating (closing) ${dbOrder.purpose}-order with params: id=${dbOrder._id}, type=${dbOrder.type}, pair=${dbOrder.pair}, price=${dbOrder.price}, coin1Amount=${dbOrder.coin1Amount}, coin2Amount=${dbOrder.coin2Amount}: unable to find it in the exchangeOrders.`);
+              log.log(`Updating (closing) ${dbOrder.purpose}-order with params: id=${dbOrder._id}, type=${dbOrder.type}, pair=${dbOrder.pair}, price=${dbOrder.price}, coin1Amount=${dbOrder.coin1Amount}, coin2Amount=${dbOrder.coin2Amount}: unable to find it in the exchangeOrders.`);
               await dbOrder.update({
                 isProcessed: true,
                 isClosed: true,

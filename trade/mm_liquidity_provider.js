@@ -102,7 +102,7 @@ module.exports = {
 
           const cancelReq = await traderapi.cancelOrder(order._id, order.type, order.pair);
           if (cancelReq !== undefined) {
-            log.info(`Closing liq-order with params: id=${order._id}, type=${order.type}, pair=${order.pair}, price=${order.price}, coin1Amount=${order.coin1Amount}, coin2Amount=${order.coin2Amount}. It is expired.`);
+            log.log(`Closing liq-order with params: id=${order._id}, type=${order.type}, pair=${order.pair}, price=${order.price}, coin1Amount=${order.coin1Amount}, coin2Amount=${order.coin2Amount}. It is expired.`);
             await order.update({
               isProcessed: true,
               isClosed: true,
@@ -116,7 +116,7 @@ module.exports = {
 
           const cancelReq = await traderapi.cancelOrder(order._id, order.type, order.pair);
           if (cancelReq !== undefined) {
-            log.info(`Closing liq-order with params: id=${order._id}, type=${order.type}, pair=${order.pair}, price=${order.price}, coin1Amount=${order.coin1Amount}, coin2Amount=${order.coin2Amount}. It is out of spread.`);
+            log.log(`Closing liq-order with params: id=${order._id}, type=${order.type}, pair=${order.pair}, price=${order.price}, coin1Amount=${order.coin1Amount}, coin2Amount=${order.coin2Amount}. It is out of spread.`);
             await order.update({
               isProcessed: true,
               isClosed: true,

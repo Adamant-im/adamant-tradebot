@@ -118,10 +118,10 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
         COINDEAL.cancelEntrustSheet(orderId).then(function(data) {
           try {
             if (data.id) {
-              log.info(`Cancelling order ${orderId}…`);
+              log.log(`Cancelling order ${orderId}…`);
               resolve(true);
             } else {
-              log.info(`Order ${orderId} not found. Unable to cancel it.`);
+              log.log(`Order ${orderId} not found. Unable to cancel it.`);
               resolve(false);
             }
           } catch (e) {

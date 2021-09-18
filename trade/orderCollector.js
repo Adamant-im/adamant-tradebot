@@ -61,7 +61,7 @@ module.exports = {
           if (!clearedOrders.includes(order._id)) {
             const cancelReq = await traderapi.cancelOrder(order._id, order.type, order.pair);
             if (cancelReq !== undefined) {
-              log.info(`Order collector: Cancelled ${order.purpose}-order with params: id=${order._id}, type=${order.type}, targetType=${order.targetType}, pair=${order.pair}, price=${order.price}, coin1Amount=${order.coin1Amount}, coin2Amount=${order.coin2Amount}.`);
+              log.log(`Order collector: Cancelled ${order.purpose}-order with params: id=${order._id}, type=${order.type}, targetType=${order.targetType}, pair=${order.pair}, price=${order.price}, coin1Amount=${order.coin1Amount}, coin2Amount=${order.coin2Amount}.`);
               await order.update({
                 isProcessed: true,
                 isCancelled: true,
@@ -139,7 +139,7 @@ module.exports = {
             if (!clearedOrders.includes(order.orderid) && !dbOrderIds.includes(order.orderid)) {
               const cancelReq = await traderapi.cancelOrder(order.orderid, order.side, order.symbol);
               if (cancelReq !== undefined) {
-                log.info(`Order collector: Cancelled unknown order with params: id=${order.orderid}, side=${order.side}, pair=${order.symbol}, price=${order.price}, coin1Amount=${order.amount}, status=${order.status}.`);
+                log.log(`Order collector: Cancelled unknown order with params: id=${order.orderid}, side=${order.side}, pair=${order.symbol}, price=${order.price}, coin1Amount=${order.amount}, status=${order.status}.`);
                 clearedOrders.push(order.orderid);
                 clearedOrdersCount += 1;
               } else {
@@ -207,7 +207,7 @@ module.exports = {
             if (!clearedOrders.includes(order.orderid)) {
               const cancelReq = await traderapi.cancelOrder(order.orderid, order.side, order.symbol);
               if (cancelReq !== undefined) {
-                log.info(`Order collector: Cancelled general order with params: id=${order.orderid}, side=${order.side}, pair=${order.symbol}, price=${order.price}, coin1Amount=${order.amount}, status=${order.status}.`);
+                log.log(`Order collector: Cancelled general order with params: id=${order.orderid}, side=${order.side}, pair=${order.symbol}, price=${order.price}, coin1Amount=${order.amount}, status=${order.status}.`);
                 clearedOrders.push(order.orderid);
                 clearedOrdersCount += 1;
               } else {

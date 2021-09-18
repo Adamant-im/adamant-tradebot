@@ -128,10 +128,10 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
         RESFINEX.cancelEntrustSheet(orderId).then(function(data) {
           try {
             if (data.status === 'ok') {
-              log.info(`Cancelling order ${orderId}…`);
+              log.log(`Cancelling order ${orderId}…`);
               resolve(true);
             } else {
-              log.info(`Order ${orderId} not found. Unable to cancel it.`);
+              log.log(`Order ${orderId} not found. Unable to cancel it.`);
               resolve(false);
             }
           } catch (e) {

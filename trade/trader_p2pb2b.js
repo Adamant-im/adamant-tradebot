@@ -192,10 +192,10 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
         P2PB2B.cancelOrder(orderId, pair_.pair).then(function(data) {
           try {
             if (data.success) {
-              log.info(`Cancelling order ${orderId}…`);
+              log.log(`Cancelling order ${orderId}…`);
               resolve(true);
             } else {
-              log.info(`Unable to cancel ${orderId}: ${data ? data.errorCode + ' ' + data.message : ' no details'}.`);
+              log.log(`Unable to cancel ${orderId}: ${data ? data.errorCode + ' ' + data.message : ' no details'}.`);
               resolve(false);
             }
           } catch (e) {

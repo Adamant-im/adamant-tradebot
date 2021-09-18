@@ -30,7 +30,7 @@ module.exports = {
     // console.log(traderapi.markets['KOM/USDT']);
     // const traderapi2 = require('./trader_' + config.exchange)(config.apikey, config.apisecret, config.apipassword, log);
 
-    console.log(await traderapi.getOpenOrders('KOM/USDT'));
+    // console.log(await traderapi.getOpenOrders('KOM/USDT'));
 
     // console.log((await traderapi.getMarkets())['ADM/USDT']);
     // console.log((await traderapi2.getMarkets())['ADM/USDT']);
@@ -40,7 +40,7 @@ module.exports = {
     //   console.log(1111);
     //   console.log(traderapi2.markets['KOM/USDT']);
     // }, 2000);
-    // let req = await traderapi.cancelOrder('vi+OVTPuS4WCp06z');
+    let req = await traderapi.cancelOrder('vi+OVTPuS4WCp06z', null, 'KOM/USDT');
     // let exchangeapi = require('./trader_' + 'atomars')(null, null, null, log, true);
     // let req = await exchangeapi.getOrderBook('ADM/USDT');
     // const pw2 = require('./mm_price_watcher');
@@ -101,7 +101,7 @@ module.exports = {
           orderBookOrdersCount -= 1;
           const cancelReq = await traderapi.cancelOrder(order._id, order.type, order.pair);
           if (cancelReq !== undefined) {
-            log.info(`Closing ob-order with params: id=${order._id}, type=${order.type}, pair=${order.pair}, price=${order.price}, coin1Amount=${order.coin1Amount}, coin2Amount=${order.coin2Amount}. It is expired. Open ob-orders: ~${orderBookOrdersCount}.`);
+            log.log(`Closing ob-order with params: id=${order._id}, type=${order.type}, pair=${order.pair}, price=${order.price}, coin1Amount=${order.coin1Amount}, coin2Amount=${order.coin2Amount}. It is expired. Open ob-orders: ~${orderBookOrdersCount}.`);
             await order.update({
               isProcessed: true,
               isClosed: true,
