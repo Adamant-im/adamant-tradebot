@@ -170,6 +170,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
                 amountExecuted: +order.numberDeal,
                 amountLeft: +order.numberOver,
                 status: orderStatus,
+                // Not necessary
                 uid: order.uid.toString(),
                 coin2Amount: +order.total,
                 coinFrom: order.coinFrom,

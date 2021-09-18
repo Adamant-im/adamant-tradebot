@@ -77,9 +77,10 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
     features() {
       return {
         markets: true,
-        depositAddress: true,
+        depositAddress: false,
       };
     },
+
     getBalances(nonzero = true) {
       return new Promise((resolve, reject) => {
         P2PB2B.getBalances().then(function(data) {
@@ -111,30 +112,30 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
         });
       });
     },
-    async getOpenOrders(pair) {
 
+    async getOpenOrders(pair) {
       let allOrders = [];
       let ordersInfo;
-      let page = 1;
+      let offset = 0;
 
       do {
 
-        ordersInfo = await this.getOpenOrdersPage(pair, page);
+        ordersInfo = await this.getOpenOrdersPage(pair, offset);
         allOrders = allOrders.concat(ordersInfo.result);
-        page += 1;
+        offset += 100;
 
-      } while (ordersInfo.pageInfo.current_page < ordersInfo.pageInfo.page_count);
+      } while (offset < ordersInfo.total);
 
       return allOrders;
-
     },
-    getOpenOrdersPage(pair, page = 1) {
+
+    getOpenOrdersPage(pair, offset = 0) {
       pair_ = formatPairName(pair);
       return new Promise((resolve, reject) => {
-        P2PB2B.getUserNowEntrustSheet(pair_.coin1, pair_.coin2, null, page).then(function(data) {
+        P2PB2B.getOrders(pair_.pair, offset).then(function(data) {
           try {
-            let openOrders = data.data.data;
-            const pageInfo = data.data.pageInfo;
+            let openOrders = data.result;
+            const total = data.total;
 
             if (!openOrders) {
               openOrders = [];
@@ -143,41 +144,34 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
             const result = [];
             openOrders.forEach((order) => {
               let orderStatus;
-              switch (order.status) {
-                case 0:
-                  orderStatus = 'new';
-                  break;
-                case 3:
-                  orderStatus = 'closed';
-                  break;
-                case 2:
-                  orderStatus = 'filled';
-                  break;
-                case 1:
-                  orderStatus = 'part_filled';
-                  break;
-                default:
-                  break;
+              if (order.left === order.amount) {
+                orderStatus = 'new';
+              } else if (order.left === '0') {
+                orderStatus = 'filled';
+              } else {
+                orderStatus = 'part_filled';
               }
+
               result.push({
-                orderid: order.id.toString(),
-                symbol: order.coinFrom + '_' + order.coinTo,
+                orderid: order.orderId.toString(),
+                symbol: order.market,
                 price: +order.price,
-                side: order.flag,
+                side: order.side, // 'buy' or 'sell'
                 type: 1, // limit
-                timestamp: order.created,
-                amount: +order.number,
-                amountExecuted: +order.numberDeal,
-                amountLeft: +order.numberOver,
+                timestamp: order.timestamp,
+                amount: +order.amount,
+                amountExecuted: +order.dealStock,
+                amountLeft: +order.left,
                 status: orderStatus,
-                uid: order.uid.toString(),
-                coin2Amount: +order.total,
-                coinFrom: order.coinFrom,
-                coinTo: order.coinTo,
+                // Not necessary
+                // uid: order.uid.toString(),
+                // coin2Amount: +order.total,
+                // coinFrom: deformatPairName(order.market).coin1,
+                // coinTo: deformatPairName(order.market).coin2,
               });
             });
 
-            resolve({ result, pageInfo });
+            resolve({ result, total });
 
           } catch (e) {
             resolve(false);
@@ -189,15 +183,17 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
         });
       });
     },
-    cancelOrder(orderId) {
+
+    cancelOrder(orderId, side, pair) {
+      pair_ = formatPairName(pair);
       return new Promise((resolve, reject) => {
-        P2PB2B.cancelEntrustSheet(orderId).then(function(data) {
+        P2PB2B.cancelOrder(orderId, pair_.pair).then(function(data) {
           try {
-            if (data.data) {
+            if (data.success) {
               log.info(`Cancelling order ${orderId}…`);
               resolve(true);
             } else {
-              log.info(`Order ${orderId} not found. Unable to cancel it.`);
+              log.info(`Unable to cancel ${orderId}: ${data ? data.errorCode + ' ' + data.message : ' no details'}.`);
               resolve(false);
             }
           } catch (e) {
@@ -210,27 +206,29 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
         });
       });
     },
+
     getRates(pair) {
       pair_ = formatPairName(pair);
       return new Promise((resolve, reject) => {
         P2PB2B.ticker(pair_.pair).then(function(data) {
           try {
-            data = data.data;
+            data = data.result;
             if (data) {
               resolve({
-                ask: +data.askPrice,
-                bid: +data.bidPrice,
+                ask: +data.ask,
+                bid: +data.bid,
                 volume: +data.volume,
-                volume_Coin2: +data.quoteVolume,
+                volume_Coin2: +data.deal,
                 high: +data.high,
                 low: +data.low,
-                askQty: +data.askQty,
-                bidQty: +data.bidQty,
-                dealCount: +data.dealCount,
-                coin1Decimals: +data.numberPrecision,
-                coin2Decimals: +data.pricePrecision,
-                firstId: data.firstId,
-                lastId: data.lastId,
+                // Not necessary
+                // askQty: +data.askQty,
+                // bidQty: +data.bidQty,
+                // dealCount: +data.dealCount,
+                // coin1Decimals: +data.numberPrecision,
+                // coin2Decimals: +data.pricePrecision,
+                // firstId: data.firstId,
+                // lastId: data.lastId,
               });
             } else {
               resolve(false);
@@ -248,13 +246,11 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
 
     placeOrder(orderType, pair, price, coin1Amount, limit = 1, coin2Amount, pairObj) {
 
-      pair = pair.toUpperCase();
       const pair_ = formatPairName(pair);
       let output = '';
       let message;
       const order = {};
-
-      const type = (orderType === 'sell') ? 2 : 1;
+      const type = orderType;
 
       if (!this.marketInfo(pair)) {
         log.warn(`Unable to place an order on ${exchangeName} exchange. I don't have info about market ${pair}.`);
@@ -275,17 +271,17 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
         output = `${orderType} ${coin1Amount} ${pair_.coin1.toUpperCase()} at ${price} ${pair_.coin2.toUpperCase()}.`;
 
         return new Promise((resolve, reject) => {
-          P2PB2B.addEntrustSheet(pair_.pair, coin1Amount, price, type).then(function(data) {
+          P2PB2B.addOrder(pair_.pair, coin1Amount, price, type).then(function(data) {
             try {
-              const result = data.data;
-              if (result) {
-                message = `Order placed to ${output} Order Id: ${result.id.toString()}.`;
+              const result = data.result;
+              if (data.success && result && result.orderId) {
+                message = `Order placed to ${output} Order Id: ${result.orderId.toString()}.`;
                 log.info(message);
-                order.orderid = result.id.toString();
+                order.orderid = result.orderId.toString();
                 order.message = message;
                 resolve(order);
               } else {
-                message = `Unable to place order to ${output} Check parameters and balances.`;
+                message = `Unable to place order to ${output} Check parameters and balances. Description: ${data.errorCode} ${data.message}`;
                 log.warn(message);
                 order.orderid = false;
                 order.message = message;
@@ -299,7 +295,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
               resolve(order);
             };
           }).catch((err) => {
-            log.warn(`API request BITZ.addEntrustSheet-limit(pair: ${pair_.pair}, coin1Amount: ${coin1Amount}, price: ${price}, type: ${type}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
+            log.warn(`API request P2PB2B.addOrder-limit(pair: ${pair_.pair}, coin1Amount: ${coin1Amount}, price: ${price}, type: ${type}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
             resolve(undefined);
           });
         });
@@ -319,7 +315,6 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
           }
         } else { // buy
           if (coin2Amount) {
-            size = coin2Amount;
             output = `${orderType} ${pair_.coin1} for ${coin2Amount} ${pair_.coin2.toUpperCase()} at Market Price on ${pair} market.`;
           } else {
             message = `Unable to place order to ${orderType} ${pair_.coin1.toUpperCase()} for ${pair_.coin2.toUpperCase()} at Market Price on ${pair} market. Set ${pair_.coin2.toUpperCase()} amount.`;
@@ -330,43 +325,20 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
           }
         }
 
-        return new Promise((resolve, reject) => {
-          P2PB2B.addMarketOrder(pair_.pair, size, type).then(function(data) {
-            try {
-              const result = data.data;
-              if (result) {
-                message = `Order placed to ${output} Order Id: ${result.id.toString()}.`;
-                log.info(message);
-                order.orderid = result.id.toString();
-                order.message = message;
-                resolve(order);
-              } else {
-                message = `Unable to place order to ${output} Check parameters and balances.`;
-                log.warn(message);
-                order.orderid = false;
-                order.message = message;
-                resolve(order);
-              }
-            } catch (e) {
-              message = 'Error while processing placeOrder() request: ' + e;
-              log.warn(message);
-              order.orderid = false;
-              order.message = message;
-              resolve(order);
-            };
-          }).catch((err) => {
-            log.warn(`API request BITZ.addEntrustSheet-market(pair: ${pair_.pair}, size: ${size}, type: ${type}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
-            resolve(undefined);
-          }); ;
-        });
+        message = `Unable to place order to ${output} ${exchangeName} doesn't support Market orders yet.`;
+        log.warn(message);
+        order.orderid = false;
+        order.message = message;
+        return order;
       }
     }, // placeOrder()
+
     getOrderBook(pair) {
       const pair_ = formatPairName(pair);
       return new Promise((resolve, reject) => {
         P2PB2B.orderBook(pair_.pair).then(function(data) {
           try {
-            let book = data.data;
+            let book = data.result;
             if (!book) {
               book = [];
             }
@@ -407,40 +379,25 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
         });
       });
     },
+
     getDepositAddress(coin) {
-      return new Promise((resolve, reject) => {
-        P2PB2B.getDepositAddress(coin).then(function(data) {
-          try {
-            const address = data.data.wallet;
-            if (address) {
-              resolve(address);
-            } else {
-              resolve(false);
-            }
-          } catch (e) {
-            resolve(false);
-            log.warn('Error while processing getDepositAddress() request: ' + e);
-          };
-        }).catch((err) => {
-          log.warn(`API request ${arguments.callee.name}(coin: ${coin}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
-          resolve(undefined);
-        });
-      });
+      // Not available for P2PB2B
     },
+
   };
 };
 
 function formatPairName(pair) {
   if (pair.indexOf('-') > -1) {
-    pair = pair.replace('-', '_').toLowerCase();
+    pair = pair.replace('-', '_').toUpperCase();
   } else {
-    pair = pair.replace('/', '_').toLowerCase();
+    pair = pair.replace('/', '_').toUpperCase();
   }
   const [coin1, coin2] = pair.split('_');
   return {
     pair,
-    coin1: coin1.toLowerCase(),
-    coin2: coin2.toLowerCase(),
+    coin1: coin1.toUpperCase(),
+    coin2: coin2.toUpperCase(),
   };
 }
 
