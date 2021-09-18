@@ -16,32 +16,18 @@ let log = {};
 // Docs
 // https://github.com/P2pb2b-team/p2pb2b-api-docs/blob/master/api-doc.md
 
-const wrongAccountErrors = [ // https://github.com/P2pb2b-team/p2pb2b-api-docs/blob/master/errors.md
-  -105, // Invalid api signature
-  -109, // Invalid secretKey
-  -111, // Current IP is not in the range of trusted IP
-  -117, // The apikey expires
-  -100015, // Trade password error
-  -200003, // Please set trade password
-  -200005, // This account can not trade
-  -200032, // Please contact customer service
-  -300069, // api_key is illegal
-  -300103, // Trade password error
-  -300046, // Please bind your email first
-  -300007, // Please turn on SMS verification or Google verification
-  -200003, // Please set the transaction password first
-  -100015, // Incorrect transaction password
-];
-
 function publicRequest(path, data) {
   let url = `${WEB_BASE}${path}`;
-  const pars = [];
+  const params = [];
   for (const key in data) {
     const v = data[key];
-    pars.push(key + '=' + v);
+    params.push(key + '=' + v);
   }
-  const p = pars.join('&');
-  url = url + '?' + p;
+  const paramsString = params.join('&');
+  if (paramsString) {
+    url = url + '?' + paramsString;
+  }
+
   return new Promise((resolve, reject) => {
     try {
       const httpOptions = {
@@ -53,26 +39,23 @@ function publicRequest(path, data) {
 
       axios(httpOptions)
           .then(function(response) {
-            try {
-              const data = response.data;
-              if (data.status === 200) {
-                resolve(data);
-              } else {
-                resolve(data); // f. e., it may return -103, if no order found
-              }
-            } catch (e) {
-              log.warn(`Error while processing response of request to ${url}: ${e}. Data object I've got: ${data}.`);
-              reject(`Unable to process data: ${data}`);
-            }
+            resolve(response.data);
           })
           .catch(function(error) {
-            log.log(`Request to ${url} with data ${pars} failed. ${error}.`);
-            reject(error);
-          }); // axios
+            // We can get 4xx with data
+            if (error.response && typeof error.response.data === 'object' && Object.keys(error.response.data).length !== 0) {
+              const data = error.response.data;
+              log.log(`Request to ${url} failed. ${error}. Reply data: ${JSON.stringify(data)}.`);
+              resolve(data);
+            } else {
+              log.log(`Request to ${url} failed. ${error}.`);
+              reject(error);
+            }
+          });
 
     } catch (err) {
-      log.log(`Processing of request to ${url} with data ${pars} failed. ${err}.`);
-      reject(null);
+      log.log(`Processing of request to ${url} failed. ${err.toString()}.`);
+      reject(err.toString());
     }
   });
 }
@@ -84,15 +67,18 @@ function protectedRequest(path, data) {
     try {
 
       data = {
+        ...data,
         request: `${WEB_BASE_PREFIX}${path}`,
         nonce: Date.now(),
       };
 
+      const body = getBody(data);
+
       const headers = {
-        'Content-Type': 'application/json',
+        ...DEFAULT_HEADERS,
         'X-TXC-APIKEY': config.apiKey,
-        'X-TXC-PAYLOAD': getPayload(getBody(data)),
-        'X-TXC-SIGNATURE': getSignature(getPayload(getBody(data))),
+        'X-TXC-PAYLOAD': getPayload(body),
+        'X-TXC-SIGNATURE': getSignature(getPayload(body)),
       };
 
       const httpOptions = {
@@ -105,41 +91,26 @@ function protectedRequest(path, data) {
 
       axios(httpOptions)
           .then(function(response) {
-            try {
-              // console.log('response', response);
-              const data = response.data;
-              if (data.status === 200) {
-                resolve(data);
-              } else if (wrongAccountErrors.includes(data.status)) {
-                reject(`Bit-Z declined a request to ${url} because of wrong account data. Make sure API keys are correct, not expired, bot's IP set as trusted, trade password is set. Reply data: ${data}.`);
-              } else {
-                resolve(data); // f. e., it may return -103, if no order found
-              }
-            } catch (e) {
-              log.warn(`Error while processing response of request to ${url}: ${e}. Data object I've got: ${data}.`);
-              reject(`Unable to process data: ${data}`);
-            }
+            resolve(response.data);
           })
           .catch(function(error) {
-            // console.log('error', error);
-            log.log(`Request to ${url} with data ${data} failed. ${error}.`);
-            reject(error);
-          }); // axios
+            // We can get 4xx with data
+            if (error.response && typeof error.response.data === 'object' && Object.keys(error.response.data).length !== 0) {
+              const data = error.response.data;
+              log.log(`Request to ${url} with data ${body} failed. ${error}. Reply data: ${JSON.stringify(data)}.`);
+              resolve(data);
+            } else {
+              log.log(`Request to ${url} with data ${body} failed. ${error}.`);
+              reject(error);
+            }
+          });
 
     } catch (err) {
-      log.log(`Processing of request to ${url} with data ${JSON.stringify(data)} failed. ${err}.`);
-      reject(null);
+      log.log(`Processing of request to ${url} with data ${body} failed. ${err.toString()}.`);
+      reject(err.toString());
     }
   });
 }
-
-const buildData = (data) => {
-  return {
-    ...data,
-    request: endpoint,
-    nonce: parseInt(Date.now() / 1000).toString(),
-  };
-};
 
 const getBody = (data) => {
   return JSON.stringify(data);
@@ -153,43 +124,28 @@ const getSignature = (payload) => {
   return crypto.createHmac('sha512', config.secret_key).update(payload).digest('hex');
 };
 
-function getSignBaseParams() {
-  // const timestamp = Math.round(new Date().getTime() / 1000) + '';
-  return {
-    // 'apiKey': config.apiKey,
-    // 'timeStamp': timestamp,
-    // 'nonce': timestamp.substr(-6),
-  };
-}
-
 const EXCHANGE_API = {
 
   setConfig: function(apiServer, apiKey, secretKey, tradePwd, logger, publicOnly = false) {
-
     if (apiServer) {
       WEB_BASE = apiServer + WEB_BASE_PREFIX;
     }
-
     if (logger) {
       log = logger;
     }
-
     if (!publicOnly) {
       config = {
         'apiKey': apiKey,
         'secret_key': secretKey,
       };
     }
-
   },
 
   /**
-     * ------------------------------------------------------------------
-     * @return {Object} List of user balances for all currencies
-     * ------------------------------------------------------------------
-     */
+   * @return {Object} List of user balances for all currencies
+   */
   getBalances: function() {
-    const data = getSignBaseParams();
+    const data = {};
     return protectedRequest('/account/balances', data);
   },
   /**
@@ -198,7 +154,7 @@ const EXCHANGE_API = {
      * ------------------------------------------------------------------
      */
   getUserNowEntrustSheet: function(coinFrom, coinTo, type, page, pageSize, startTime, endTime) {
-    const data = getSignBaseParams();
+    const data = {};
     if (coinFrom) data.coinFrom = coinFrom;
     if (coinTo) data.coinTo = coinTo;
     if (type) data.type = type;
@@ -223,7 +179,7 @@ const EXCHANGE_API = {
      * ------------------------------------------------------------------
      */
   getUserHistoryEntrustSheet: function(coinFrom, coinTo, type, page, pageSize, startTime, endTime) {
-    const data = getSignBaseParams();
+    const data = {};
     if (coinFrom) data.coinFrom = coinFrom;
     if (coinTo) data.coinTo = coinTo;
     if (type) data.type = type;
@@ -247,7 +203,7 @@ const EXCHANGE_API = {
      * ------------------------------------------------------------------
      */
   addEntrustSheet: function(symbol, amount, price, type) {
-    const data = getSignBaseParams();
+    const data = {};
     data.symbol = symbol;
     data.price = price;
     data.number = amount;
@@ -264,7 +220,7 @@ const EXCHANGE_API = {
      * ------------------------------------------------------------------
      */
   addMarketOrder: function(symbol, total, type) {
-    const data = getSignBaseParams();
+    const data = {};
     data.symbol = symbol;
     data.total = total;
     data.type = type;
@@ -279,7 +235,7 @@ const EXCHANGE_API = {
      * ------------------------------------------------------------------
      */
   getDepositAddress: function(coin, type) {
-    const data = getSignBaseParams();
+    const data = {};
     data.coin = coin.toLowerCase();
     if (type) data.type = type;
     return protectedRequest('/Trade/getCoinAddress', data);
@@ -291,7 +247,7 @@ const EXCHANGE_API = {
      * ------------------------------------------------------------------
      */
   getEntrustSheetInfo: function(entrustSheetId) {
-    const data = getSignBaseParams();
+    const data = {};
     data.entrustSheetId = entrustSheetId;
     return protectedRequest('/Trade/getEntrustSheetInfo', data);
   },
@@ -302,7 +258,7 @@ const EXCHANGE_API = {
      * ------------------------------------------------------------------
      */
   cancelEntrustSheet: function(entrustSheetId) {
-    const data = getSignBaseParams();
+    const data = {};
     data.entrustSheetId = entrustSheetId;
     return protectedRequest('/Trade/cancelEntrustSheet', data);
   },
@@ -313,7 +269,7 @@ const EXCHANGE_API = {
      * ------------------------------------------------------------------
      */
   cancelAllEntrustSheet: function(ids) {
-    const data = getSignBaseParams();
+    const data = {};
     data.ids = ids;
     return protectedRequest('/Trade/cancelAllEntrustSheet', data);
   },
