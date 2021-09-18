@@ -119,26 +119,23 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
       let allOrders = [];
       let ordersInfo;
       let offset = 0;
+      const limit = 100;
 
       do {
-
-        ordersInfo = await this.getOpenOrdersPage(pair, offset);
+        ordersInfo = await this.getOpenOrdersPage(pair, offset, limit);
         allOrders = allOrders.concat(ordersInfo.result);
-        offset += 100;
-
-      } while (offset < ordersInfo.total);
+        offset += limit;
+      } while (ordersInfo.result.length === limit);
 
       return allOrders;
     },
 
-    getOpenOrdersPage(pair, offset = 0) {
+    getOpenOrdersPage(pair, offset = 0, limit = 100) {
       pair_ = formatPairName(pair);
       return new Promise((resolve, reject) => {
-        P2PB2B.getOrders(pair_.pair, offset).then(function(data) {
+        P2PB2B.getOrders(pair_.pair, offset, limit).then(function(data) {
           try {
             let openOrders = data.result;
-            const total = data.total;
-
             if (!openOrders) {
               openOrders = [];
             }
@@ -172,6 +169,9 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
                 // coinTo: deformatPairName(order.market).coin2,
               });
             });
+
+            // That's not good, but sometimes API doesn't return limit-offset-total fields
+            const total = data.total;
 
             resolve({ result, total });
 
