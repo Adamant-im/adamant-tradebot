@@ -40,7 +40,7 @@ module.exports = {
     setTimeout(() => {
       console.log(1);
       const traderapi = require('./trader_' + config.exchange)(config.apikey, config.apisecret, config.apipassword, log);
-      console.log(require('./orderUtils').parseTradePair('KOM/USDT'));
+      console.log(require('./orderUtils').parseMarket('KOM/USDT'));
       console.log(2);
       // console.log(traderapi2.markets['KOM/USDT']);
     }, 3000);

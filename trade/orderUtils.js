@@ -7,53 +7,37 @@ const db = require('../modules/DB');
 module.exports = {
 
   /**
-   * Parses a trade pair object: coin1, coin2, and decimals.
-   * If not isPairParsed, then aPair is not a valid trading pair, and default pair returned
-   * @param {String} aPair String to parse
+   * Parses a market info for specific exchange: coin1, coin2, and decimals.
+   * @param {String} pair String to parse
    * @return {Object} or false
    */
-  parseTradePair(aPair) {
+  parseMarket(pair, exchange) {
     try {
 
-      console.log(traderapi.marketInfo('KOM/USDT'));
-      let pair = (aPair || '').toUpperCase().trim();
-      let coin1Decimals = 8;
-      let coin2Decimals = 8;
-      let isPairParsed = true;
-      let coin1; let coin2;
-
-      if (!pair || pair.indexOf('/') === -1 || pair === config.pair) {
-
-        // aPair is not a pair, or is a default pair
-
-        if (pair !== config.pair) {
-          isPairParsed = false;
-        }
-
-        if ((pair.indexOf('/') === -1) && letCoin1only) {
-
-          // aPair is not a pair, may be a coin only
-          coin1 = pair;
-          if (coin1 === config.coin1) {
-            coin1Decimals = config.coin1Decimals;
-          }
-          pair = null;
-          coin2 = null;
-
-        } else {
-
-          // Set a default trading pair
-          pair = config.pair;
-          coin1Decimals = config.coin1Decimals;
-          coin2Decimals = config.coin2Decimals;
-
-        }
-
+      if (!pair || pair.indexOf('/') === -1) {
+        log.warn(`Unable to parse market pair from '${pair}'. Returning 'false'.`);
+        return false;
       }
 
-      if (pair) {
-        coin1 = pair.substr(0, pair.indexOf('/'));
-        coin2 = pair.substr(pair.indexOf('/') + 1, pair.length);
+      pair = pair.toUpperCase().trim();
+      const [coin1, coin2] = pair.split('/');
+
+      let marketInfo;
+      if (exchange) {
+        marketInfo = require('./trader_' + exchange.toLowerCase())(null, null, null, log, true).marketInfo(pair);
+      } else {
+        exchange = config.exchangeName;
+        marketInfo = traderapi.marketInfo(pair);
+      }
+
+      let coin1Decimals = 8;
+      let coin2Decimals = 8;
+
+      if (!marketInfo) {
+        log.warn(`Unable to get info about ${pair} market on ${exchange} exchange. Returning default values for decimal places.`);
+      } else {
+        coin1Decimals = marketInfo.coin1Decimals;
+        coin2Decimals = marketInfo.coin2Decimals;
       }
 
       return {
@@ -62,11 +46,10 @@ module.exports = {
         coin2,
         coin1Decimals,
         coin2Decimals,
-        isPairParsed,
       };
 
     } catch (e) {
-      log.warn(`Error in getPairObject() of ${utils.getModuleName(module.id)} module: ${e}.`);
+      log.warn(`Error in parseMarket() of ${utils.getModuleName(module.id)} module: ${e}. Returning 'false'.`);
       return false;
     }
 
