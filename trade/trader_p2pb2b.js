@@ -212,23 +212,15 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
       return new Promise((resolve, reject) => {
         P2PB2B.ticker(pair_.pair).then(function(data) {
           try {
-            data = data.result;
-            if (data) {
+            ticker = data.result;
+            if (ticker && data.success) {
               resolve({
-                ask: +data.ask,
-                bid: +data.bid,
-                volume: +data.volume,
-                volume_Coin2: +data.deal,
-                high: +data.high,
-                low: +data.low,
-                // Not necessary
-                // askQty: +data.askQty,
-                // bidQty: +data.bidQty,
-                // dealCount: +data.dealCount,
-                // coin1Decimals: +data.numberPrecision,
-                // coin2Decimals: +data.pricePrecision,
-                // firstId: data.firstId,
-                // lastId: data.lastId,
+                ask: +ticker.ask,
+                bid: +ticker.bid,
+                volume: +ticker.volume,
+                volumeInCoin2: +ticker.deal,
+                high: +ticker.high,
+                low: +ticker.low,
               });
             } else {
               resolve(false);

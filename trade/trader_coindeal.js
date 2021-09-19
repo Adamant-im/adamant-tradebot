@@ -182,7 +182,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
             if (data2) {
               resolve({
                 volume: +data2.baseVolume,
-                volume_Coin2: +data2.quoteVolume,
+                volumeInCoin2: +data2.quoteVolume,
                 high: +data2.high24hr,
                 low: +data2.low24hr,
                 ask: +data2.lowestAsk,

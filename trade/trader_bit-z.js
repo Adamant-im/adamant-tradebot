@@ -222,7 +222,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
                 ask: +data.askPrice,
                 bid: +data.bidPrice,
                 volume: +data.volume,
-                volume_Coin2: +data.quoteVolume,
+                volumeInCoin2: +data.quoteVolume,
                 high: +data.high,
                 low: +data.low,
                 askQty: +data.askQty,

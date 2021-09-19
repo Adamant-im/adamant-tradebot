@@ -234,7 +234,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
                     bid: +data2.bids[0].price,
 
                     volume: +data.volumeBase,
-                    volume_Coin2: +data.volume,
+                    volumeInCoin2: +data.volume,
                     high: +data.high,
                     low: +data.low,
                   });
