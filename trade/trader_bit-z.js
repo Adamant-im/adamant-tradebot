@@ -247,7 +247,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
       });
     },
 
-    placeOrder(orderType, pair, price, coin1Amount, limit = 1, coin2Amount, pairObj) {
+    placeOrder(orderType, pair, price, coin1Amount, limit = 1, coin2Amount) {
 
       pair = pair.toUpperCase();
       const pair_ = formatPairName(pair);

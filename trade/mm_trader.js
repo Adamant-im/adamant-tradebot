@@ -51,7 +51,6 @@ module.exports = {
 
       let output = '';
       let orderParamsString = '';
-      const pairObj = utils.getPairObject(config.pair);
 
       if (!price) {
         if ((Date.now()-lastNotifyPriceTimestamp > HOUR) && priceReq.message) {
@@ -88,7 +87,7 @@ module.exports = {
 
       if (priceReq.mmCurrentAction === 'executeInSpread') {
 
-        order1 = await traderapi.placeOrder(crossType(type), config.pair, price, coin1Amount, 1, null, pairObj);
+        order1 = await traderapi.placeOrder(crossType(type), config.pair, price, coin1Amount, 1, null);
         if (order1 && order1.orderid) {
           const { ordersDb } = db;
           const order = new ordersDb({
@@ -112,7 +111,7 @@ module.exports = {
             isCancelled: false,
           });
 
-          order2 = await traderapi.placeOrder(type, config.pair, price, coin1Amount, 1, null, pairObj);
+          order2 = await traderapi.placeOrder(type, config.pair, price, coin1Amount, 1, null);
           if (order2 && order2.orderid) {
             output = `${type} ${coin1Amount.toFixed(config.coin1Decimals)} ${config.coin1} for ${coin2Amount.toFixed(config.coin2Decimals)} ${config.coin2}`;
             log.info(`Successfully executed mm-order to ${output}. Action: executeInSpread.`);
@@ -135,7 +134,7 @@ module.exports = {
 
       } else if (priceReq.mmCurrentAction === 'executeInOrderBook') {
 
-        order1 = await traderapi.placeOrder(type, config.pair, price, coin1Amount, 1, null, pairObj);
+        order1 = await traderapi.placeOrder(type, config.pair, price, coin1Amount, 1, null);
         if (order1 && order1.orderid) {
           const { ordersDb } = db;
           const order = new ordersDb({

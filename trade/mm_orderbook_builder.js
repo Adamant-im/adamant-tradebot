@@ -163,7 +163,6 @@ module.exports = {
 
       let output = '';
       let orderParamsString = '';
-      const pairObj = utils.getPairObject(config.pair);
 
       if (!price) {
         if ((Date.now()-lastNotifyPriceTimestamp > HOUR) && priceReq.message) {
@@ -193,7 +192,7 @@ module.exports = {
         return;
       }
 
-      const orderReq = await traderapi.placeOrder(type, config.pair, price, coin1Amount, 1, null, pairObj);
+      const orderReq = await traderapi.placeOrder(type, config.pair, price, coin1Amount, 1, null);
       if (orderReq && orderReq.orderid) {
         const { ordersDb } = db;
         const order = new ordersDb({

@@ -158,7 +158,6 @@ module.exports = {
 
       let output = '';
       let orderParamsString = '';
-      const pairObj = utils.getPairObject(config.pair);
 
       orderParamsString = `type=${type}, pair=${config.pair}, price=${price}, coin1Amount=${coin1Amount}, coin2Amount=${coin2Amount}`;
       if (!type || !price || !coin1Amount || !coin2Amount) {
@@ -195,7 +194,7 @@ module.exports = {
         return;
       }
 
-      const orderReq = await traderapi.placeOrder(type, config.pair, price, coin1Amount, 1, null, pairObj);
+      const orderReq = await traderapi.placeOrder(type, config.pair, price, coin1Amount, 1, null);
       if (orderReq && orderReq.orderid) {
         const { ordersDb } = db;
         const order = new ordersDb({
