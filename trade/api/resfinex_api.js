@@ -181,39 +181,39 @@ const EXCHANGE_API = {
   },
 
   /**
-     * ------------------------------------------------------------------
-     * (Get user balances)
-     * ------------------------------------------------------------------
-     */
+   * List of user balances for all currencies
+   * @return {Object}
+   */
   getUserAssets: function() {
     return sign_api('/account/balances', {}, 'post');
   },
+
   /**
-     * ------------------------------------------------------------------
-     * (Get user open orders)
-     * ------------------------------------------------------------------
-     */
+   * Query account active orders
+   * @param {String} coinFrom
+   * @param {String} coinFrom
+   * @return {Object}
+   */
   getUserNowEntrustSheet: function(coinFrom, coinTo) {
     const data = {};
     data.pair = coinFrom + '_' + coinTo;
-    // size/limit not documented, but limit fits
+    // size/limit not documented, but 'limit' works
     // https://docs.resfinex.com/guide/rest-auth-endpoints.html#post-get-open-orders
     data.limit = 200;
     return sign_api('/order/open_orders', data, 'post');
   },
+
   /**
-     * ------------------------------------------------------------------
-     * (Place an order)
-     * @param symbol        string "ADM_USDT"
-     * @param amount        float
-     * @param price         float
-     * @param side          string  BUY, SELL
-     * @param type          string  MARKET, LIMIT
-     * ------------------------------------------------------------------
-     */
-  addEntrustSheet: function(symbol, amount, price, side, type) {
+   * Places a Limit order
+   * @param {String} pair
+   * @param {String} amount
+   * @param {String} price
+   * @param {String} side
+   * @param {String} type
+   */
+  addEntrustSheet: function(pair, amount, price, side, type) {
     const data = {};
-    data.pair = symbol;
+    data.pair = pair;
     if (price) {
       data.price = price;
     }
@@ -222,45 +222,54 @@ const EXCHANGE_API = {
     data.type = type;
     return sign_api('/order/place_order', data, 'post');
   },
+
   /**
-     * ------------------------------------------------------------------
-     * (Cancel the order)
-     * @param entrustSheetId    string
-     * ------------------------------------------------------------------
-     */
-  cancelEntrustSheet: function(entrustSheetId) {
+   * Cancel an order
+   * @param {String} orderId
+   * @return {Object}
+   */
+  cancelEntrustSheet: function(orderId) {
     const data = {};
-    data.orderId = entrustSheetId;
+    data.orderId = orderId;
     return sign_api(`/order/cancel_order`, data, 'post');
   },
 
   /**
-     * ------------------------------------------------------------------
-     * (Get the price data)
-     * @param symbol    ADM_BTC
-     * ------------------------------------------------------------------
-     */
-  ticker: function(symbol) {
+   * Get trade details for a ticker (market rates)
+   * @return {Object}
+   */
+  ticker: function() {
     return public_api(`/engine/ticker`);
   },
+
   /**
-     * ------------------------------------------------------------------
-     * (Get stats)
-     * @param symbol    eth_btc
-     * ------------------------------------------------------------------
-     */
-  orderBook: function(symbol, size) {
+   * Get market depth
+   * @param pair
+   * @param {Number} limit min 1, default 50, max 100
+   * @return {Object}
+   */
+  orderBook: function(pair, limit) {
     const data = {};
-    data.pair = symbol;
+    data.pair = pair;
     // default limit/size is 500; no limit according to docs
     // https://docs.resfinex.com/guide/rest-public-endpoints.html#get-orderbook
-    if (size) {
-      data.size = size;
+    if (limit) {
+      data.size = limit;
     } else {
       data.size = 1000;
     }
     return public_api(`/engine/depth`, data);
   },
+
+  /**
+   * Get info on all markets
+   * @return string
+   */
+  markets: function() {
+    const data = {};
+    return public_api('/config', data);
+  },
+
 
 };
 

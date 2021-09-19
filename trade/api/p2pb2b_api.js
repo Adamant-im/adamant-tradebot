@@ -142,7 +142,8 @@ const EXCHANGE_API = {
   },
 
   /**
-   * @return {Object} List of user balances for all currencies
+   * List of user balances for all currencies
+   * @return {Object}
    */
   getBalances: function() {
     const data = {};
@@ -171,7 +172,6 @@ const EXCHANGE_API = {
    * @param {String} amount
    * @param {String} price
    * @param {String} side 'buy' or 'sell'
-   * ------------------------------------------------------------------
    */
   addOrder: function(pair, amount, price, side) {
     const data = {};
@@ -199,7 +199,6 @@ const EXCHANGE_API = {
    * Get trade details for a ticker (market rates)
    * @param {String} pair
    * @return {Object}
-   * ------------------------------------------------------------------
    */
   ticker: function(pair) {
     const data = {};
@@ -208,7 +207,6 @@ const EXCHANGE_API = {
   },
 
   /**
-   * ------------------------------------------------------------------
    * Get market depth
    * @param pair
    * @param {Number} limit min 1, default 50, max 100

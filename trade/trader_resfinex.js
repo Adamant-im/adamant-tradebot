@@ -4,12 +4,85 @@ const utils = require('../helpers/utils');
 // API endpoints:
 // https://api.resfinex.com/
 const apiServer = 'https://api.resfinex.com';
+const exchangeName = 'Resfinex';
 
 module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
 
   RESFINEX.setConfig(apiServer, apiKey, secretKey, pwd, log, publicOnly);
 
+  let exchangeMarkets;
+  let gettingMarkets;
+  getMarkets();
+
+  function getMarkets(pair) {
+    if (module.exports.gettingMarkets) return;
+    if (module.exports.exchangeMarkets) return module.exports.exchangeMarkets[pair];
+
+    module.exports.gettingMarkets = true;
+    return new Promise((resolve, reject) => {
+      RESFINEX.markets().then(function(data) {
+        try {
+          let markets = data.data.pairs;
+          if (!markets) {
+            markets = [];
+          }
+          let coins = data.data.coins;
+          if (!coins) {
+            coins = [];
+          }
+          const result = {};
+          markets.forEach((market) => {
+            const pairFormatted = `${market.primary.toUpperCase()}/${market.secondary.toUpperCase()}`;
+
+            // Here we can get also withdrawalFee, withdrawalMin, tokenType, and other info
+            const coin1info = coins.filter((coin) => coin.symbol.toUpperCase() === market.primary.toUpperCase())[0];
+
+            result[pairFormatted] = {
+              pairPlain: market.name,
+              coin1: market.primary.toUpperCase(),
+              coin2: market.secondary.toUpperCase(),
+              coin1Decimals: market.amountDecimal,
+              coin2Decimals: market.priceDecimal,
+              // Not necessary
+              minTrade: market.minBaseAmount, // in coin2
+              coin1MinAmount: coin1info ? coin1info.minTrading : undefined, // but most do have null
+            };
+          });
+
+          if (Object.keys(result).length > 0) {
+            module.exports.exchangeMarkets = result;
+            console.log(result);
+            log.log(`Received info about ${Object.keys(result).length} markets on ${exchangeName} exchange.`);
+          }
+          resolve(result);
+        } catch (e) {
+          resolve(false);
+          log.warn('Error while processing getMarkets() request: ' + e);
+        };
+      }).catch((err) => {
+        log.warn(`API request getMarkets() of ${utils.getModuleName(module.id)} module failed. ${err}`);
+        resolve(undefined);
+      }).finally(() => {
+        module.exports.gettingMarkets = false;
+      });
+    });
+  }
+
   return {
+    get markets() {
+      return module.exports.exchangeMarkets;
+    },
+    marketInfo(pair) {
+      return getMarkets(pair);
+    },
+    features() {
+      return {
+        getMarkets: true,
+        placeMarketOrder: true,
+        getDepositAddress: false,
+      };
+    },
+
     getBalances(nonzero = true) {
       return new Promise((resolve, reject) => {
         RESFINEX.getUserAssets().then(function(data) {
@@ -198,16 +271,19 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
         coin1Amount = coin2Amount / price;
       }
 
-      if (pairObj) { // Set precision (decimals)
-        if (coin1Amount) {
-          coin1Amount = (+coin1Amount).toFixed(pairObj.coin1Decimals);
-        }
-        if (coin2Amount) {
-          coin2Amount = (+coin2Amount).toFixed(pairObj.coin2Decimals);
-        }
-        if (price) {
-          price = (+price).toFixed(pairObj.coin2Decimals);
-        }
+      if (!this.marketInfo(pair)) {
+        log.warn(`Unable to place an order on ${exchangeName} exchange. I don't have info about market ${pair}.`);
+        return undefined;
+      }
+
+      if (coin1Amount) {
+        coin1Amount = (+coin1Amount).toFixed(this.marketInfo(pair).coin1Decimals);
+      }
+      if (coin2Amount) {
+        coin2Amount = (+coin2Amount).toFixed(this.marketInfo(pair).coin2Decimals);
+      }
+      if (price) {
+        price = (+price).toFixed(this.marketInfo(pair).coin2Decimals);
       }
 
       if (limit) { // Limit order

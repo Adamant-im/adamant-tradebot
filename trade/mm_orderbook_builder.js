@@ -30,6 +30,8 @@ module.exports = {
     // console.log(traderapi.markets['KOM/USDT']);
     // const traderapi2 = require('./trader_' + config.exchange)(config.apikey, config.apisecret, config.apipassword, log);
 
+    // const traderapi2 = require('./trader_' + 'resfinex')(config.apikey, config.apisecret, config.apipassword, log);
+
     // console.log(await traderapi.getOpenOrders('KOM/USDT'));
     // console.log(await traderapi.getOrderBook('KOM/USDT'));
 
@@ -39,13 +41,14 @@ module.exports = {
 
     setTimeout(() => {
       console.log(1);
-      const traderapi = require('./trader_' + config.exchange)(config.apikey, config.apisecret, config.apipassword, log);
-      console.log(require('./orderUtils').parseMarket('KOM/USDT'));
+      const traderapi = require('./trader_' + 'resfinex')(config.apikey, config.apisecret, config.apipassword, log);
+      console.log(require('./orderUtils').parseMarket('ADM/USDT', 'resfinex'));
       console.log(2);
       // console.log(traderapi2.markets['KOM/USDT']);
     }, 3000);
     setTimeout(() => {
       console.log(1);
+      console.log(require('./orderUtils').parseMarket('ADM/USDT', 'resfinex'));
       console.log(require('./trader_' + config.exchange)(config.apikey, config.apisecret, config.apipassword, log).marketInfo('KOM/USDT'));
       console.log(2);
       // console.log(traderapi2.markets['KOM/USDT']);

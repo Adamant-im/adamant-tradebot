@@ -40,6 +40,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
               coin2: markets[market].coinTo.toUpperCase(),
               coin1Decimals: Number(markets[market].numberFloat),
               coin2Decimals: Number(markets[market].priceFloat),
+              // Not necessary
               coin1MinAmount: Number(markets[market].minTrade),
               coin1MaxAmount: Number(markets[market].maxTrade),
             };
