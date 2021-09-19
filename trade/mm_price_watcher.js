@@ -1,3 +1,4 @@
+const constants = require('../helpers/const');
 const utils = require('../helpers/utils');
 const exchangerUtils = require('../helpers/cryptos/exchanger');
 const config = require('../modules/configReader');
@@ -11,11 +12,10 @@ const orderUtils = require('./orderUtils');
 let lastNotifyBalancesTimestamp = 0;
 let lastNotifyPriceTimestamp = 0;
 
-const HOUR = 1000 * 60 * 60;
 const INTERVAL_MIN = 10000;
 const INTERVAL_MAX = 30000;
-const LIFETIME_MIN = HOUR * 5;
-const LIFETIME_MAX = HOUR * 10;
+const LIFETIME_MIN = constants.HOUR * 5;
+const LIFETIME_MAX = constants.HOUR * 10;
 
 let isPreviousIterationFinished = true;
 
@@ -187,7 +187,7 @@ module.exports = {
       const balances = await isEnoughCoins(config.coin1, config.coin2, coin1Amount, coin2Amount, type);
       if (!balances.result) {
         if (balances.message) {
-          if (Date.now()-lastNotifyBalancesTimestamp > HOUR) {
+          if (Date.now()-lastNotifyBalancesTimestamp > constants.HOUR) {
             notify(balances.message, 'warn', config.silent_mode);
             lastNotifyBalancesTimestamp = Date.now();
           } else {
@@ -304,7 +304,6 @@ async function setPriceRange() {
       const exchange = tradeParams.mm_priceWatcherSource.split('@')[1];
       const pairObj = orderUtils.parseMarket(pair, exchange);
 
-      // let exchangeapi = require('./trader_' + exchange.toLowerCase())(null, null, null, log, true);
       module.exports.setPwExchangeApi(exchange);
       const orderBook = await pwExchangeApi.getOrderBook(pair);
       if (!orderBook || !orderBook.asks[0] || !orderBook.bids[0]) {
@@ -439,7 +438,7 @@ function errorSettingPriceRange(errorMessage) {
     if (setPriceRangeCount > 10) {
 
       isPriceActual = false;
-      if (Date.now()-lastNotifyPriceTimestamp > HOUR) {
+      if (Date.now()-lastNotifyPriceTimestamp > constants.HOUR) {
         notify(`${baseNotifyMessage} ${errorMessage}`, 'warn');
         lastNotifyPriceTimestamp = Date.now();
       } else {

@@ -1,3 +1,4 @@
+const constants = require('../helpers/const');
 const utils = require('../helpers/utils');
 const config = require('../modules/configReader');
 const log = require('../helpers/log');
@@ -9,8 +10,6 @@ const orderCollector = require('./orderCollector');
 
 let lastNotifyBalancesTimestamp = 0;
 let lastNotifyPriceTimestamp = 0;
-
-const HOUR = 1000 * 60 * 60;
 
 let isPreviousIterationFinished = true;
 
@@ -53,7 +52,7 @@ module.exports = {
       let orderParamsString = '';
 
       if (!price) {
-        if ((Date.now()-lastNotifyPriceTimestamp > HOUR) && priceReq.message) {
+        if ((Date.now()-lastNotifyPriceTimestamp > constants.HOUR) && priceReq.message) {
           notify(priceReq.message, 'warn');
           lastNotifyPriceTimestamp = Date.now();
         }
@@ -73,7 +72,7 @@ module.exports = {
       const balances = await isEnoughCoins(config.coin1, config.coin2, coin1Amount, coin2Amount, type, priceReq.mmCurrentAction);
       if (!balances.result) {
         if (balances.message) {
-          if (Date.now()-lastNotifyBalancesTimestamp > HOUR) {
+          if (Date.now()-lastNotifyBalancesTimestamp > constants.HOUR) {
             notify(balances.message, 'warn', config.silent_mode);
             lastNotifyBalancesTimestamp = Date.now();
           } else {
