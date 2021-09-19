@@ -302,7 +302,7 @@ async function setPriceRange() {
 
       const pair = tradeParams.mm_priceWatcherSource.split('@')[0];
       const exchange = tradeParams.mm_priceWatcherSource.split('@')[1];
-      const pairObj = utils.getPairObject(pair, false);
+      const pairObj = orderUtils.parseMarket(pair, exchange);
 
       // let exchangeapi = require('./trader_' + exchange.toLowerCase())(null, null, null, log, true);
       module.exports.setPwExchangeApi(exchange);
