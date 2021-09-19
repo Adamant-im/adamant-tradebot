@@ -10,6 +10,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
 
   RESFINEX.setConfig(apiServer, apiKey, secretKey, pwd, log, publicOnly);
 
+  // Fulfill markets on initialization
   let exchangeMarkets;
   let gettingMarkets;
   getMarkets();

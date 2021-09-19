@@ -5,12 +5,41 @@ const utils = require('../helpers/utils');
 // https://apigateway.coindeal.com
 
 const apiServer = 'https://apigateway.coindeal.com';
+const exchangeName = 'CoinDeal';
 
 module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
 
   COINDEAL.setConfig(apiServer, apiKey, secretKey, pwd, log, publicOnly);
 
+  // CoinDeal API doesn't provide market info
+  const defaultMarketInfo = {
+    coin1Decimals: 8,
+    coin2Decimals: 8,
+  };
+
   return {
+    get markets() {
+      return {};
+    },
+    marketInfo(pair) {
+      pair = pair.toUpperCase().trim();
+      const [coin1, coin2] = pair.split('/');
+      return {
+        ...defaultMarketInfo,
+        pairPlain: pair,
+        coin1,
+        coin2,
+      };
+    },
+    features() {
+      return {
+        getMarkets: false,
+        placeMarketOrder: false,
+        getDepositAddress: true,
+        getDepositAddressLimit: 'Only created on website',
+      };
+    },
+
     getBalances(nonzero = true) {
       return new Promise((resolve, reject) => {
         COINDEAL.getUserAssets().then(function(data) {
@@ -182,16 +211,19 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
 
       const type = (orderType === 'sell') ? 'sell' : 'buy';
 
-      if (pairObj) { // Set precision (decimals)
-        if (coin1Amount) {
-          coin1Amount = (+coin1Amount).toFixed(pairObj.coin1Decimals);
-        }
-        if (coin2Amount) {
-          coin2Amount = (+coin2Amount).toFixed(pairObj.coin2Decimals);
-        }
-        if (price) {
-          price = (+price).toFixed(pairObj.coin2Decimals);
-        }
+      if (!this.marketInfo(pair)) {
+        log.warn(`Unable to place an order on ${exchangeName} exchange. I don't have info about market ${pair}.`);
+        return undefined;
+      }
+
+      if (coin1Amount) {
+        coin1Amount = (+coin1Amount).toFixed(this.marketInfo(pair).coin1Decimals);
+      }
+      if (coin2Amount) {
+        coin2Amount = (+coin2Amount).toFixed(this.marketInfo(pair).coin2Decimals);
+      }
+      if (price) {
+        price = (+price).toFixed(this.marketInfo(pair).coin2Decimals);
       }
 
       if (limit) { // Limit order
