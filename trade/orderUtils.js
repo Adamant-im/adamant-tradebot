@@ -6,6 +6,72 @@ const db = require('../modules/DB');
 
 module.exports = {
 
+  /**
+   * Parses a trade pair object: coin1, coin2, and decimals.
+   * If not isPairParsed, then aPair is not a valid trading pair, and default pair returned
+   * @param {String} aPair String to parse
+   * @return {Object} or false
+   */
+  parseTradePair(aPair) {
+    try {
+
+      console.log(traderapi.marketInfo('KOM/USDT'));
+      let pair = (aPair || '').toUpperCase().trim();
+      let coin1Decimals = 8;
+      let coin2Decimals = 8;
+      let isPairParsed = true;
+      let coin1; let coin2;
+
+      if (!pair || pair.indexOf('/') === -1 || pair === config.pair) {
+
+        // aPair is not a pair, or is a default pair
+
+        if (pair !== config.pair) {
+          isPairParsed = false;
+        }
+
+        if ((pair.indexOf('/') === -1) && letCoin1only) {
+
+          // aPair is not a pair, may be a coin only
+          coin1 = pair;
+          if (coin1 === config.coin1) {
+            coin1Decimals = config.coin1Decimals;
+          }
+          pair = null;
+          coin2 = null;
+
+        } else {
+
+          // Set a default trading pair
+          pair = config.pair;
+          coin1Decimals = config.coin1Decimals;
+          coin2Decimals = config.coin2Decimals;
+
+        }
+
+      }
+
+      if (pair) {
+        coin1 = pair.substr(0, pair.indexOf('/'));
+        coin2 = pair.substr(pair.indexOf('/') + 1, pair.length);
+      }
+
+      return {
+        pair,
+        coin1,
+        coin2,
+        coin1Decimals,
+        coin2Decimals,
+        isPairParsed,
+      };
+
+    } catch (e) {
+      log.warn(`Error in getPairObject() of ${utils.getModuleName(module.id)} module: ${e}.`);
+      return false;
+    }
+
+  },
+
   async addOrder(orderType, pair, price, coin1Amount, limit, coin2Amount, pairObj, purpose = 'man') {
 
     let orderReq;

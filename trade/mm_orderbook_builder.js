@@ -37,10 +37,19 @@ module.exports = {
     // console.log((await traderapi2.getMarkets())['ADM/USDT']);
     // console.log(traderapi2.markets['ADM/USDT']);
 
-    // setTimeout(() => {
-    //   console.log(1111);
-    //   console.log(traderapi2.markets['KOM/USDT']);
-    // }, 2000);
+    setTimeout(() => {
+      console.log(1);
+      const traderapi = require('./trader_' + config.exchange)(config.apikey, config.apisecret, config.apipassword, log);
+      console.log(require('./orderUtils').parseTradePair('KOM/USDT'));
+      console.log(2);
+      // console.log(traderapi2.markets['KOM/USDT']);
+    }, 3000);
+    setTimeout(() => {
+      console.log(1);
+      console.log(require('./trader_' + config.exchange)(config.apikey, config.apisecret, config.apipassword, log).marketInfo('KOM/USDT'));
+      console.log(2);
+      // console.log(traderapi2.markets['KOM/USDT']);
+    }, 6000);
     // let req = await traderapi.cancelOrder('53346669011', null, 'KOM/USDT');
     // let exchangeapi = require('./trader_' + 'atomars')(null, null, null, log, true);
     // let req = await exchangeapi.getOrderBook('ADM/USDT');

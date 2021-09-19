@@ -5,3 +5,4 @@ package-lock.json
 tests.js
 config.test
 .DS_Store
+trade/settings/

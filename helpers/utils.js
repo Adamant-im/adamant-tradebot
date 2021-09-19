@@ -306,11 +306,14 @@ module.exports = {
     return output;
   },
 
-  /*
-    Returns a trade pair, coin1 and coin2, and decimals
-    Or coin1 only, if aPair is not a pair, and letCoin1only = true
-    If not isPairParsed, then aPair is not a valid trading pair, and default pair returned
-  */
+  /**
+   * Parses a trade pair object: coin1, coin2, and decimals.
+   * Object may store only coin1, if aPair is not a pair, and letCoin1only = true
+   * If not isPairParsed, then aPair is not a valid trading pair, and default pair returned
+   * @param {String} aPair String to parse
+   * @param {boolean} letCoin1only If aPair may include only coin1
+   * @return {Object} or false
+   */
   getPairObject(aPair, letCoin1only = false) {
 
     try {

@@ -5,23 +5,21 @@ const utils = require('../helpers/utils');
 // https://api.p2pb2b.io
 const apiServer = 'https://api.p2pb2b.io';
 const exchangeName = 'P2PB2B';
-let gettingMarkets = false;
 
 module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
 
   P2PB2B.setConfig(apiServer, apiKey, secretKey, pwd, log, publicOnly);
 
   // Fulfill markets on initialization
-  let markets;
-  if (!markets && !gettingMarkets) {
-    getMarkets();
-  }
+  let exchangeMarkets;
+  let gettingMarkets;
+  getMarkets();
 
-  function getMarkets() {
-    gettingMarkets = true;
-    if (module.exports.markets) {
-      return module.exports.markets;
-    }
+  function getMarkets(pair) {
+    if (module.exports.gettingMarkets) return;
+    if (module.exports.exchangeMarkets) return module.exports.exchangeMarkets[pair];
+
+    module.exports.gettingMarkets = true;
     return new Promise((resolve, reject) => {
       P2PB2B.markets().then(function(data) {
         try {
@@ -51,7 +49,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
           });
 
           if (Object.keys(result).length > 0) {
-            module.exports.markets = result;
+            module.exports.exchangeMarkets = result;
             log.log(`Received info about ${Object.keys(result).length} markets on ${exchangeName} exchange.`);
           }
           resolve(result);
@@ -63,17 +61,17 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
         log.warn(`API request getMarkets() of ${utils.getModuleName(module.id)} module failed. ${err}`);
         resolve(undefined);
       }).finally(() => {
-        gettingMarkets = false;
+        module.exports.gettingMarkets = false;
       });
     });
   }
 
   return {
     get markets() {
-      return module.exports.markets;
+      return module.exports.exchangeMarkets;
     },
     marketInfo(pair) {
-      return module.exports.markets[pair];
+      return getMarkets(pair);
     },
     features() {
       return {
