@@ -30,14 +30,6 @@ const fields = {
     type: String,
     isRequired: true,
   },
-  coin1Decimals: {
-    type: Number,
-    default: 8,
-  },
-  coin2Decimals: {
-    type: Number,
-    default: 8,
-  },
   clearAllOrdersInterval: {
     type: Number,
     default: 0,
