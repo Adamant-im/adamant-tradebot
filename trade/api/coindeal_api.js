@@ -52,8 +52,8 @@ function protectedRequest(path, data, type = 'get') {
                 resolve(error.response.data);
               } else if (
                 type === 'delete' &&
-                error.status === 404 &&
                 error.response &&
+                error.response.status === 404 &&
                 typeof error.response.data === 'string' &&
                 error.response.data.includes('<!DOCTYPE html>') &&
                 error.response.data.includes('404 Not Found')
