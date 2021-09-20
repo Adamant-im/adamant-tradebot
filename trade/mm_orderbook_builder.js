@@ -40,21 +40,25 @@ module.exports = {
     // console.log((await traderapi2.getMarkets())['ADM/USDT']);
     // console.log(traderapi2.markets['ADM/USDT']);
 
-    setTimeout(() => {
-      console.log(1);
-      const traderapi = require('./trader_' + 'resfinex')(config.apikey, config.apisecret, config.apipassword, log);
-      console.log(require('./orderUtils').parseMarket('ADM/USDT', 'resfinex'));
-      console.log(2);
-      // console.log(traderapi2.markets['KOM/USDT']);
-    }, 3000);
-    setTimeout(() => {
-      console.log(1);
-      console.log(require('./orderUtils').parseMarket('ADM/USDT', 'resfinex'));
-      console.log(require('./trader_' + config.exchange)(config.apikey, config.apisecret, config.apipassword, log).marketInfo('KOM/USDT'));
-      console.log(2);
-      // console.log(traderapi2.markets['KOM/USDT']);
-    }, 6000);
+    // setTimeout(() => {
+    //   console.log(1);
+    //   const traderapi = require('./trader_' + 'resfinex')(config.apikey, config.apisecret, config.apipassword, log);
+    //   console.log(require('./orderUtils').parseMarket('ADM/USDT', 'resfinex'));
+    //   console.log(2);
+    //   // console.log(traderapi2.markets['KOM/USDT']);
+    // }, 3000);
+    // setTimeout(() => {
+    //   console.log(1);
+    //   console.log(require('./orderUtils').parseMarket('ADM/USDT', 'resfinex'));
+    //   console.log(require('./trader_' + config.exchange)(config.apikey, config.apisecret, config.apipassword, log).marketInfo('KOM/USDT'));
+    //   console.log(2);
+    //   // console.log(traderapi2.markets['KOM/USDT']);
+    // }, 6000);
+
     // let req = await traderapi.cancelOrder('53346669011', null, 'KOM/USDT');
+
+    let req = await traderapi.cancelOrder('5d13f3e8-dcb3-4a6d-88c1-16cf6e8d8179');
+
     // let exchangeapi = require('./trader_' + 'atomars')(null, null, null, log, true);
     // let req = await exchangeapi.getOrderBook('ADM/USDT');
     // const pw2 = require('./mm_price_watcher');

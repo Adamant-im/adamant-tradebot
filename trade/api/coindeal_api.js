@@ -13,16 +13,16 @@ let config = {
 };
 let log = {};
 
-function sign_api(path, data, type = 'get') {
+function protectedRequest(path, data, type = 'get') {
   let url = `${WEB_BASE}${path}`;
-  const pars = [];
+  const params = [];
   for (const key in data) {
     const v = data[key];
-    pars.push(key + '=' + v);
+    params.push(key + '=' + v);
   }
-  const p = pars.join('&');
-  if (p && type !== 'post') {
-    url = url + '?' + p;
+  const paramsString = params.join('&');
+  if (paramsString && type !== 'post') {
+    url = url + '?' + paramsString;
   }
   let headersWithSign = Object.assign({ 'Authorization': setSign() }, DEFAULT_HEADERS);
 
@@ -31,7 +31,7 @@ function sign_api(path, data, type = 'get') {
 
       let httpOptions;
 
-      if (type === 'get') {
+      if (type === 'get' || type === 'delete') {
 
         httpOptions = {
           url: url,
@@ -48,9 +48,10 @@ function sign_api(path, data, type = 'get') {
             .catch(function(error) {
               // We can get 404 with data
               if (error.response && typeof error.response.data === 'object' && Object.keys(error.response.data).length !== 0) {
+                log.log(`${type.toUpperCase()}-request to ${url} with data ${JSON.stringify(data)} failed. ${error}. Reply data: ${JSON.stringify(error.response.data)}.`);
                 resolve(error.response.data);
               } else {
-                log.log(`Request to ${url} with data ${JSON.stringify(data)} failed. ${error}.`);
+                log.log(`${type.toUpperCase()}-request to ${url} with data ${JSON.stringify(data)} failed. ${error}.`);
                 reject(error);
               }
             });
@@ -74,21 +75,22 @@ function sign_api(path, data, type = 'get') {
             .catch(function(error) {
               // We can get 404 with data
               if (error.response && typeof error.response.data === 'object' && Object.keys(error.response.data).length !== 0) {
+                log.log(`${type.toUpperCase()}-request to ${url} with data ${JSON.stringify(data)} failed. ${error}. Reply data: ${JSON.stringify(error.response.data)}.`);
                 resolve(error.response.data);
               } else {
-                log.log(`Request to ${url} with data ${JSON.stringify(data)} failed. ${error}.`);
+                log.log(`${type.toUpperCase()}-request to ${url} with data ${JSON.stringify(data)} failed. ${error}.`);
                 reject(error);
               }
             });
       }
     } catch (err) {
-      log.log(`Processing of request to ${url} with data ${JSON.stringify(data)} failed. ${err}.`);
+      log.log(`Processing of ${type}-request to ${url} with data ${JSON.stringify(data)} failed. ${err}.`);
       reject(null);
     }
   });
 }
 
-function public_api(url, data, type = 'get') {
+function publicRequest(url, data, type = 'get') {
   return new Promise((resolve, reject) => {
     try {
       const httpOptions = {
@@ -104,15 +106,16 @@ function public_api(url, data, type = 'get') {
           .catch(function(error) {
             // We can get 404 with data
             if (error.response && typeof error.response.data === 'object' && Object.keys(error.response.data).length !== 0) {
+              log.log(`${type.toUpperCase()}-request to ${url} failed. ${error}. Reply data: ${JSON.stringify(error.response.data)}.`);
               resolve(error.response.data);
             } else {
-              log.log(`Request to ${url} failed. ${error}.`);
+              log.log(`${type.toUpperCase()}-request to ${url} failed. ${error}.`);
               reject(error);
             }
           });
 
     } catch (err) {
-      log.log(`Processing of request to ${url} failed. ${err}.`);
+      log.log(`Processing of ${type}-request to ${url} failed. ${err}.`);
       reject(null);
     }
   });
@@ -152,7 +155,7 @@ const EXCHANGE_API = {
      * ------------------------------------------------------------------
      */
   getUserAssets: function() {
-    return sign_api('/api/v1/trading/balance');
+    return protectedRequest('/api/v1/trading/balance');
   },
   /**
      * ------------------------------------------------------------------
@@ -164,7 +167,7 @@ const EXCHANGE_API = {
     data.symbol = coinFrom + coinTo;
     // no limit/size parameter according to docs
     // https://apigateway.coindeal.com/api/doc#operation/v1getOrder
-    return sign_api('/api/v1/order', data);
+    return protectedRequest('/api/v1/order', data);
   },
   /**
      * ------------------------------------------------------------------
@@ -182,24 +185,8 @@ const EXCHANGE_API = {
     data.quantity = amount;
     data.side = side;
     data.type = 'limit';
-    return sign_api('/api/v1/order', data, 'post');
+    return protectedRequest('/api/v1/order', data, 'post');
   },
-  /**
-     * ------------------------------------------------------------------
-     * (Place a Market order)
-     * @param symbol        string "ADMBTC"
-     * @param total        float, Incoming amount at the time of purchase, incoming quantity at the time of sale
-     * @param type          int  "1":"buy"   "2":"sale"
-     * ------------------------------------------------------------------
-     */
-  // addMarketOrder: function(symbol, total, type) {
-  //     var data = getSignBaseParams();
-  //     data.symbol = symbol;
-  //     data.total  = total;
-  //     data.type   = type;
-  //     data.tradePwd = config.tradePwd;//#
-  //     return sign_api("/Trade/MarketTrade", data);
-  // },
   /**
      * ------------------------------------------------------------------
      * (Cancel the order)
@@ -207,7 +194,8 @@ const EXCHANGE_API = {
      * ------------------------------------------------------------------
      */
   cancelEntrustSheet: function(entrustSheetId) {
-    return sign_api(`/api/v1/order/${entrustSheetId}`, null, 'delete');
+    const data = {};
+    return protectedRequest(`/api/v1/order/${entrustSheetId}`, data, 'delete');
   },
 
   /**
@@ -226,7 +214,7 @@ const EXCHANGE_API = {
     } else {
       data.limit = 0;
     }
-    return public_api(`${WEB_BASE}/api/v1/public/orderbook/${symbol}`, data);
+    return publicRequest(`${WEB_BASE}/api/v1/public/orderbook/${symbol}`, data);
   },
 
   /**
@@ -237,7 +225,7 @@ const EXCHANGE_API = {
      */
   getDepositAddress: function(symbol) {
     const data = {};
-    return sign_api(`/api/v1/deposits/${symbol}/addresses`, data);
+    return protectedRequest(`/api/v1/deposits/${symbol}/addresses`, data);
   },
 
   /**
@@ -247,7 +235,7 @@ const EXCHANGE_API = {
      * ------------------------------------------------------------------
      */
   stats: function(symbol) {
-    return public_api(`https://coinmarketcap.coindeal.com/api/v1/ticker`);
+    return publicRequest(`https://coinmarketcap.coindeal.com/api/v1/ticker`);
   },
 
 
