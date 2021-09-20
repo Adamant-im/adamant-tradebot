@@ -46,9 +46,19 @@ function protectedRequest(path, data, type = 'get') {
               resolve(data);
             })
             .catch(function(error) {
-              // We can get 404 with data
+              // We can get 4xx with data
               if (error.response && typeof error.response.data === 'object' && Object.keys(error.response.data).length !== 0) {
                 log.log(`${type.toUpperCase()}-request to ${url} with data ${JSON.stringify(data)} failed. ${error}. Reply data: ${JSON.stringify(error.response.data)}.`);
+                resolve(error.response.data);
+              } else if (
+                type === 'delete' &&
+                error.status === 404 &&
+                error.response &&
+                typeof error.response.data === 'string' &&
+                error.response.data.includes('<!DOCTYPE html>') &&
+                error.response.data.includes('404 Not Found')
+              ) {
+                log.log(`${type.toUpperCase()}-request to ${url} with data ${JSON.stringify(data)} failed. ${error}. We assume that user doesn't have this order (but this may be a temporary server error, can't be sure).`);
                 resolve(error.response.data);
               } else {
                 log.log(`${type.toUpperCase()}-request to ${url} with data ${JSON.stringify(data)} failed. ${error}.`);
@@ -73,7 +83,7 @@ function protectedRequest(path, data, type = 'get') {
               resolve(data);
             })
             .catch(function(error) {
-              // We can get 404 with data
+              // We can get 4xx with data
               if (error.response && typeof error.response.data === 'object' && Object.keys(error.response.data).length !== 0) {
                 log.log(`${type.toUpperCase()}-request to ${url} with data ${JSON.stringify(data)} failed. ${error}. Reply data: ${JSON.stringify(error.response.data)}.`);
                 resolve(error.response.data);
@@ -104,7 +114,7 @@ function publicRequest(url, data, type = 'get') {
             resolve(data);
           })
           .catch(function(error) {
-            // We can get 404 with data
+            // We can get 4xx with data
             if (error.response && typeof error.response.data === 'object' && Object.keys(error.response.data).length !== 0) {
               log.log(`${type.toUpperCase()}-request to ${url} failed. ${error}. Reply data: ${JSON.stringify(error.response.data)}.`);
               resolve(error.response.data);
