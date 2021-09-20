@@ -51,12 +51,6 @@
   /** Pair to trade **/
   "pair": "ADM/USDT",
 
-  /** Meaningful decimals for output of coin1 amounts. Depends on coin and exchange **/
-  "coin1Decimals": 2, // 0.12 ADM
-
-  /** Meaningful decimals for output of coin2 amounts. Depends on coin and exchange **/
-  "coin2Decimals": 6, // 0.123456 USDT
-
   /** Interval in minutes to clear all of Unknown (which are not placed by the bot) opened orders.
     Some exchanges has API issues with closing or matching orders.
     Because of this, your account can accumulate open orders and lead to frozen balances.

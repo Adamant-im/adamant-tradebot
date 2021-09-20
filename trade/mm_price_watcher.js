@@ -118,8 +118,8 @@ module.exports = {
           orderBookInfo.amountTargetPriceQuote *= reliabilityKoef;
 
           // console.log(orderBookInfo);
-          const priceString = `${config.pair} price of ${targetPrice.toFixed(config.coin2Decimals)} ${config.coin2}`;
-          const actionString = `${orderBookInfo.typeTargetPrice} ${orderBookInfo.amountTargetPrice.toFixed(config.coin1Decimals)} ${config.coin1} ${orderBookInfo.typeTargetPrice === 'buy' ? 'with' : 'for'} ${orderBookInfo.amountTargetPriceQuote.toFixed(config.coin2Decimals)} ${config.coin2}`;
+          const priceString = `${config.pair} price of ${targetPrice.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${config.coin2}`;
+          const actionString = `${orderBookInfo.typeTargetPrice} ${orderBookInfo.amountTargetPrice.toFixed(orderUtils.parseMarket(config.pair).coin1Decimals)} ${config.coin1} ${orderBookInfo.typeTargetPrice === 'buy' ? 'with' : 'for'} ${orderBookInfo.amountTargetPriceQuote.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${config.coin2}`;
           const logMessage = `To make ${priceString}, the bot is going to ${actionString}.`;
           log.info(logMessage);
           await this.placePriceWatcherOrder(targetPrice, orderBookInfo);
@@ -221,7 +221,7 @@ module.exports = {
           isClosed: false,
         }, true);
 
-        output = `${type} ${coin1Amount.toFixed(config.coin1Decimals)} ${config.coin1} for ${coin2Amount.toFixed(config.coin2Decimals)} ${config.coin2}`;
+        output = `${type} ${coin1Amount.toFixed(orderUtils.parseMarket(config.pair).coin1Decimals)} ${config.coin1} for ${coin2Amount.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${config.coin2}`;
         log.info(`Successfully placed pw-order to ${output}.`);
 
       } else {
@@ -253,11 +253,11 @@ async function isEnoughCoins(coin1, coin2, amount1, amount2, type) {
       balance2freezed = balances.filter((crypto) => crypto.code === coin2)[0].freezed;
 
       if ((!balance1free || balance1free < amount1) && type === 'sell') {
-        output = `${config.notifyName}: Not enough balance to place ${amount1.toFixed(config.coin1Decimals)} ${coin1} ${type} pw-order. Free: ${balance1free.toFixed(config.coin1Decimals)} ${coin1}, frozen: ${balance1freezed.toFixed(config.coin1Decimals)} ${coin1}.`;
+        output = `${config.notifyName}: Not enough balance to place ${amount1.toFixed(orderUtils.parseMarket(config.pair).coin1Decimals)} ${coin1} ${type} pw-order. Free: ${balance1free.toFixed(orderUtils.parseMarket(config.pair).coin1Decimals)} ${coin1}, frozen: ${balance1freezed.toFixed(orderUtils.parseMarket(config.pair).coin1Decimals)} ${coin1}.`;
         isBalanceEnough = false;
       }
       if ((!balance2free || balance2free < amount2) && type === 'buy') {
-        output = `${config.notifyName}: Not enough balance to place ${amount2.toFixed(config.coin2Decimals)} ${coin2} ${type} pw-order. Free: ${balance2free.toFixed(config.coin2Decimals)} ${coin2}, frozen: ${balance2freezed.toFixed(config.coin2Decimals)} ${coin2}.`;
+        output = `${config.notifyName}: Not enough balance to place ${amount2.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${coin2} ${type} pw-order. Free: ${balance2free.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${coin2}, frozen: ${balance2freezed.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${coin2}.`;
         isBalanceEnough = false;
       }
 
@@ -409,13 +409,13 @@ async function setPriceRange() {
       }
 
       if (deltaLowPercent > warningPercent || deltaHighPercent > warningPercent) {
-        notify(`${config.notifyName}: Price watcher's new price range changed much—new values are from ${lowPrice.toFixed(config.coin2Decimals)} ${changedByStringLow} to ${highPrice.toFixed(config.coin2Decimals)} ${changedByStringHigh} ${config.coin2}.`, 'warn');
+        notify(`${config.notifyName}: Price watcher's new price range changed much—new values are from ${lowPrice.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${changedByStringLow} to ${highPrice.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${changedByStringHigh} ${config.coin2}.`, 'warn');
       } else {
-        log.log(`Price watcher set a new price range from ${lowPrice.toFixed(config.coin2Decimals)} ${changedByStringLow} to ${highPrice.toFixed(config.coin2Decimals)} ${changedByStringHigh} ${config.coin2}.`);
+        log.log(`Price watcher set a new price range from ${lowPrice.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${changedByStringLow} to ${highPrice.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${changedByStringHigh} ${config.coin2}.`);
       }
 
     } else {
-      log.log(`Price watcher set a price range from ${lowPrice.toFixed(config.coin2Decimals)} to ${highPrice.toFixed(config.coin2Decimals)} ${config.coin2}.`);
+      log.log(`Price watcher set a price range from ${lowPrice.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} to ${highPrice.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${config.coin2}.`);
 
     }
 

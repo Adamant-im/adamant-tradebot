@@ -2,7 +2,7 @@ module.exports = {
   'mm_buyPercent': 0.67,
   'mm_minInterval': 5000,
   'mm_maxInterval': 22000,
-  'mm_isActive': false,
+  'mm_isActive': true,
   'mm_minAmount': 5,
   'mm_maxAmount': 100,
   'mm_Policy': 'optimal',

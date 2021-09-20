@@ -492,7 +492,7 @@ async function enable(params) {
 
         // let sourceString = pwSource === '#' ? `${config.coin2} (this pair rate)` : `${coin} (global rate)`;
         const sourceString = coin === config.coin2 ? `${coin}` : `${coin} (global rate)`;
-        infoString = `from ${pwLowPrice.toFixed(config.coin2Decimals)} to ${pwHighPrice.toFixed(config.coin2Decimals)} ${sourceString}—${pwDeviationPercent.toFixed(2)}% price deviation`;
+        infoString = `from ${pwLowPrice.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} to ${pwHighPrice.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${sourceString}—${pwDeviationPercent.toFixed(2)}% price deviation`;
 
       }
 
@@ -1584,7 +1584,7 @@ async function make(params, tx, confirmation) {
           notifyType: 'log',
         };
       } else {
-        actionString = `${orderBookInfo.typeTargetPrice} ${orderBookInfo.amountTargetPrice.toFixed(config.coin1Decimals)} ${config.coin1} ${orderBookInfo.typeTargetPrice === 'buy' ? 'with' : 'for'} ${orderBookInfo.amountTargetPriceQuote.toFixed(config.coin2Decimals)} ${config.coin2}`;
+        actionString = `${orderBookInfo.typeTargetPrice} ${orderBookInfo.amountTargetPrice.toFixed(orderUtils.parseMarket(config.pair).coin1Decimals)} ${config.coin1} ${orderBookInfo.typeTargetPrice === 'buy' ? 'with' : 'for'} ${orderBookInfo.amountTargetPriceQuote.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${config.coin2}`;
       }
 
       if (confirmation) {
@@ -1630,7 +1630,7 @@ async function make(params, tx, confirmation) {
         let pwWarning = ' ';
         const pw = require('../trade/mm_price_watcher');
         if (tradeParams.mm_isActive && pw.getIsPriceActual()) {
-          pwWarning = `\n\n**Warning**: Price watcher is enabled for ${config.pair} from ${pw.getLowPrice().toFixed(config.coin2Decimals)} to ${pw.getHighPrice().toFixed(config.coin2Decimals)} ${config.coin2}.`;
+          pwWarning = `\n\n**Warning**: Price watcher is enabled for ${config.pair} from ${pw.getLowPrice().toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} to ${pw.getHighPrice().toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${config.coin2}.`;
           if (targetPrice < pw.getLowPrice() || targetPrice > pw.getHighPrice()) {
             pwWarning += ` **Target price ${targetPrice} ${config.coin2} is out of this range.** If you confirm change, the bot will try to restore a price then.`;
           }
@@ -1827,7 +1827,7 @@ async function balances() {
       output += `Total holdings ${signUSD}${utils.formatNumber(+deltaUSD.toFixed(2), true)} _USD_ or ${signBTC}${utils.formatNumber(deltaBTC.toFixed(8), true)} _BTC_`;
       if (deltaCoin1 && deltaCoin2 && (signCoin1 !== signCoin2)) {
         const price = deltaCoin2 / deltaCoin1;
-        output += `\n${signCoin1 === '+' ? 'I\'ve bought' : 'I\'ve sold'} ${utils.formatNumber(+deltaCoin1.toFixed(config.coin1Decimals), true)} _${config.coin1}_ at ${utils.formatNumber(price.toFixed(config.coin2Decimals), true)} _${config.coin2}_ price.`;
+        output += `\n${signCoin1 === '+' ? 'I\'ve bought' : 'I\'ve sold'} ${utils.formatNumber(+deltaCoin1.toFixed(orderUtils.parseMarket(config.pair).coin1Decimals), true)} _${config.coin1}_ at ${utils.formatNumber(price.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals), true)} _${config.coin2}_ price.`;
       }
 
     } else {

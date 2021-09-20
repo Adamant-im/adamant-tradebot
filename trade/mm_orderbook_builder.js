@@ -6,6 +6,7 @@ const notify = require('../helpers/notify');
 const tradeParams = require('./settings/tradeParams_' + config.exchange);
 const traderapi = require('./trader_' + config.exchange)(config.apikey, config.apisecret, config.apipassword, log);
 const db = require('../modules/DB');
+const orderUtils = require('./orderUtils');
 
 let lastNotifyBalancesTimestamp = 0;
 let lastNotifyPriceTimestamp = 0;
@@ -215,7 +216,7 @@ module.exports = {
           isCancelled: false,
           isClosed: false,
         }, true);
-        output = `${type} ${coin1Amount.toFixed(config.coin1Decimals)} ${config.coin1} for ${coin2Amount.toFixed(config.coin2Decimals)} ${config.coin2}`;
+        output = `${type} ${coin1Amount.toFixed(orderUtils.parseMarket(config.pair).coin1Decimals)} ${config.coin1} for ${coin2Amount.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${config.coin2}`;
         log.info(`Successfully placed ob-order to ${output}. Open ob-orders: ~${orderBookOrdersCount+1}.`);
       } else {
         log.warn(`${config.notifyName} unable to execute ob-order with params: ${orderParamsString}. No order id returned.`);
@@ -260,11 +261,11 @@ async function isEnoughCoins(coin1, coin2, amount1, amount2, type) {
       balance2freezed = balances.filter((crypto) => crypto.code === coin2)[0].freezed;
 
       if ((!balance1free || balance1free < amount1) && type === 'sell') {
-        output = `${config.notifyName}: Not enough balance to place ${amount1.toFixed(config.coin1Decimals)} ${coin1} ${type} ob-order. Free: ${balance1free.toFixed(config.coin1Decimals)} ${coin1}, frozen: ${balance1freezed.toFixed(config.coin1Decimals)} ${coin1}.`;
+        output = `${config.notifyName}: Not enough balance to place ${amount1.toFixed(orderUtils.parseMarket(config.pair).coin1Decimals)} ${coin1} ${type} ob-order. Free: ${balance1free.toFixed(orderUtils.parseMarket(config.pair).coin1Decimals)} ${coin1}, frozen: ${balance1freezed.toFixed(orderUtils.parseMarket(config.pair).coin1Decimals)} ${coin1}.`;
         isBalanceEnough = false;
       }
       if ((!balance2free || balance2free < amount2) && type === 'buy') {
-        output = `${config.notifyName}: Not enough balance to place ${amount2.toFixed(config.coin2Decimals)} ${coin2} ${type} ob-order. Free: ${balance2free.toFixed(config.coin2Decimals)} ${coin2}, frozen: ${balance2freezed.toFixed(config.coin2Decimals)} ${coin2}.`;
+        output = `${config.notifyName}: Not enough balance to place ${amount2.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${coin2} ${type} ob-order. Free: ${balance2free.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${coin2}, frozen: ${balance2freezed.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${coin2}.`;
         isBalanceEnough = false;
       }
 
@@ -308,7 +309,7 @@ async function setPrice(type, position, orderList) {
     }
 
     // Put orders between current orders, but not with the same price
-    const precision = utils.getPrecision(config.coin2Decimals);
+    const precision = utils.getPrecision(orderUtils.parseMarket(config.pair).coin2Decimals);
     // console.log(`ob precision: ${precision}, before: low ${low}, high ${high}`);
     if (low + precision < high) {
       low += precision;
@@ -325,18 +326,18 @@ async function setPrice(type, position, orderList) {
 
       const lowPrice = pw.getLowPrice();
       const highPrice = pw.getHighPrice();
-      // console.log('lowPrice:', +lowPrice.toFixed(config.coin2Decimals), 'highPrice:', +highPrice.toFixed(config.coin2Decimals));
+      // console.log('lowPrice:', +lowPrice.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals), 'highPrice:', +highPrice.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals));
 
       if (type === 'sell') {
         if (price < lowPrice) {
           price = lowPrice * utils.randomValue(1, 1.21);
-          output = `${config.notifyName}: Price watcher corrected price to sell not lower than ${lowPrice.toFixed(config.coin2Decimals)} while placing ob-order. Low: ${low.toFixed(config.coin2Decimals)}, high: ${high.toFixed(config.coin2Decimals)} ${config.coin2}.`;
+          output = `${config.notifyName}: Price watcher corrected price to sell not lower than ${lowPrice.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} while placing ob-order. Low: ${low.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)}, high: ${high.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${config.coin2}.`;
           log.log(output);
         }
       } else {
         if (price > highPrice) {
           price = highPrice * utils.randomValue(0.79, 1);
-          output = `${config.notifyName}: Price watcher corrected price to buy not higher than ${highPrice.toFixed(config.coin2Decimals)} while placing ob-order. Low: ${low.toFixed(config.coin2Decimals)}, high: ${high.toFixed(config.coin2Decimals)} ${config.coin2}.`;
+          output = `${config.notifyName}: Price watcher corrected price to buy not higher than ${highPrice.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} while placing ob-order. Low: ${low.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)}, high: ${high.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${config.coin2}.`;
           log.log(output);
         }
       }

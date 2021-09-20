@@ -7,6 +7,7 @@ const tradeParams = require('./settings/tradeParams_' + config.exchange);
 const traderapi = require('./trader_' + config.exchange)(config.apikey, config.apisecret, config.apipassword, log);
 const db = require('../modules/DB');
 const orderCollector = require('./orderCollector');
+const orderUtils = require('./orderUtils');
 
 let lastNotifyBalancesTimestamp = 0;
 let lastNotifyPriceTimestamp = 0;
@@ -112,7 +113,7 @@ module.exports = {
 
           order2 = await traderapi.placeOrder(type, config.pair, price, coin1Amount, 1, null);
           if (order2 && order2.orderid) {
-            output = `${type} ${coin1Amount.toFixed(config.coin1Decimals)} ${config.coin1} for ${coin2Amount.toFixed(config.coin2Decimals)} ${config.coin2}`;
+            output = `${type} ${coin1Amount.toFixed(orderUtils.parseMarket(config.pair).coin1Decimals)} ${config.coin1} for ${coin2Amount.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${config.coin2}`;
             log.info(`Successfully executed mm-order to ${output}. Action: executeInSpread.`);
             order.update({
               isProcessed: true,
@@ -158,7 +159,7 @@ module.exports = {
           });
           await order.save();
 
-          output = `${type} ${coin1Amount.toFixed(config.coin1Decimals)} ${config.coin1} for ${coin2Amount.toFixed(config.coin2Decimals)} ${config.coin2}`;
+          output = `${type} ${coin1Amount.toFixed(orderUtils.parseMarket(config.pair).coin1Decimals)} ${config.coin1} for ${coin2Amount.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${config.coin2}`;
           log.info(`Successfully executed mm-order to ${output}. Action: executeInOrderBook.`);
 
         } else { // if order1
@@ -206,16 +207,16 @@ async function isEnoughCoins(coin1, coin2, amount1, amount2, type, mmCurrentActi
 
         if (mmCurrentAction === 'executeInSpread') {
           if (type === 'sell') {
-            output = `${config.notifyName}: Not enough balance to place ${amount1.toFixed(config.coin1Decimals)} ${coin1} ${type} direct mm-order (in spread). Free: ${balance1free.toFixed(config.coin1Decimals)} ${coin1}, frozen: ${balance1freezed.toFixed(config.coin1Decimals)} ${coin1}.`;
+            output = `${config.notifyName}: Not enough balance to place ${amount1.toFixed(orderUtils.parseMarket(config.pair).coin1Decimals)} ${coin1} ${type} direct mm-order (in spread). Free: ${balance1free.toFixed(orderUtils.parseMarket(config.pair).coin1Decimals)} ${coin1}, frozen: ${balance1freezed.toFixed(orderUtils.parseMarket(config.pair).coin1Decimals)} ${coin1}.`;
           } else {
-            output = `${config.notifyName}: Not enough balance to place ${amount1.toFixed(config.coin1Decimals)} ${coin1} ${type} cross-type mm-order (in spread). Free: ${balance1free.toFixed(config.coin1Decimals)} ${coin1}, frozen: ${balance1freezed.toFixed(config.coin1Decimals)} ${coin1}.`;
+            output = `${config.notifyName}: Not enough balance to place ${amount1.toFixed(orderUtils.parseMarket(config.pair).coin1Decimals)} ${coin1} ${type} cross-type mm-order (in spread). Free: ${balance1free.toFixed(orderUtils.parseMarket(config.pair).coin1Decimals)} ${coin1}, frozen: ${balance1freezed.toFixed(orderUtils.parseMarket(config.pair).coin1Decimals)} ${coin1}.`;
           }
           isBalanceEnough = false;
         }
 
         if (mmCurrentAction === 'executeInOrderBook') {
           if (type === 'sell') {
-            output = `${config.notifyName}: Not enough balance to place ${amount1.toFixed(config.coin1Decimals)} ${coin1} ${type} mm-order (in order book). Free: ${balance1free.toFixed(config.coin1Decimals)} ${coin1}, frozen: ${balance1freezed.toFixed(config.coin1Decimals)} ${coin1}.`;
+            output = `${config.notifyName}: Not enough balance to place ${amount1.toFixed(orderUtils.parseMarket(config.pair).coin1Decimals)} ${coin1} ${type} mm-order (in order book). Free: ${balance1free.toFixed(orderUtils.parseMarket(config.pair).coin1Decimals)} ${coin1}, frozen: ${balance1freezed.toFixed(orderUtils.parseMarket(config.pair).coin1Decimals)} ${coin1}.`;
             isBalanceEnough = false;
           }
         }
@@ -226,16 +227,16 @@ async function isEnoughCoins(coin1, coin2, amount1, amount2, type, mmCurrentActi
 
         if (mmCurrentAction === 'executeInSpread') {
           if (type === 'buy') {
-            output = `${config.notifyName}: Not enough balance to place ${amount2.toFixed(config.coin2Decimals)} ${coin2} ${type} direct mm-order (in spread). Free: ${balance2free.toFixed(config.coin2Decimals)} ${coin2}, freezed: ${balance2freezed.toFixed(config.coin2Decimals)} ${coin2}.`;
+            output = `${config.notifyName}: Not enough balance to place ${amount2.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${coin2} ${type} direct mm-order (in spread). Free: ${balance2free.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${coin2}, freezed: ${balance2freezed.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${coin2}.`;
           } else {
-            output = `${config.notifyName}: Not enough balance to place ${amount2.toFixed(config.coin2Decimals)} ${coin2} ${type} cross-type mm-order (in spread). Free: ${balance2free.toFixed(config.coin2Decimals)} ${coin2}, freezed: ${balance2freezed.toFixed(config.coin2Decimals)} ${coin2}.`;
+            output = `${config.notifyName}: Not enough balance to place ${amount2.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${coin2} ${type} cross-type mm-order (in spread). Free: ${balance2free.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${coin2}, freezed: ${balance2freezed.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${coin2}.`;
           }
           isBalanceEnough = false;
         }
 
         if (mmCurrentAction === 'executeInOrderBook') {
           if (type === 'buy') {
-            output = `${config.notifyName}: Not enough balance to place ${amount2.toFixed(config.coin2Decimals)} ${coin2} ${type} mm-order (in order book). Free: ${balance2free.toFixed(config.coin2Decimals)} ${coin2}, freezed: ${balance2freezed.toFixed(config.coin2Decimals)} ${coin2}.`;
+            output = `${config.notifyName}: Not enough balance to place ${amount2.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${coin2} ${type} mm-order (in order book). Free: ${balance2free.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${coin2}, freezed: ${balance2freezed.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${coin2}.`;
             isBalanceEnough = false;
           }
         }
@@ -267,7 +268,7 @@ async function setPrice(type, pair, coin1Amount) {
 
   try {
 
-    const precision = utils.getPrecision(config.coin2Decimals);
+    const precision = utils.getPrecision(orderUtils.parseMarket(config.pair).coin2Decimals);
     const smallSpread = precision * 15; // if spread is small and should do market making less careful
     let output = '';
 
@@ -300,20 +301,20 @@ async function setPrice(type, pair, coin1Amount) {
 
         if (bid_low > highPrice) {
 
-          output = `${config.notifyName}: Refusing to buy higher than ${highPrice.toFixed(config.coin2Decimals)}. Mm-order cancelled. Low: ${bid_low.toFixed(config.coin2Decimals)}, high: ${ask_high.toFixed(config.coin2Decimals)} ${config.coin2}. Check current order books and the price watcher parameters.`;
+          output = `${config.notifyName}: Refusing to buy higher than ${highPrice.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)}. Mm-order cancelled. Low: ${bid_low.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)}, high: ${ask_high.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${config.coin2}. Check current order books and the price watcher parameters.`;
           skipNotify = true;
           mmCurrentAction = 'doNotExecute';
 
         } else if (ask_high > highPrice) {
 
-          output = `${config.notifyName}: Price watcher corrected spread to buy not higher than ${highPrice.toFixed(config.coin2Decimals)} while placing mm-order.`;
+          output = `${config.notifyName}: Price watcher corrected spread to buy not higher than ${highPrice.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} while placing mm-order.`;
           if (mmPolicy === 'orderbook') {
             mmCurrentAction = 'doNotExecute';
-            output += ` Market making settings deny trading in spread. Unable to set a price for ${pair}. Mm-order cancelled. Low: ${bid_low.toFixed(config.coin2Decimals)}, high: ${ask_high.toFixed(config.coin2Decimals)} ${config.coin2}. Check current order books and the price watcher parameters.`;
+            output += ` Market making settings deny trading in spread. Unable to set a price for ${pair}. Mm-order cancelled. Low: ${bid_low.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)}, high: ${ask_high.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${config.coin2}. Check current order books and the price watcher parameters.`;
             skipNotify = true;
           } else {
             mmPolicy = 'spread';
-            output += ` Will trade in spread. Low: ${bid_low.toFixed(config.coin2Decimals)}, high: ${ask_high.toFixed(config.coin2Decimals)} ${config.coin2}. Check current order books and the price watcher parameters.`;
+            output += ` Will trade in spread. Low: ${bid_low.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)}, high: ${ask_high.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${config.coin2}. Check current order books and the price watcher parameters.`;
             log.log(output);
             output = '';
             isSpreadCorrectedByPriceWatcher = true;
@@ -326,20 +327,20 @@ async function setPrice(type, pair, coin1Amount) {
 
         if (ask_high < lowPrice) {
 
-          output = `${config.notifyName}: Refusing to sell lower than ${lowPrice.toFixed(config.coin2Decimals)}. Mm-order cancelled. Low: ${bid_low.toFixed(config.coin2Decimals)}, high: ${ask_high.toFixed(config.coin2Decimals)} ${config.coin2}. Check current order books and the price watcher parameters.`;
+          output = `${config.notifyName}: Refusing to sell lower than ${lowPrice.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)}. Mm-order cancelled. Low: ${bid_low.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)}, high: ${ask_high.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${config.coin2}. Check current order books and the price watcher parameters.`;
           skipNotify = true;
           mmCurrentAction = 'doNotExecute';
 
         } else if (bid_low < lowPrice) {
 
-          output = `${config.notifyName}: Price watcher corrected spread to sell not lower than ${lowPrice.toFixed(config.coin2Decimals)} while placing mm-order.`;
+          output = `${config.notifyName}: Price watcher corrected spread to sell not lower than ${lowPrice.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} while placing mm-order.`;
           if (mmPolicy === 'orderbook') {
             mmCurrentAction = 'doNotExecute';
-            output += ` Market making settings deny trading in spread. Unable to set a price for ${pair}. Mm-order cancelled. Low: ${bid_low.toFixed(config.coin2Decimals)}, high: ${ask_high.toFixed(config.coin2Decimals)} ${config.coin2}. Check current order books and the price watcher parameters.`;
+            output += ` Market making settings deny trading in spread. Unable to set a price for ${pair}. Mm-order cancelled. Low: ${bid_low.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)}, high: ${ask_high.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${config.coin2}. Check current order books and the price watcher parameters.`;
             skipNotify = true;
           } else {
             mmPolicy = 'spread';
-            output += ` Will trade in spread. Low: ${bid_low.toFixed(config.coin2Decimals)}, high: ${ask_high.toFixed(config.coin2Decimals)} ${config.coin2}. Check current order books and the price watcher parameters.`;
+            output += ` Will trade in spread. Low: ${bid_low.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)}, high: ${ask_high.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${config.coin2}. Check current order books and the price watcher parameters.`;
             log.log(output);
             output = '';
             isSpreadCorrectedByPriceWatcher = true;
@@ -402,10 +403,10 @@ async function setPrice(type, pair, coin1Amount) {
 
       if (!output) {
         if (isSpreadCorrectedByPriceWatcher) {
-          output = `${config.notifyName}: Refusing to place mm-order because of price watcher. Corrected spread is too small. Low: ${bid_low.toFixed(config.coin2Decimals)}, high: ${ask_high.toFixed(config.coin2Decimals)} ${config.coin2}. Check current order books and the price watcher parameters.`;
+          output = `${config.notifyName}: Refusing to place mm-order because of price watcher. Corrected spread is too small. Low: ${bid_low.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)}, high: ${ask_high.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${config.coin2}. Check current order books and the price watcher parameters.`;
           skipNotify = true;
         } else {
-          output = `${config.notifyName}: No spread currently, and market making settings deny trading in the order book. Low: ${bid_low.toFixed(config.coin2Decimals)}, high: ${ask_high.toFixed(config.coin2Decimals)} ${config.coin2}. Unable to set a price for ${pair}. Update settings or create spread manually.`;
+          output = `${config.notifyName}: No spread currently, and market making settings deny trading in the order book. Low: ${bid_low.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)}, high: ${ask_high.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${config.coin2}. Unable to set a price for ${pair}. Update settings or create spread manually.`;
         }
       }
       if (skipNotify) {

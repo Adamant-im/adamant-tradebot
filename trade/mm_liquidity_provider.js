@@ -86,7 +86,7 @@ module.exports = {
         }
       } while (amountPlaced);
 
-      log.info(`Liquidity stats: opened ${liquidityStats.bidsCount} bids-buy orders for ${liquidityStats.bidsTotalQuoteAmount.toFixed(config.coin2Decimals)} of ${tradeParams.mm_liquidityBuyQuoteAmount} ${config.coin2} and ${liquidityStats.asksCount} asks-sell orders with ${liquidityStats.asksTotalAmount.toFixed(config.coin1Decimals)} of ${tradeParams.mm_liquiditySellAmount} ${config.coin1}.`);
+      log.info(`Liquidity stats: opened ${liquidityStats.bidsCount} bids-buy orders for ${liquidityStats.bidsTotalQuoteAmount.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} of ${tradeParams.mm_liquidityBuyQuoteAmount} ${config.coin2} and ${liquidityStats.asksCount} asks-sell orders with ${liquidityStats.asksTotalAmount.toFixed(orderUtils.parseMarket(config.pair).coin1Decimals)} of ${tradeParams.mm_liquiditySellAmount} ${config.coin1}.`);
 
     } catch (e) {
       log.error(`Error in updateLiquidity() of ${utils.getModuleName(module.id)} module: ` + e);
@@ -218,7 +218,7 @@ module.exports = {
           isClosed: false,
         }, true);
 
-        output = `${type} ${coin1Amount.toFixed(config.coin1Decimals)} ${config.coin1} for ${coin2Amount.toFixed(config.coin2Decimals)} ${config.coin2}`;
+        output = `${type} ${coin1Amount.toFixed(orderUtils.parseMarket(config.pair).coin1Decimals)} ${config.coin1} for ${coin2Amount.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${config.coin2}`;
         log.info(`Successfully placed liq-order to ${output}.`);
         if (type === 'sell') {
           return +coin1Amount;
@@ -255,11 +255,11 @@ async function isEnoughCoins(coin1, coin2, amount1, amount2, type) {
       balance2freezed = balances.filter((crypto) => crypto.code === coin2)[0].freezed;
 
       if ((!balance1free || balance1free < amount1) && type === 'sell') {
-        output = `${config.notifyName}: Not enough balance to place ${amount1.toFixed(config.coin1Decimals)} ${coin1} ${type} liq-order. Free: ${balance1free.toFixed(config.coin1Decimals)} ${coin1}, frozen: ${balance1freezed.toFixed(config.coin1Decimals)} ${coin1}.`;
+        output = `${config.notifyName}: Not enough balance to place ${amount1.toFixed(orderUtils.parseMarket(config.pair).coin1Decimals)} ${coin1} ${type} liq-order. Free: ${balance1free.toFixed(orderUtils.parseMarket(config.pair).coin1Decimals)} ${coin1}, frozen: ${balance1freezed.toFixed(orderUtils.parseMarket(config.pair).coin1Decimals)} ${coin1}.`;
         isBalanceEnough = false;
       }
       if ((!balance2free || balance2free < amount2) && type === 'buy') {
-        output = `${config.notifyName}: Not enough balance to place ${amount2.toFixed(config.coin2Decimals)} ${coin2} ${type} liq-order. Free: ${balance2free.toFixed(config.coin2Decimals)} ${coin2}, frozen: ${balance2freezed.toFixed(config.coin2Decimals)} ${coin2}.`;
+        output = `${config.notifyName}: Not enough balance to place ${amount2.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${coin2} ${type} liq-order. Free: ${balance2free.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${coin2}, frozen: ${balance2freezed.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${coin2}.`;
         isBalanceEnough = false;
       }
 
@@ -303,7 +303,7 @@ async function setPrice(type, orderBookInfo) {
         break;
     }
 
-    const precision = utils.getPrecision(config.coin2Decimals);
+    const precision = utils.getPrecision(orderUtils.parseMarket(config.pair).coin2Decimals);
     let price; let lowPrice = 0; let highPrice = 0;
 
     const pw = require('./mm_price_watcher');
@@ -318,7 +318,7 @@ async function setPrice(type, orderBookInfo) {
       price = utils.randomValue(low, high);
       if (lowPrice && price < lowPrice) {
         price = lowPrice;
-        output = `${config.notifyName}: Price watcher corrected price to sell not lower than ${lowPrice.toFixed(config.coin2Decimals)} while placing liq-order. Low: ${low.toFixed(config.coin2Decimals)}, high: ${high.toFixed(config.coin2Decimals)} ${config.coin2}.`;
+        output = `${config.notifyName}: Price watcher corrected price to sell not lower than ${lowPrice.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} while placing liq-order. Low: ${low.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)}, high: ${high.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${config.coin2}.`;
         log.log(output);
       }
       if (price - precision < orderBookInfo.highestBid) {
@@ -330,7 +330,7 @@ async function setPrice(type, orderBookInfo) {
       price = utils.randomValue(low, high);
       if (highPrice && price > highPrice) {
         price = highPrice;
-        output = `${config.notifyName}: Price watcher corrected price to buy not higher than ${highPrice.toFixed(config.coin2Decimals)} while placing liq-order. Low: ${low.toFixed(config.coin2Decimals)}, high: ${high.toFixed(config.coin2Decimals)} ${config.coin2}.`;
+        output = `${config.notifyName}: Price watcher corrected price to buy not higher than ${highPrice.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} while placing liq-order. Low: ${low.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)}, high: ${high.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${config.coin2}.`;
         log.log(output);
       }
       if (price + precision > orderBookInfo.lowestAsk) {
