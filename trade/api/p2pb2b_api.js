@@ -16,6 +16,13 @@ let log = {};
 // Docs
 // https://github.com/P2pb2b-team/p2pb2b-api-docs/blob/master/api-doc.md
 
+const notValidStatuses = [ // https://github.com/P2pb2b-team/p2pb2b-api-docs/blob/master/errors.md
+  401, // Invalid auth
+  429, // Too many requests
+  423, // Temporary block
+  500, // Service temporary unavailable
+];
+
 function publicRequest(path, data) {
   let url = `${WEB_BASE}${path}`;
   const params = [];
@@ -46,10 +53,10 @@ function publicRequest(path, data) {
             if (error.response && typeof error.response.data === 'object' && Object.keys(error.response.data).length !== 0) {
               const data = error.response.data;
               log.log(`Request to ${url} failed. ${error}. Reply data: ${JSON.stringify(data)}.`);
-              if (error.response.status < 500) {
-                resolve(data);
-              } else {
+              if (notValidStatuses.includes(error.response.status)) {
                 reject(data);
+              } else {
+                resolve(data);
               }
             } else {
               log.log(`Request to ${url} failed. ${error}.`);
@@ -102,10 +109,10 @@ function protectedRequest(path, data) {
             if (error.response && typeof error.response.data === 'object' && Object.keys(error.response.data).length !== 0) {
               const data = error.response.data;
               log.log(`Request to ${url} with data ${body} failed. ${error}. Reply data: ${JSON.stringify(data)}.`);
-              if (error.response.status < 500) {
-                resolve(data);
-              } else {
+              if (notValidStatuses.includes(error.response.status)) {
                 reject(data);
+              } else {
+                resolve(data);
               }
             } else {
               log.log(`Request to ${url} with data ${body} failed. ${error}.`);
