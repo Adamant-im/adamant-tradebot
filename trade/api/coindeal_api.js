@@ -59,7 +59,11 @@ function protectedRequest(path, data, type = 'get') {
                 error.response.data.includes('404 Not Found')
               ) {
                 log.log(`${type.toUpperCase()}-request to ${url} with data ${JSON.stringify(data)} failed. ${error}. We assume that user doesn't have this order (but this may be a temporary server error, can't be sure).`);
-                resolve(error.response.data);
+                if (error.response.status < 500) {
+                  resolve(error.response.data);
+                } else {
+                  reject(error.response.data);
+                }
               } else {
                 log.log(`${type.toUpperCase()}-request to ${url} with data ${JSON.stringify(data)} failed. ${error}.`);
                 reject(error);
@@ -86,7 +90,11 @@ function protectedRequest(path, data, type = 'get') {
               // We can get 4xx with data
               if (error.response && typeof error.response.data === 'object' && Object.keys(error.response.data).length !== 0) {
                 log.log(`${type.toUpperCase()}-request to ${url} with data ${JSON.stringify(data)} failed. ${error}. Reply data: ${JSON.stringify(error.response.data)}.`);
-                resolve(error.response.data);
+                if (error.response.status < 500) {
+                  resolve(error.response.data);
+                } else {
+                  reject(error.response.data);
+                }
               } else {
                 log.log(`${type.toUpperCase()}-request to ${url} with data ${JSON.stringify(data)} failed. ${error}.`);
                 reject(error);
@@ -117,7 +125,11 @@ function publicRequest(url, data, type = 'get') {
             // We can get 4xx with data
             if (error.response && typeof error.response.data === 'object' && Object.keys(error.response.data).length !== 0) {
               log.log(`${type.toUpperCase()}-request to ${url} failed. ${error}. Reply data: ${JSON.stringify(error.response.data)}.`);
-              resolve(error.response.data);
+              if (error.response.status < 500) {
+                resolve(error.response.data);
+              } else {
+                reject(error.response.data);
+              }
             } else {
               log.log(`${type.toUpperCase()}-request to ${url} failed. ${error}.`);
               reject(error);

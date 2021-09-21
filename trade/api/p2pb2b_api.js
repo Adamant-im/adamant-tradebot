@@ -46,7 +46,11 @@ function publicRequest(path, data) {
             if (error.response && typeof error.response.data === 'object' && Object.keys(error.response.data).length !== 0) {
               const data = error.response.data;
               log.log(`Request to ${url} failed. ${error}. Reply data: ${JSON.stringify(data)}.`);
-              resolve(data);
+              if (error.response.status < 500) {
+                resolve(data);
+              } else {
+                reject(data);
+              }
             } else {
               log.log(`Request to ${url} failed. ${error}.`);
               reject(error);
@@ -98,7 +102,11 @@ function protectedRequest(path, data) {
             if (error.response && typeof error.response.data === 'object' && Object.keys(error.response.data).length !== 0) {
               const data = error.response.data;
               log.log(`Request to ${url} with data ${body} failed. ${error}. Reply data: ${JSON.stringify(data)}.`);
-              resolve(data);
+              if (error.response.status < 500) {
+                resolve(data);
+              } else {
+                reject(data);
+              }
             } else {
               log.log(`Request to ${url} with data ${body} failed. ${error}.`);
               reject(error);
