@@ -18,7 +18,9 @@ const pendingConfirmation = {
   command: '',
   timestamp: 0,
 };
-let previousBalances = {};
+
+// stored for each senderId
+const previousBalances = {};
 const previousOrders = {};
 
 module.exports = async (commandMsg, tx, itx) => {
@@ -1397,7 +1399,7 @@ async function stats(params) {
 
 }
 
-async function orders(params) {
+async function orders(params, tx) {
 
   let output = '';
 
@@ -1424,8 +1426,12 @@ async function orders(params) {
 
     let diff; let sign;
     let diffStringExchnageOrdersCount = '';
-    if (previousOrders[pairObj.pair] && previousOrders[pairObj.pair].openOrdersCount) {
-      diff = openOrders.length - previousOrders[pairObj.pair].openOrdersCount;
+    if (
+      previousOrders[tx.senderId] &&
+      previousOrders[tx.senderId][pairObj.pair] &&
+      previousOrders[tx.senderId][pairObj.pair].openOrdersCount
+    ) {
+      diff = openOrders.length - previousOrders[tx.senderId][pairObj.pair].openOrdersCount;
       sign = diff > 0 ? '+' : '−';
       diff = Math.abs(diff);
       if (diff) diffStringExchnageOrdersCount = ` (${sign}${diff})`;
@@ -1439,8 +1445,12 @@ async function orders(params) {
 
     ordersByType.openOrdersCount = openOrders.length;
     ordersByType.unkLength = openOrders.length - ordersByType.all.length;
-    if (previousOrders[pairObj.pair] && previousOrders[pairObj.pair].unkLength) {
-      diff = ordersByType.unkLength - previousOrders[pairObj.pair].unkLength;
+    if (
+      previousOrders[tx.senderId] &&
+      previousOrders[tx.senderId][pairObj.pair] &&
+      previousOrders[tx.senderId][pairObj.pair].unkLength
+    ) {
+      diff = ordersByType.unkLength - previousOrders[tx.senderId][pairObj.pair].unkLength;
       sign = diff > 0 ? '+' : '−';
       diff = Math.abs(diff);
       if (diff) diffStringUnknownOrdersCount = ` (${sign}${diff})`;
@@ -1454,11 +1464,12 @@ async function orders(params) {
     let diff; let sign;
     let diffString = '';
     if (
-      previousOrders[pairObj.pair] &&
-      previousOrders[pairObj.pair][orderType] &&
-      previousOrders[pairObj.pair][orderType].length >= 0
+      previousOrders[tx.senderId] &&
+      previousOrders[tx.senderId][pairObj.pair] &&
+      previousOrders[tx.senderId][pairObj.pair][orderType] &&
+      previousOrders[tx.senderId][pairObj.pair][orderType].length >= 0
     ) {
-      diff = ordersByType[orderType].length - previousOrders[pairObj.pair][orderType].length;
+      diff = ordersByType[orderType].length - previousOrders[tx.senderId][pairObj.pair][orderType].length;
       sign = diff > 0 ? '+' : '−';
       diff = Math.abs(diff);
       if (diff) diffString = ` (${sign}${diff})`;
@@ -1486,7 +1497,8 @@ async function orders(params) {
 
   output += `\n\nOrders which are not in my database (Unknown orders): ${ordersByType.unkLength}${diffStringUnknownOrdersCount}.`;
 
-  previousOrders[pairObj.pair] = ordersByType;
+  previousOrders[tx.senderId] = {};
+  previousOrders[tx.senderId][pairObj.pair] = ordersByType;
 
   return {
     msgNotify: ``,
@@ -1732,7 +1744,7 @@ async function calc(params) {
 
 }
 
-async function balances() {
+async function balances({}, tx) {
 
   const balances = await traderapi.getBalances();
   let output = '';
@@ -1793,7 +1805,7 @@ async function balances() {
 
   }
 
-  const diff = utils.difference(balances, previousBalances);
+  const diff = utils.difference(balances, previousBalances[tx.senderId]);
   if (diff) {
     if (diff[0]) {
       output += '\nChanges:\n';
@@ -1835,7 +1847,7 @@ async function balances() {
     }
   }
 
-  previousBalances = balances;
+  previousBalances[tx.senderId] = balances;
 
   return {
     msgNotify: ``,
