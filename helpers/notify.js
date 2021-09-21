@@ -8,52 +8,55 @@ const {
 } = config;
 
 module.exports = (message, type, silent_mode = false) => {
-
   try {
-
-    log[type](removeMarkdown(message));
-
     if (!silent_mode) {
+      log[type](removeMarkdown(message));
 
-      if (!slack && !adamant_notify) {
-        return;
+      if (slack && slack.length) {
+        let color;
+        switch (type) {
+          case ('error'):
+            color = '#FF0000';
+            break;
+          case ('warn'):
+            color = '#FFFF00';
+            break;
+          case ('info'):
+            color = '#00FF00';
+            break;
+          case ('log'):
+            color = '#FFFFFF';
+            break;
+        }
+
+        const params = {
+          'attachments': [{
+            'fallback': message,
+            'color': color,
+            'text': makeBoldForSlack(message),
+            'mrkdwn_in': ['text'],
+          }],
+        };
+
+        slack.forEach((slackApp) => {
+          if (typeof slackApp === 'string' && slackApp.length > 34) {
+            axios.post(slackApp, params)
+                .catch(function(error) {
+                  log.log(`Request to Slack with message ${message} failed. ${error}.`);
+                });
+          }
+        });
       }
-      let color;
-      switch (type) {
-        case ('error'):
-          color = '#FF0000';
-          break;
-        case ('warn'):
-          color = '#FFFF00';
-          break;
-        case ('info'):
-          color = '#00FF00';
-          break;
-        case ('log'):
-          color = '#FFFFFF';
-          break;
-      }
 
-      const params = {
-        'attachments': [{
-          'fallback': message,
-          'color': color,
-          'text': makeBoldForSlack(message),
-          'mrkdwn_in': ['text'],
-        }],
-      };
-
-      if (slack && slack.length > 34) {
-        axios.post(slack, params)
-            .catch(function(error) {
-              log.log(`Request to Slack with message ${message} failed. ${error}.`);
+      if (adamant_notify && adamant_notify.length) {
+        adamant_notify.forEach((admAddress) => {
+          if (typeof admAddress === 'string' && admAddress.length > 5 && admAddress.startsWith('U') && config.passPhrase && config.passPhrase.length > 30) {
+            const mdMessage = makeBoldForMarkdown(message);
+            api.sendMessage(config.passPhrase, admAddress, `${type}| ${mdMessage}`).then((response) => {
+              if (!response.success) {
+                log.warn(`Failed to send notification message '${mdMessage}' to ${admAddress}. ${response.errorMessage}.`);
+              }
             });
-      }
-      if (adamant_notify && adamant_notify.length > 5 && adamant_notify.startsWith('U') && config.passPhrase && config.passPhrase.length > 30) {
-        const mdMessage = makeBoldForMarkdown(message);
-        api.sendMessage(config.passPhrase, adamant_notify, `${type}| ${mdMessage}`).then((response) => {
-          if (!response.success) {
-            log.warn(`Failed to send notification message '${mdMessage}' to ${adamant_notify}. ${response.errorMessage}.`);
           }
         });
       }

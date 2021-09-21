@@ -67,12 +67,12 @@ const fields = {
     default: null,
   },
   adamant_notify: {
-    type: String,
-    default: null,
+    type: Array,
+    default: [],
   },
   slack: {
-    type: String,
-    default: null,
+    type: Array,
+    default: [],
   },
   silent_mode: {
     type: Boolean,

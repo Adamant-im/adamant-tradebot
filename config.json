@@ -75,11 +75,11 @@
   /** Bot's name for notifications **/
   "bot_name": "Lovely Trade Bot",
 
-  /** ADAMANT address for notifications and monitoring. Optional. **/
-  "adamant_notify": "",
+  /** ADAMANT addresses for notifications and monitoring. Optional. **/
+  "adamant_notify": [""],
 
-  /** Slack key for notifications and monitoring. Optional. **/
-  "slack": "https://hooks.slack.com/services/…",
+  /** Slack keys for notifications and monitoring. Optional. **/
+  "slack": ["https://hooks.slack.com/services/…"],
 
   /** If you don't want to receive "not enough balance" notifications, set this to "true" **/
   "silent_mode": false,
