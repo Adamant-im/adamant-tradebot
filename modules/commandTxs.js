@@ -36,11 +36,11 @@ module.exports = async (commandMsg, tx, itx) => {
     const commandName = group.shift().trim().toLowerCase().replace('\/', '');
     const command = commands[commandName];
 
-    let commandResult = '';
+    let commandResult = {};
     if (command) {
-      commandResult = await command(group, tx);
+      commandResult = await command(group, tx, itx.commandFix);
     } else {
-      commandResult = `I don’t know */${commandName}* command. ℹ️ You can start with **/help**.`;
+      commandResult.msgSendBack = `I don’t know */${commandName}* command. ℹ️ You can start with **/help**.`;
     }
 
     if (commandResult.msgNotify) {
@@ -1198,11 +1198,15 @@ function params() {
 
 }
 
-function help() {
+function help({}, {}, commandFix) {
 
   let output = `I am **online** and ready to trade. I do trading and market-making, and provide market info and stats.`;
   output += ` See command reference on https://marketmaking.app/commands/`;
   output += `\nHappy trading!`;
+
+  if (commandFix === 'help') {
+    output += `\n\nNote: commands starts with slash **/**. Example: **/help**.`;
+  }
 
   return {
     msgNotify: ``,

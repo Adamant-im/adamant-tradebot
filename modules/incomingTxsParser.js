@@ -38,6 +38,16 @@ module.exports = async (tx) => {
     decryptedMessage = api.decodeMsg(chat.message, tx.senderPublicKey, config.passPhrase, chat.own_message).trim();
   }
 
+  let commandFix = '';
+  if (decryptedMessage.toLowerCase() === 'help') {
+    decryptedMessage = '/help';
+    commandFix = 'help';
+  }
+  if (decryptedMessage.toLowerCase() === '/balance') {
+    decryptedMessage = '/balances';
+    commandFix = 'balance';
+  }
+
   let messageDirective = 'unknown';
   if (decryptedMessage.includes('_transaction') || tx.amount > 0) {
     messageDirective = 'transfer';
@@ -75,6 +85,7 @@ module.exports = async (tx) => {
     relays: tx.relays,
     receivedAt: tx.receivedAt,
     isNonAdmin: false,
+    commandFix,
   });
 
   let msgSendBack; let msgNotify;
