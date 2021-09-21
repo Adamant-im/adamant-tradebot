@@ -38,7 +38,7 @@ module.exports = async (commandMsg, tx, itx) => {
 
     let commandResult = {};
     if (command) {
-      commandResult = await command(group, tx, itx.commandFix);
+      commandResult = await command(group, tx, itx ? itx.commandFix : undefined);
     } else {
       commandResult.msgSendBack = `I don’t know */${commandName}* command. ℹ️ You can start with **/help**.`;
     }
