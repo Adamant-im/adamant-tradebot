@@ -99,8 +99,8 @@ try {
   if (!config.node_ADM) {
     exit(`Bot's config is wrong. ADM nodes are not set. Cannot start the Bot.`);
   }
-  if (!config.passPhrase) {
-    exit(`Bot's config is wrong. No passPhrase. Cannot start the Bot.`);
+  if (!config.passPhrase || config.passPhrase.length < 35) {
+    exit(`Bot's config is wrong. Set an ADAMANT passPhrase to manage the Bot.`);
   }
 
   let keyPair;
