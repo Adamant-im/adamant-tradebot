@@ -1136,6 +1136,7 @@ function getBuySellParams(params, type) {
     }
   }
 
+  let pair = params[0];
   if (!pair || pair.indexOf('/') === -1) {
     pair = config.pair;
   }
