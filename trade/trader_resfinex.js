@@ -52,7 +52,6 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
 
           if (Object.keys(result).length > 0) {
             module.exports.exchangeMarkets = result;
-            console.log(result);
             log.log(`Received info about ${Object.keys(result).length} markets on ${exchangeName} exchange.`);
           }
           resolve(result);
@@ -120,9 +119,6 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
       return new Promise((resolve, reject) => {
         RESFINEX.getUserNowEntrustSheet(pair_.coin1, pair_.coin2).then(function(data) {
           try {
-            // console.log(2);
-            // console.log(data);
-
             let openOrders = data.data;
             if (!openOrders) {
               openOrders = [];
@@ -178,8 +174,6 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
                 // coinTo: order.quoteCurrency
               });
             });
-            // console.log(result[0]);
-            // console.log(3);
 
             resolve(result);
 

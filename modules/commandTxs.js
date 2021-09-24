@@ -739,12 +739,16 @@ async function clear(params) {
     }
 
     if (['all'].includes(param.toLowerCase())) {
-      // purposes = ['mm', 'tb', 'ob', 'liq', 'pw'];
+      // purposes = ['mm', 'tb', 'ob', 'liq', 'pw', 'man'];
       purposes = 'all';
     }
     if (['unk'].includes(param.toLowerCase())) {
       purposes = 'unk';
       purposeString = `unknown`;
+    }
+    if (['man'].includes(param.toLowerCase())) {
+      purposes = ['man'];
+      purposeString = `manual`;
     }
     if (['mm'].includes(param.toLowerCase())) {
       purposes = ['mm'];

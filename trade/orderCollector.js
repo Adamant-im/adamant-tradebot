@@ -113,8 +113,6 @@ module.exports = {
     const dbOrderIds = dbOrders.map((order) => {
       return order._id;
     });
-    // console.log(dbOrderIds);
-    // return;
 
     let clearedOrdersCount = 0; let totalOrdersCount;
 
@@ -181,7 +179,7 @@ module.exports = {
 
     // console.log(`clearAllOrders(${pair}, ${doForce})…`);
     // First, close orders which are in bot's database
-    // 'all' = ['mm', 'tb', 'ob', 'liq', 'pw']
+    // 'all' = ['mm', 'tb', 'ob', 'liq', 'pw', 'man']
     const clearedInfo = await this.clearOrders('all', pair, doForce);
     let totalOrdersCount = clearedInfo.totalOrders;
     let clearedOrdersCount = clearedInfo.clearedOrders;
