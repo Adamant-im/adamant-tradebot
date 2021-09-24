@@ -197,8 +197,10 @@ const EXCHANGE_API = {
   getUserNowEntrustSheet: function(coinFrom, coinTo) {
     const data = {};
     data.pair = coinFrom + '_' + coinTo;
-    // size/limit not documented, but 'limit' works
+    // size/limit not documented, but 'limit' works; max is 200
     // https://docs.resfinex.com/guide/rest-auth-endpoints.html#post-get-open-orders
+    // data.offset = 150; // doesn't work
+    // there must be a hint combining buy+sell types separately [data.side: BUY or SELL]
     data.limit = 200;
     return sign_api('/order/open_orders', data, 'post');
   },
