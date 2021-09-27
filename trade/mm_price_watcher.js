@@ -17,6 +17,9 @@ const INTERVAL_MAX = 30000;
 const LIFETIME_MIN = constants.HOUR * 5;
 const LIFETIME_MAX = constants.HOUR * 10;
 
+const priceChangeWarningPercent = 20;
+const priceChangeNotifyPercent = 1;
+
 let isPreviousIterationFinished = true;
 
 let lowPrice; let highPrice;
@@ -387,8 +390,6 @@ async function setPriceRange() {
 
     if (previousLowPrice && previousHighPrice) {
 
-      const warningPercent = 20;
-
       const deltaLow = Math.abs(lowPrice - previousLowPrice);
       const deltaLowPercent = deltaLow / ( (lowPrice + previousLowPrice) / 2 ) * 100;
       const directionLow = lowPrice > previousLowPrice ? 'increased' : 'decreased';
@@ -397,18 +398,18 @@ async function setPriceRange() {
       const directionHigh = highPrice > previousHighPrice ? 'increased' : 'decreased';
 
       let changedByStringLow; let changedByStringHigh;
-      if (deltaLowPercent < 0.01) {
+      if (deltaLowPercent < priceChangeNotifyPercent) {
         changedByStringLow = `(no changes)`;
       } else {
-        changedByStringLow = `(${directionLow} by ${deltaLowPercent.toFixed(2)}%)`;
+        changedByStringLow = `(${directionLow} by ${deltaLowPercent.toFixed(0)}%)`;
       }
-      if (deltaHighPercent < 0.01) {
+      if (deltaHighPercent < priceChangeNotifyPercent) {
         changedByStringHigh = `(no changes)`;
       } else {
-        changedByStringHigh = `(${directionHigh} by ${deltaHighPercent.toFixed(2)}%)`;
+        changedByStringHigh = `(${directionHigh} by ${deltaHighPercent.toFixed(0)}%)`;
       }
 
-      if (deltaLowPercent > warningPercent || deltaHighPercent > warningPercent) {
+      if (deltaLowPercent > priceChangeWarningPercent || deltaHighPercent > priceChangeWarningPercent) {
         notify(`${config.notifyName}: Price watcher's new price range changed much—new values are from ${lowPrice.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${changedByStringLow} to ${highPrice.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${changedByStringHigh} ${config.coin2}.`, 'warn');
       } else {
         log.log(`Price watcher set a new price range from ${lowPrice.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${changedByStringLow} to ${highPrice.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${changedByStringHigh} ${config.coin2}.`);
