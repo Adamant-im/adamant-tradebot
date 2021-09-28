@@ -2,7 +2,7 @@ ADAMANT Trading & Market making bot is a software that allows to run trades on c
 
 # Market making
 
-In Market making mode, the bot places orders and execute them by himself, making a trade volume, maintaining spread and liquidity; and builds live-like dynamic order book. Market making helps:
+In Market making mode, the bot places orders and executes them by itself, making a trade volume, maintaining spread and liquidity; builds live-like dynamic order books and watches a token price. Market making helps:
 
 * Cryptocurrency projects (token issuers)
 * Cryptocurrency exchanges
@@ -15,7 +15,7 @@ See [marketmaking.app](https://marketmaking.app) to have a look at the bot possi
 
 # Profit trading
 
-Trading is a mode when bot run orders according to some strategy. It can be profitable or not. This feature is unavailable now—we recommend to use [Zenbot](https://github.com/DeviaVir/zenbot) instead.
+Trading is a mode when a bot runs orders according to some strategy. It can be profitable or not. This feature is unavailable now—we recommend to use [Zenbot](https://github.com/DeviaVir/zenbot) instead.
 
 # Features
 
@@ -38,7 +38,7 @@ If the bot don't support the exchange you need, code it by yourself, or [hire de
 * [Bit-Z](https://u.bit-z.com/register?invite_code=2423317)
 * [CoinDeal](https://coindeal.com/ref/9WZN)
 * [Resfinex](https://trade.resfinex.com?ref=7ccb34d867&pair=ADM_USDT)
-* [Atomars](https://atomars.com/refcode/kaba)
+* [P2PB2B](https://p2pb2b.io?referral=d5ef5f6e)
 
 # Usage and Installation
 
@@ -50,8 +50,8 @@ We can run market-making for you, see [marketmaking.app/services](https://market
 
 ## Requirements
 
-* Ubuntu 16, 18 or 20 (we didn't test others)
-* NodeJS v 10+
+* Ubuntu 18 or 20 (we didn't test others)
+* NodeJS v12+
 * MongoDB ([installation instructions](https://docs.mongodb.com/manual/tutorial/install-mongodb-on-ubuntu/))
 
 ## Setup
@@ -69,28 +69,7 @@ npm i
 nano config.json
 ```
 
-Parameters:
-
-* `exchange` <string> Exchange to work with. Available values see above. Case insensitive, obligatory.
-* `pair` <string> Pair to with on the exchange. Obligatory.
-* `coin1Decimals` <number>  Meaningful decimals for output of coin1 amounts. Default is 8.
-* `coin2Decimals` <number>  Meaningful decimals for output of coin2 amounts. Default is 8.
-* `clearAllOrdersInterval` <number> Interval in minutes to clear all opened orders. Default is 0 (disabled).
-* `apikey` <string> Exchange's account API key (username/login for some exchanges) for connection. Obligatory.
-* `apisecret` <string> Exchange's account API secret (password for some exchanges) for connection. Obligatory.
-* `apipassword` <string> Exchange's account trade password. If needed for exchange.
-* `passPhrase` <string> The bot's secret phrase for accepting commands. Obligatory. Bot's ADM address will correspond this passPhrase.
-* `admin_accounts` <string, array> ADAMANT accounts to accept commands from. Commands from other accounts will not be executed. At lease one account.
-* `notify_non_admins` <boolean> Notify non-admins that they are not admins. If false, bot will be silent.
-* `node_ADM` <string, array> List of nodes for API work, obligatorily
-* `infoservice` <string, array> List of [ADAMANT InfoServices](https://github.com/Adamant-im/adamant-currencyinfo-services) for catching exchange rates, recommended
-* `slack` <string> Token for Slack alerts for the bot’s administrator. No alerts if not set.
-* `adamant_notify` <string> ADM address for the bot’s administrator. Recommended.
-* `silent_mode` <boolean> Enable if you don't want to receive "not enough balance" and "unable to execute cross-order" notifications. Default is "false".
-* `socket` <boolean> If to use WebSocket connection. Recommended for better user experience.
-* `ws_type` <string> Choose socket connection, "ws" or "wss" depending on your server.
-* `bot_name` <string> Bot's name for notifications.
-* `welcome_string` <string> How to reply user in-chat, if unknown command received.
+Parameters: see comments in `config.json`.
 
 ## Launching
 
@@ -100,7 +79,7 @@ You can start the Bot with the `node app` command, but it is recommended to use 
 pm2 start --name tradebot app.js
 ```
 
-## Add Bot to cron
+## Add a Bot to cron
 
 ```
 crontab -e

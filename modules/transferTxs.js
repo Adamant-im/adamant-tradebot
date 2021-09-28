@@ -1,47 +1,20 @@
-const {SAT} = require('../helpers/const');
-const $u = require('../helpers/utils');
 const notify = require('../helpers/notify');
 const config = require('./configReader');
+const api = require('./api');
 
 module.exports = async (itx, tx) => {
 
-	const msg = itx.encrypted_content;
-	let inCurrency,
-		outCurrency,
-		inTxid,
-		inAmountMessage;
+  const msgSendBack = `I got a transfer from you. Thanks, bro.`;
+  const msgNotify = `${config.notifyName} got a transfer transaction. Income ADAMANT Tx: https://explorer.adamant.im/tx/${tx.id}.`;
+  const notifyType = 'log';
 
-	if (tx.amount > 0) { // ADM income payment
-		inAmountMessage = tx.amount / SAT;
-		inCurrency = 'ADM';
-		outCurrency = msg;
-		inTxid = tx.id;
-	} else if (msg.includes('_transaction')) { // not ADM income payment
-		inCurrency = msg.match(/"type":"(.*)_transaction/)[1];
-		try {
-			const json = JSON.parse(msg);
-			inAmountMessage = Number(json.amount);
-			inTxid = json.hash;
-			outCurrency = json.comments;
-			if (outCurrency === ''){
-				outCurrency = 'NONE';
-			}		
-		} catch (e){
-			inCurrency = 'none';
-		}
-	}
+  await itx.update({ isProcessed: true }, true);
 
-	outCurrency = String(outCurrency).toUpperCase().trim();
-	inCurrency = String(inCurrency).toUpperCase().trim();
-
-	// Validate
-	let msgSendBack = `I got a transfer from you. Thanks, bro.`;
-	let msgNotify = `${config.notifyName} got a transfer transaction. Income ADAMANT Tx: https://explorer.adamant.im/tx/${tx.id}.`;
-	let notifyType = 'log';
-
-	await itx.update({isProcessed: true}, true);
-
-	notify(msgNotify, notifyType);
-	$u.sendAdmMsg(tx.senderId, msgSendBack);
+  notify(msgNotify, notifyType);
+  api.sendMessage(config.passPhrase, tx.senderId, msgSendBack).then((response) => {
+    if (!response.success) {
+      log.warn(`Failed to send ADM message '${msgSendBack}' to ${tx.senderId}. ${response.errorMessage}.`);
+    }
+  });
 
 };
