@@ -35,7 +35,6 @@ Trading is a mode when a bot runs orders according to some strategy. It can be p
 
 If the bot don't support the exchange you need, code it by yourself, or [hire developers](https://marketmaking.app/services/).
 
-* [Bit-Z](https://u.bit-z.com/register?invite_code=2423317)
 * [CoinDeal](https://coindeal.com/ref/9WZN)
 * [Resfinex](https://trade.resfinex.com?ref=7ccb34d867&pair=ADM_USDT)
 * [P2PB2B](https://p2pb2b.io?referral=d5ef5f6e)
