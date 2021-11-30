@@ -26,7 +26,7 @@ const previousOrders = {};
 module.exports = async (commandMsg, tx, itx) => {
   try {
 
-    log.log(`Processing '${commandMsg}' command from ${tx.recipientId} (transaction ${tx.id})…`);
+    log.log(`Processing '${commandMsg}' command from ${tx.senderId} (transaction ${tx.id})…`);
     const group = commandMsg
         .trim()
         .replace(/    /g, ' ')
@@ -63,7 +63,7 @@ module.exports = async (commandMsg, tx, itx) => {
 
   } catch (e) {
     tx = tx || {};
-    log.error(`Error while processing ${commandMsg} command from ${tx.recipientId} (transaction ${tx.id}). Error: ${e.toString()}`);
+    log.error(`Error while processing ${commandMsg} command from ${tx.senderId} (transaction ${tx.id}). Error: ${e.toString()}`);
   }
 };
 

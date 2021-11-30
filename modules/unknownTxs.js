@@ -7,7 +7,7 @@ const api = require('./api');
 module.exports = async (tx, itx) => {
 
   if (itx.isProcessed) return;
-  log.log(`Processing unknownTx from ${tx.recipientId} (transaction ${tx.id})…`);
+  log.log(`Processing unknownTx from ${tx.senderId} (transaction ${tx.id})…`);
 
   const { incomingTxsDb } = db;
   incomingTxsDb.db
