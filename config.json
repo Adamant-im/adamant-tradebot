@@ -2,7 +2,7 @@
   /** The bot's secret passphrase. Create separate ADM account for the bot.
     Bot's ADM address will correspond this passPhrase.
     **/
-  "passPhrase": "distance expect praise frequent…",
+  "passPhrase": "distance expect praise frequent..",
 
   /** List of nodes to fetch transactions.
       If one become unavailable, bot will choose live one.
@@ -31,7 +31,7 @@
 
   /** ADAMANT accounts to accept commands from. Commands from other accounts will not be executed. **/
   "admin_accounts": [
-    "U123…"
+    "U123.."
   ],
 
   /** Notify non-admins that they are not admins. If false, bot will be silent. **/
@@ -39,7 +39,6 @@
 
   /** List of supported exchanges **/
   "exchanges": [
-    "Bit-Z",
     "CoinDeal",
     "Resfinex",
     "P2PB2B"
@@ -61,12 +60,12 @@
   "clearAllOrdersInterval": 0,
 
   /** Exchange's account API key for connection **/
-  "apikey": "YOUR-KEY…",
+  "apikey": "YOUR-KEY..",
 
   /** Exchange's account API secret for connection **/
-  "apisecret": "YOUR-SECRET…",
+  "apisecret": "YOUR-SECRET..",
 
-  /** Exchange's account trade password. Mandatory for Bit-Z. **/
+  /** Exchange's account trade password. Mandatory for some exchanges. **/
   "apipassword": "YOUR-TRADE-PASS",
 
   /** How to reply user in-chat, if first unknown command received. **/
@@ -79,7 +78,7 @@
   "adamant_notify": [""],
 
   /** Slack keys for notifications and monitoring. Optional. **/
-  "slack": ["https://hooks.slack.com/services/…"],
+  "slack": ["https://hooks.slack.com/services/.."],
 
   /** If you don't want to receive "not enough balance" notifications, set this to "true" **/
   "silent_mode": false,
