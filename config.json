@@ -39,7 +39,6 @@
 
   /** List of supported exchanges **/
   "exchanges": [
-    "Bit-Z",
     "CoinDeal",
     "Resfinex",
     "P2PB2B"
@@ -66,7 +65,7 @@
   /** Exchange's account API secret for connection **/
   "apisecret": "YOUR-SECRET..",
 
-  /** Exchange's account trade password. Mandatory for Bit-Z. **/
+  /** Exchange's account trade password. Mandatory for some exchanges. **/
   "apipassword": "YOUR-TRADE-PASS",
 
   /** How to reply user in-chat, if first unknown command received. **/
