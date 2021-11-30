@@ -314,7 +314,7 @@ async function enable(params) {
       if (!pwSourceInput || pwSourceInput === undefined) {
         return {
           msgNotify: '',
-          msgSendBack: `Wrong parameters. Example: */enable pw 0.1—0.2 USDT* or */enable pw ADM/USDT@Bit-Z 0.5% smart*.`,
+          msgSendBack: `Wrong parameters. Example: */enable pw 0.1—0.2 USDT* or */enable pw ADM/USDT@CoinDeal 0.5% smart*.`,
           notifyType: 'log',
         };
       }
@@ -333,7 +333,7 @@ async function enable(params) {
         if (!pair || pair.length < 3 || pair.indexOf('/') === -1 || !exchange || exchange.length < 3) {
           return {
             msgNotify: '',
-            msgSendBack: `Wrong price source. Example: */enable pw ADM/USDT@Bit-Z 0.5% smart*.`,
+            msgSendBack: `Wrong price source. Example: */enable pw ADM/USDT@CoinDeal 0.5% smart*.`,
             notifyType: 'log',
           };
         }
@@ -347,7 +347,7 @@ async function enable(params) {
         if (!exchangeName || exchangeName === undefined) {
           return {
             msgNotify: '',
-            msgSendBack: `I don't support ${exchange} exchange. Supported exchanges: ${config.supported_exchanges}. Example: */enable pw ADM/USDT@Bit-Z 0.5% smart*.`,
+            msgSendBack: `I don't support ${exchange} exchange. Supported exchanges: ${config.supported_exchanges}. Example: */enable pw ADM/USDT@CoinDeal 0.5% smart*.`,
             notifyType: 'log',
           };
         }
@@ -357,7 +357,7 @@ async function enable(params) {
         if (!pairObj) {
           return {
             msgNotify: '',
-            msgSendBack: `Trading pair ${pair.toUpperCase()} is not valid. Example: */enable pw ADM/USDT@Bit-Z 0.5% smart*.`,
+            msgSendBack: `Trading pair ${pair.toUpperCase()} is not valid. Example: */enable pw ADM/USDT@CoinDeal 0.5% smart*.`,
             notifyType: 'log',
           };
         }
@@ -376,7 +376,7 @@ async function enable(params) {
         ) {
           return {
             msgNotify: '',
-            msgSendBack: `Unable to set Price watcher to the same trading pair as I trade, ${pairObj.pair}@${exchangeName}. Set price in numbers or watch other trading pair/exchange. Example: */enable pw 0.1—0.2 USDT* or */enable pw ADM/USDT@Bit-Z 0.5% smart*.`,
+            msgSendBack: `Unable to set Price watcher to the same trading pair as I trade, ${pairObj.pair}@${exchangeName}. Set price in numbers or watch other trading pair/exchange. Example: */enable pw 0.1—0.2 USDT* or */enable pw ADM/USDT@CoinDeal 0.5% smart*.`,
             notifyType: 'log',
           };
         }
@@ -397,7 +397,7 @@ async function enable(params) {
         if (!percentString || (percentString.slice(-1) !== '%')) {
           return {
             msgNotify: '',
-            msgSendBack: `Set a deviation in percentage. Example: */enable pw ADM/USDT@Bit-Z 0.5% smart*.`,
+            msgSendBack: `Set a deviation in percentage. Example: */enable pw ADM/USDT@CoinDeal 0.5% smart*.`,
             notifyType: 'log',
           };
         }
@@ -405,7 +405,7 @@ async function enable(params) {
         if (percentValue === Infinity || percentValue < 0 || percentValue > 90) {
           return {
             msgNotify: '',
-            msgSendBack: `Set correct deviation in percentage. Example: */enable pw ADM/USDT@Bit-Z 0.5% smart*.`,
+            msgSendBack: `Set correct deviation in percentage. Example: */enable pw ADM/USDT@CoinDeal 0.5% smart*.`,
             notifyType: 'log',
           };
         }
@@ -419,7 +419,7 @@ async function enable(params) {
         if (!['smart', 'strict'].includes(pwSourcePolicy)) {
           return {
             msgNotify: '',
-            msgSendBack: `Wrong deviation policy. Allowed _smart_ or _strict_. Example: */enable pw ADM/USDT@Bit-Z 0.5% smart*.`,
+            msgSendBack: `Wrong deviation policy. Allowed _smart_ or _strict_. Example: */enable pw ADM/USDT@CoinDeal 0.5% smart*.`,
             notifyType: 'log',
           };
         }
