@@ -719,6 +719,13 @@ function interval(param) {
       notifyType: 'log',
     };
   }
+  if (min > max) {
+    return {
+      msgNotify: '',
+      msgSendBack: `Invalid intervals for market making of ${config.pair}. Value _to_ must be greater or equal, than _from_. Example: */interval 1-5 min*.`,
+      notifyType: 'log',
+    };
+  }
   tradeParams.mm_minInterval = min * multiplier;
   tradeParams.mm_maxInterval = max * multiplier;
   return {
