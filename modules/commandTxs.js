@@ -665,6 +665,13 @@ function amount(param) {
       notifyType: 'log',
     };
   }
+  if (min > max) {
+    return {
+      msgNotify: '',
+      msgSendBack: `Invalid values for market making of ${config.pair}. Value _to_ must be greater or equal, than _from_. Example: */amount 0.01-20*.`,
+      notifyType: 'log',
+    };
+  }
   tradeParams.mm_minAmount = min;
   tradeParams.mm_maxAmount = max;
   return {
