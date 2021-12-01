@@ -487,7 +487,7 @@ async function enable(params) {
           }
           pwLowPrice = rangeOrValue.value * (1 - percentValue/100);
           pwHighPrice = rangeOrValue.value * (1 + percentValue/100);
-          pwMidPrice = rangeOrValue.isValue;
+          pwMidPrice = rangeOrValue.value;
           pwDeviationPercent = percentValue;
           pwSource = coin;
         }
