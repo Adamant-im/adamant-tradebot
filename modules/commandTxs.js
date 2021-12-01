@@ -726,8 +726,8 @@ function interval(param) {
       notifyType: 'log',
     };
   }
-  tradeParams.mm_minInterval = min * multiplier;
-  tradeParams.mm_maxInterval = max * multiplier;
+  tradeParams.mm_minInterval = Math.round(min * multiplier);
+  tradeParams.mm_maxInterval = Math.round(max * multiplier);
   return {
     msgNotify: `${config.notifyName} is set to make market in intervals from ${min} to ${max} ${time} for ${config.pair} pair.`,
     msgSendBack: `Set to make market in intervals from ${min} to ${max} ${time} for ${config.pair} pair.`,
