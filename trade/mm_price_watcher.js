@@ -440,7 +440,7 @@ function errorSettingPriceRange(errorMessage) {
 
       isPriceActual = false;
       if (Date.now()-lastNotifyPriceTimestamp > constants.HOUR) {
-        notify(`${baseNotifyMessage} ${errorMessage}`, 'warn');
+        notify(`${config.notifyName}: ${baseNotifyMessage} ${errorMessage}`, 'warn');
         lastNotifyPriceTimestamp = Date.now();
       } else {
         log.log(`${baseNotifyMessage} ${errorMessage}`);

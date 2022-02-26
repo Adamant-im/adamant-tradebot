@@ -37,6 +37,7 @@ module.exports = {
    */
   getRate(from, to) {
     try {
+      if (from && to && from === to) return 1; // 1 USD = 1 USD
       let price = this.currencies[from + '/' + to] || 1 / this.currencies[to + '/' + from];
       if (!price) {
         // We don't have direct or reverse rate, calculate it from /USD rates

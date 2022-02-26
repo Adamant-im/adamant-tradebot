@@ -30,7 +30,7 @@ module.exports = async (tx) => {
     return;
   };
 
-  log.log(`Processing new incoming transaction ${tx.id} from ${tx.recipientId} via ${tx.height ? 'REST' : 'socket'}…`);
+  log.log(`Processing new incoming transaction ${tx.id} from ${tx.senderId} via ${tx.height ? 'REST' : 'socket'}…`);
 
   let decryptedMessage = '';
   const chat = tx.asset ? tx.asset.chat : '';
