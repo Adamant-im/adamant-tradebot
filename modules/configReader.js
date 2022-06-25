@@ -1,6 +1,6 @@
 const jsonminify = require('jsonminify');
 const fs = require('fs');
-const keys = require('adamant-api/helpers/keys');
+const keys = require('adamant-api/src/helpers/keys');
 const isDev = process.argv.includes('dev');
 let config = {};
 
