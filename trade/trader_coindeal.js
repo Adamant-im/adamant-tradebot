@@ -1,4 +1,4 @@
-const COINDEAL = require('./api/coindeal_api');
+const Coindeal = require('./api/coindeal_api');
 const utils = require('../helpers/utils');
 
 // API endpoints:
@@ -8,8 +8,9 @@ const apiServer = 'https://apigateway.coindeal.com';
 const exchangeName = 'CoinDeal';
 
 module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
+  const CoindealClient = Coindeal();
 
-  COINDEAL.setConfig(apiServer, apiKey, secretKey, pwd, log, publicOnly);
+  CoindealClient.setConfig(apiServer, apiKey, secretKey, pwd, log, publicOnly);
 
   // CoinDeal API doesn't provide market info
   const defaultMarketInfo = {
@@ -37,12 +38,13 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
         placeMarketOrder: false,
         getDepositAddress: true,
         getDepositAddressLimit: 'Only created on website',
+        createDepositAddressWithWebsiteOnly: true,
       };
     },
 
     getBalances(nonzero = true) {
       return new Promise((resolve, reject) => {
-        COINDEAL.getUserAssets().then(function(data) {
+        CoindealClient.getUserAssets().then(function(data) {
           try {
             let assets = data;
             if (!assets) {
@@ -63,7 +65,6 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
             if (nonzero) {
               result = result.filter((crypto) => crypto.free || crypto.freezed);
             }
-            // console.log(result);
             resolve(result);
           } catch (e) {
             resolve(false);
@@ -78,7 +79,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
     getOpenOrders(pair) {
       pair_ = formatPairName(pair);
       return new Promise((resolve, reject) => {
-        COINDEAL.getUserNowEntrustSheet(pair_.coin1, pair_.coin2).then(function(data) {
+        CoindealClient.getUserNowEntrustSheet(pair_.coin1, pair_.coin2).then(function(data) {
           try {
             let openOrders = data;
             if (!openOrders) {
@@ -144,7 +145,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
         Balances stay frozen. To fix them, you need to contact Coindeal support.
       */
       return new Promise((resolve, reject) => {
-        COINDEAL.cancelEntrustSheet(orderId).then(function(data) {
+        CoindealClient.cancelEntrustSheet(orderId).then(function(data) {
           try {
             if (data.id) {
               log.log(`Cancelling order ${orderId}…`);
@@ -167,7 +168,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
             }
           };
         }).catch((err) => {
-          log.warn(`API request ${arguments.callee.name}(orderId: ${orderId}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
+          log.warn(`API request cancelOrder(orderId: ${orderId}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
           resolve(undefined);
         });
       });
@@ -175,9 +176,8 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
     getRates(pair) {
       pair_ = formatPairName(pair);
       return new Promise((resolve, reject) => {
-        COINDEAL.stats().then(function(data2) {
+        CoindealClient.stats().then(function(data2) {
           data2 = data2[pair_.coin1 + '_' + pair_.coin2];
-          // console.log(data2);
           try {
             if (data2) {
               resolve({
@@ -230,7 +230,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
         output = `${orderType} ${coin1Amount} ${pair_.coin1.toUpperCase()} at ${price} ${pair_.coin2.toUpperCase()}.`;
 
         return new Promise((resolve, reject) => {
-          COINDEAL.addEntrustSheet(pair_.pair, coin1Amount, price, type).then(function(data) {
+          CoindealClient.addEntrustSheet(pair_.pair, coin1Amount, price, type).then(function(data) {
             try {
               const result = data;
               if (result && result.id) {
@@ -257,7 +257,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
               resolve(order);
             };
           }).catch((err) => {
-            log.warn(`API request COINDEAL.addEntrustSheet-limit(pair: ${pair_.pair}, coin1Amount: ${coin1Amount}, price: ${price}, type: ${type}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
+            log.warn(`API request CoindealClient.addEntrustSheet-limit(pair: ${pair_.pair}, coin1Amount: ${coin1Amount}, price: ${price}, type: ${type}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
             resolve(undefined);
           });
         });
@@ -298,7 +298,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
     getOrderBook(pair) {
       const pair_ = formatPairName(pair);
       return new Promise((resolve, reject) => {
-        COINDEAL.orderBook(pair_.pair).then(function(data) {
+        CoindealClient.orderBook(pair_.pair).then(function(data) {
           try {
             let book = data;
             if (!book) {
@@ -341,13 +341,56 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
         });
       });
     },
-    getDepositAddress(coin) {
+
+    getTradesHistory(pair, limit, sort, by, from, till, offset) {
+      const pair_ = formatPairName(pair);
       return new Promise((resolve, reject) => {
-        COINDEAL.getDepositAddress(coin).then(function(data) {
-          data = data;
+        CoindealClient.getTradesHistory(pair_.pair, limit, sort, by, from, till, offset).then(function(data) {
           try {
-            if (data && data.items && data.items[0]) {
-              resolve(data.items[0].address);
+            let trades = data;
+            if (!trades) {
+              trades = [];
+            }
+
+            const result = [];
+            trades.forEach((trade) => {
+
+              result.push({
+                coin1Amount: +trade.quantity, // amount in coin1
+                price: +trade.price, // trade price
+                coin2Amount: +trade.quantity * +trade.price, // quote in coin2
+                // trade.timestamp is like '2021-04-21 22:41:28' (ISO)
+                dateOri: trade.timestamp,
+                date: new Date(trade.timestamp + '+0000').getTime(), // must be as utils.unixTimeStampMs(): 1641121688194 - 1 641 121 688 194
+                type: trade.side?.toLowerCase(), // 'buy' or 'sell'
+                id: trade.id?.toString(),
+                // Additionally CoinDeal provides: clientOrderId, orderId, symbol, fee
+              });
+            });
+
+            // We need ascending sort order
+            result.sort(function(a, b) {
+              return parseFloat(a.date) - parseFloat(b.date);
+            });
+            resolve(result);
+
+          } catch (e) {
+            resolve(false);
+            log.warn('Error while processing getTradesHistory() request: ' + e);
+          };
+        }).catch((err) => {
+          log.warn(`API request getTradesHistory(pair: ${pair}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
+          resolve(undefined);
+        });
+      });
+    },
+
+    getDepositAddress(coin) {
+      return new Promise((resolve) => {
+        CoindealClient.getDepositAddress(coin).then(function(data) {
+          try {
+            if (data?.items?.length) {
+              resolve(data.items.map(({ address }) => ({ network: null, address })));
             } else {
               resolve(false);
             }
@@ -356,7 +399,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
             log.warn('Error while processing getDepositAddress() request: ' + e);
           };
         }).catch((err) => {
-          log.warn(`API request ${arguments.callee.name}(coin: ${coin}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
+          log.warn(`API request getDepositAddress(coin: ${coin}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
           resolve(undefined);
         });
       });
