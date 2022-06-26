@@ -1,5 +1,7 @@
 ADAMANT Trading & Market making bot is a software that allows to run trades on crypto exchanges, make trade volume, maintain spread and liquidity, set price range, and build live-like dynamic order book.
 
+This is a free version. For premium features, see [marketmaking.app/services](https://marketmaking.app/services/).
+
 # Market making
 
 In Market making mode, the bot places orders and executes them by itself, making a trade volume, maintaining spread and liquidity; builds live-like dynamic order books and watches a token price. Market making helps:
@@ -20,24 +22,22 @@ Trading is a mode when a bot runs orders according to some strategy. It can be p
 # Features
 
 * Easy to install and configure
-* Free and open source
-* Fill order books
-* Place buy and sell limit or market orders
-* Market making
+* Initial fill order books
 * Dynamic order book building
+* Place buy and sell limit or market orders
+* Market making with 3 policies: spread, orderbook, optimal
 * Spread & liquidity maintenance
 * Price range setting
 * Arbitrage token price on other trade pairs or exchanges
-* Stores and displays statistics
 * Managed with your commands using ADAMANT Messenger
 
 # Supported exchanges
 
-If the bot don't support the exchange you need, code it by yourself, or [hire developers](https://marketmaking.app/services/).
+* [CoinDeal](https://coindeal.com)
+* [Resfinex](https://resfinex.com)
+* [P2PB2B](https://p2pb2b.com)
 
-* [CoinDeal](https://coindeal.com/ref/9WZN)
-* [Resfinex](https://trade.resfinex.com?ref=7ccb34d867&pair=ADM_USDT)
-* [P2PB2B](https://p2pb2b.io?referral=d5ef5f6e)
+To add other exchange support, see [marketmaking.app/services](https://marketmaking.app/services/).
 
 # Usage and Installation
 
@@ -49,8 +49,8 @@ We can run market-making for you, see [marketmaking.app/services](https://market
 
 ## Requirements
 
-* Ubuntu 18 or 20 (we didn't test others)
-* NodeJS v12+
+* Ubuntu 18 or 20, centOS 7 or 8 (we didn't test others)
+* NodeJS v14+
 * MongoDB ([installation instructions](https://docs.mongodb.com/manual/tutorial/install-mongodb-on-ubuntu/))
 
 ## Setup
@@ -64,7 +64,10 @@ npm i
 
 ## Pre-launch tuning
 
+The bot will use `config.json`, if available, or `config.default.json` otherwise.
+
 ```
+cp config.default.json config.json
 nano config.json
 ```
 
