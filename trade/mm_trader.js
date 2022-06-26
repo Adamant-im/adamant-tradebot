@@ -133,7 +133,7 @@ module.exports = {
             isSecondAccountOrder: false,
           });
 
-          // Last, (taker) we place type-order using second account (in case of 2-keys trading)
+          // Last, (taker) we place type-order
           order2 = await takerApi.placeOrder(type, config.pair, price, coin1Amount, 1, null);
           if (order2 && order2.orderid) {
             output = `${type} ${coin1Amount.toFixed(coin1Decimals)} ${config.coin1} for ${coin2Amount.toFixed(coin2Decimals)} ${config.coin2} at ${price.toFixed(coin2Decimals)} ${config.coin2}`;
@@ -156,7 +156,7 @@ module.exports = {
 
       } else if (priceReq.mmCurrentAction === 'executeInOrderBook') {
 
-        // First and last, (taker) we place type-order using second account (in case of 2-keys trading)
+        // First and last, (taker) we place type-order
         order1 = await takerApi.placeOrder(type, config.pair, price, coin1Amount, 1, null);
         if (order1 && order1.orderid) {
           const { ordersDb } = db;
@@ -263,8 +263,8 @@ async function isEnoughCoins(coin1, coin2, amount1, amount2, type, mmCurrentActi
 
     if (mmCurrentAction === 'executeInSpread') {
       if (type === 'buy') {
-        // First, (maker) we place crossType-order (sell) using first account
-        // Last, (taker) we place type-order (buy) using second account
+        // First, (maker) we place crossType-order (sell)
+        // Last, (taker) we place type-order (buy)
         coin1Balance = makerCoin1Balance;
         coin2Balance = takerCoin2Balance;
         if (!coin1Balance.free || coin1Balance.free < amount1) {
@@ -279,8 +279,8 @@ async function isEnoughCoins(coin1, coin2, amount1, amount2, type, mmCurrentActi
           output = `Not enough balance${onWhichAccount} to place ${amount2.toFixed(coin2Decimals)} ${coin2} ${orderType} mm-order (in spread). Free: ${coin2Balance.free.toFixed(coin2Decimals)} ${coin2}, frozen: ${coin2Balance.freezed.toFixed(coin2Decimals)} ${coin2}.`;
         }
       } else { // type === 'sell'
-        // First, (maker) we place crossType-order (buy) using first account
-        // Last, (taker) we place type-order (sell) using second account
+        // First, (maker) we place crossType-order (buy)
+        // Last, (taker) we place type-order (sell)
         coin1Balance = takerCoin1Balance;
         coin2Balance = makerCoin2Balance;
         if (!coin2Balance.free || coin2Balance.free < amount2) {

@@ -391,7 +391,6 @@ module.exports = {
 
 /**
  * Checks if enough funds to place pw-order
- * It uses second account, if set in config
  * @param {String} coin1 = config.coin1 (base)
  * @param {String} coin2 = config.coin2 (quote)
  * @param {Number} amount1 Amount in coin1 (base)

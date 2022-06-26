@@ -186,7 +186,7 @@ module.exports = {
       let clearedOrdersCountSuccess = 0;
       let totalOrdersToClearCount;
 
-      let openOrders = await orderUtils.getOpenOrdersCached(pair || config.pair, utils.getModuleName(module.id));
+      let openOrders = await traderapi.getOpenOrders(pair || config.pair);
       if (orderType) openOrders = openOrders.filter((order) => order.side === orderType);
 
       if (openOrders) {
