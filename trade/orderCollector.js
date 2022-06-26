@@ -9,7 +9,6 @@ module.exports = {
   orderPurposes: {
     'mm': 'Market making',
     'ob': 'Dynamic order book',
-    'tb': 'Trade bot',
     'liq': 'Liquidity',
     'pw': 'Price watcher',
     'man': 'Manual', // manually placed order with /fill, /buy, /sell, /make price commands

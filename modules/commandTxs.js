@@ -39,7 +39,7 @@ module.exports = async (commandMsg, tx, itx) => {
     const command = commands[commandName];
 
     if (command) {
-      commandResult = await command(group, tx, itx ? itx.commandFix : undefined);
+      commandResult = await command(group, tx, itx?.commandFix); // commandFix if for /help only
     } else {
       commandResult.msgSendBack = `I don’t know */${commandName}* command. ℹ️ You can start with **/help**.`;
     }
@@ -170,7 +170,7 @@ function stop(params) {
   };
 }
 
-async function enable(params, isWebApi = false) {
+async function enable(params, {}, isWebApi = false) {
   let msgNotify; let msgSendBack; let infoString; const infoStringSendBack = ''; let optionsString;
 
   try {
@@ -1503,7 +1503,7 @@ async function stats(params) {
   };
 }
 
-async function pair(params, tx = {}) {
+async function pair(params) {
   let output = '';
 
   try {
