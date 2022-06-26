@@ -1,5 +1,4 @@
 const constants = require('../helpers/const');
-const fs = require('fs');
 const utils = require('../helpers/utils');
 const exchangerUtils = require('../helpers/cryptos/exchanger');
 const config = require('./configReader');
@@ -20,23 +19,25 @@ const pendingConfirmation = {
 };
 
 // stored for each senderId
-const previousBalances = {};
-const previousOrders = {};
+const previousBalances = [{}, {}, {}]; // stored for each account and both as well (for two-keys trading)
+const previousOrders = [{}, {}]; // stored for each account as well (for two-keys trading)
 
 module.exports = async (commandMsg, tx, itx) => {
-  try {
+  let commandResult = {};
 
-    log.log(`Processing '${commandMsg}' command from ${tx.senderId} (transaction ${tx.id})…`);
+  try {
+    const from =
+      `${tx.senderId} (transaction ${tx.id})`;
+
+    log.log(`Processing '${commandMsg}' command from ${from}…`);
+
     const group = commandMsg
         .trim()
-        .replace(/    /g, ' ')
-        .replace(/   /g, ' ')
-        .replace(/  /g, ' ')
+        .replace(/ {2,}/g, ' ')
         .split(' ');
     const commandName = group.shift().trim().toLowerCase().replace('\/', '');
     const command = commands[commandName];
 
-    let commandResult = {};
     if (command) {
       commandResult = await command(group, tx, itx ? itx.commandFix : undefined);
     } else {
@@ -44,63 +45,63 @@ module.exports = async (commandMsg, tx, itx) => {
     }
 
     if (commandResult.msgNotify) {
-      notify(commandResult.msgNotify, commandResult.notifyType);
-    }
-
-    if (commandResult.msgSendBack) {
-      api.sendMessage(config.passPhrase, tx.senderId, commandResult.msgSendBack).then((response) => {
-        if (!response.success) {
-          log.warn(`Failed to send ADM message '${commandResult.msgSendBack}' to ${tx.senderId}. ${response.errorMessage}.`);
-        }
-      });
+      notify(`${commandResult.msgNotify} Action is executed by ${from}.`, commandResult.notifyType);
     }
 
     if (itx) {
       itx.update({ isProcessed: true }, true);
     }
 
-    saveConfig();
+    utils.saveConfig();
 
   } catch (e) {
     tx = tx || {};
     log.error(`Error while processing ${commandMsg} command from ${tx.senderId} (transaction ${tx.id}). Error: ${e.toString()}`);
   }
+
+  return commandResult;
 };
 
-function y(params, tx) {
+/**
+ * Command to confirm previous command: '/enable pw' or '/make price'
+ * @param {Array of String} params Doesn't matter
+ * @param {Object} tx Information about initiator
+ * @return {Object} commandResult.msgSendBack to reply
+ */
+async function y(params, tx) {
   try {
     if (pendingConfirmation.command) {
+      let commandResult = {
+        msgNotify: '',
+        msgSendBack: '',
+        notifyType: 'log',
+      };
+
       if (Date.now() - pendingConfirmation.timestamp > timeToConfirm) {
-        return {
-          msgNotify: '',
-          msgSendBack: `I will not confirm command ${pendingConfirmation.command} as it is expired. Try again.`,
-          notifyType: 'log',
-        };
+        commandResult.msgSendBack = `I will not confirm command ${pendingConfirmation.command} as it is expired. Try again.`;
       } else {
-        module.exports(`${pendingConfirmation.command} -y`, tx);
-        return {
-          msgNotify: '',
-          msgSendBack: '',
-          notifyType: 'log',
-        };
+        commandResult = await module.exports(`${pendingConfirmation.command} -y`, tx);
+        commandResult.msgNotify = ''; // Command itself will notify, we need only msgSendBack
       }
+
+      pendingConfirmation.command = '';
+
+      return commandResult;
     } else {
       return {
         msgNotify: '',
-        msgSendBack: `There is no pending command to confirm.`,
+        msgSendBack: 'There is no pending command to confirm.',
         notifyType: 'log',
       };
     }
   } catch (e) {
     log.error(`Error in y()-confirmation of ${utils.getModuleName(module.id)} module: ` + e);
   }
-  pendingConfirmation.command = '';
 }
 
 function start(params) {
-
-  const type = (params[0] || '').trim().toLowerCase();
-  if (!type || !type.length || !['mm'].includes(type)) {
+  const type = params[0]?.toLowerCase();
+  if (!['mm'].includes(type)) {
     return {
       msgNotify: '',
       msgSendBack: `Indicate trade type, _mm_ for market making. Example: */start mm*.`,
@@ -108,61 +109,37 @@ function start(params) {
     };
   }
 
-  const policy = (params[1] || 'optimal').trim().toLowerCase();
-  if (!policy || !policy.length || !['optimal', 'spread', 'orderbook'].includes(policy)) {
+  const policy = (params[1] || 'optimal').toLowerCase();
+  if (!['optimal', 'spread', 'orderbook'].includes(policy)) {
     return {
       msgNotify: '',
-      msgSendBack: `Wrong market making policy. It should be _spread_, _orderbook_, or _optimal_. Example: */start mm spread*.`,
+      msgSendBack: `Wrong market making policy. It should be _spread_, _orderbook_, _optimal_. Example: */start mm spread*.`,
       notifyType: 'log',
     };
   }
 
-  if (type === 'mm') {
+  let msgNotify; let msgSendBack;
 
+  if (type === 'mm') {
     tradeParams.mm_isActive = true;
     tradeParams.mm_Policy = policy;
 
-    let optionsString = '';
-    let notesStringNotify = '';
-    let notesStringMsg = '';
+    const notesStringMsg = ' Check enabled options with */params* command.';
 
-    if (tradeParams.mm_isOrderBookActive) {
-      optionsString += ' & order book building';
-    } else {
-      notesStringNotify += ' Order book building is disabled.';
-      notesStringMsg += ' Order book building is disabled—type */enable ob* to enable.';
-    }
-
-    if (tradeParams.mm_isPriceWatcherActive) {
-      optionsString += ' & price watching';
-    } else {
-      notesStringNotify += ' Price watching is disabled.';
-      notesStringMsg += ' Price watching is disabled—type */enable pw* to enable.';
-    }
-
-    if (tradeParams.mm_isLiquidityActive) {
-      optionsString += ' & liquidity and spread maintenance';
-    } else {
-      notesStringNotify += ' Liquidity and spread maintenance is disabled.';
-      notesStringMsg += ' Liquidity and spread maintenance is disabled—type */enable liq* to enable.';
-    }
-
-    msgNotify = `${config.notifyName} set to start market making${optionsString} with ${policy} policy for ${config.pair}.${notesStringNotify}`;
-    msgSendBack = `Starting market making${optionsString} with ${policy} policy for ${config.pair} pair.${notesStringMsg}`;
+    msgNotify = `${config.notifyName} set to start market making with ${policy} policy for ${config.pair}.`;
+    msgSendBack = `Starting market making with ${policy} policy for ${config.pair} pair.${notesStringMsg}`;
 
     return {
       msgNotify,
       msgSendBack,
       notifyType: 'log',
     };
-
   }
 }
 
 function stop(params) {
-
-  const type = (params[0] || '').trim();
-  if (!type || !type.length || !['mm'].includes(type)) {
+  const type = params[0]?.toLowerCase();
+  if (!['mm'].includes(type)) {
     return {
       msgNotify: '',
       msgSendBack: `Indicate trade type, _mm_ for market making. Example: */stop mm*.`,
@@ -173,19 +150,17 @@ function stop(params) {
   let msgNotify; let msgSendBack;
 
   if (type === 'mm') {
-
-    const optionsString = ', order book building, liquidity and spread maintenance, price watching';
+    const optionsString = ', order book building, liquidity and spread maintenance, price watching and other options';
 
     if (tradeParams.mm_isActive) {
       msgNotify = `${config.notifyName} stopped Market making${optionsString} for ${config.pair} pair.`;
       msgSendBack = `Market making${optionsString} for ${config.pair} pair are disabled now.`;
     } else {
       msgNotify = '';
-      msgSendBack = `Market making for ${config.pair} pair is disabled already.`;
+      msgSendBack = `Market making for ${config.pair} pair is not active.`;
     }
 
     tradeParams.mm_isActive = false;
-
   }
 
   return {
@@ -193,41 +168,75 @@ function stop(params) {
     msgSendBack,
     notifyType: 'log',
   };
-
 }
 
-async function enable(params) {
-
-  let msgNotify; let msgSendBack; let infoString; let notesStringNotify; let notesStringMsg; let optionsString;
+async function enable(params, isWebApi = false) {
+  let msgNotify; let msgSendBack; let infoString; let infoStringSendBack = ''; let optionsString;
 
   try {
-
-    const type = (params[0] || '').trim();
-    if (!type || !type.length || !['ob', 'liq', 'pw'].includes(type)) {
+    const type = params[0]?.toLowerCase();
+    if (!['ob', 'liq', 'pw'].includes(type)) {
+      msgSendBack = `Indicate option:\n\n_ob_ for order book building,\n_liq_ for liquidity and spread maintenance,`;
+      msgSendBack += `\n_pw_ for price watching.`;
+      msgSendBack += `\n\nExample: */enable ob 15*.`;
       return {
         msgNotify: '',
-        msgSendBack: `Indicate option: _ob_ for order book building, _liq_ for liquidity and spread maintenance, _pw_ for price watching. Example: */enable ob 15*.`,
+        msgSendBack,
         notifyType: 'log',
       };
     }
 
     if (type === 'ob') {
 
-      const orderBookOrdersCount = +params[1];
-      tradeParams.mm_isOrderBookActive = true;
-      if (orderBookOrdersCount && orderBookOrdersCount !== Infinity) {
-        tradeParams.mm_orderBookOrdersCount = orderBookOrdersCount;
-      } else if (!orderBookOrdersCount.length && !tradeParams.mm_orderBookOrdersCount) {
-        orderBookOrdersCount = 15;
-      } // default for mm_orderBookOrdersCount
+      const pairObj = orderUtils.parseMarket(config.pair);
 
-      infoString = `with ${tradeParams.mm_orderBookOrdersCount} maximum number of orders`;
+      const orderBookOrdersCount = +params[1];
+      if (params[1] && !utils.isPositiveNumber(orderBookOrdersCount)) {
+        return {
+          msgNotify: '',
+          msgSendBack: `Set correct ob-order count. Example: */enable ob 15 20%*.`,
+          notifyType: 'log',
+        };
+      }
+      if (utils.isPositiveNumber(orderBookOrdersCount)) {
+        tradeParams.mm_orderBookOrdersCount = orderBookOrdersCount;
+      } else if (!tradeParams.mm_orderBookOrdersCount) {
+        orderBookOrdersCount = constants.DEFAULT_ORDERBOOK_ORDERS_COUNT;
+      }
+
+      const maxOrderPercentParam = params[2];
+      let maxOrderPercent;
+      if (maxOrderPercentParam) {
+        const percentSign = maxOrderPercentParam.slice(-1);
+        maxOrderPercent = +maxOrderPercentParam.slice(0, -1);
+        if (!utils.isPositiveNumber(maxOrderPercent) || percentSign !== '%') {
+          return {
+            msgNotify: '',
+            msgSendBack: `Set correct max ob-order amount percent from market-making max order (currently _${tradeParams.mm_maxAmount.toFixed(pairObj.coin1Decimals)} ${pairObj.coin1}_). Example: */enable ob 15 20%*.`,
+            notifyType: 'log',
+          };
+        }
+      } else {
+        maxOrderPercent = 100;
+      }
+
+      tradeParams.mm_isOrderBookActive = true;
+      tradeParams.mm_orderBookMaxOrderPercent = maxOrderPercent;
+
+      infoString = '';
+      let infoStringPercent = '';
       optionsString = `Order book building`;
+      if (tradeParams.mm_orderBookMaxOrderPercent === 100) {
+        infoStringPercent = ` and same max order amount as market-making (currently _${tradeParams.mm_maxAmount.toFixed(pairObj.coin1Decimals)} ${pairObj.coin1}_)`;
+      } else {
+        const maxAgOrderAmount = tradeParams.mm_orderBookMaxOrderPercent * tradeParams.mm_maxAmount / 100;
+        infoStringPercent = ` and max order amount of _${tradeParams.mm_orderBookMaxOrderPercent}%_ from market-making max order, _~${maxAgOrderAmount.toFixed(pairObj.coin1Decimals)} ${pairObj.coin1}_ currently`;
+      }
+      infoString = ` with _${tradeParams.mm_orderBookOrdersCount}_ maximum number of orders${infoStringPercent}`;
 
     } else if (type === 'liq') {
 
       const spreadString = params[1];
-
       if (!spreadString || (spreadString.slice(-1) !== '%')) {
         return {
           msgNotify: '',
@@ -246,7 +255,6 @@ async function enable(params) {
 
       const coin1 = params[3].toUpperCase();
       const coin2 = params[5].toUpperCase();
-
       if (
         !coin1 || !coin2 || coin1 === coin2 ||
         (![config.coin1, config.coin2].includes(coin1)) || (![config.coin1, config.coin2].includes(coin2))
@@ -305,13 +313,15 @@ async function enable(params) {
       if (trend === 'middle') {
         trend = 'middle trend';
       }
-      infoString = `with ${tradeParams.mm_liquiditySellAmount} ${config.coin1} asks (sell) and ${tradeParams.mm_liquidityBuyQuoteAmount} ${config.coin2} bids (buy) within ${spreadValue}% spread & ${trend}`;
+      infoString = ` with _${tradeParams.mm_liquiditySellAmount} ${config.coin1}_ asks (sell) and _${tradeParams.mm_liquidityBuyQuoteAmount} ${config.coin2}_ bids (buy) within _${spreadValue}%_ spread & _${trend}_`;
       optionsString = `Liquidity and spread maintenance`;
 
     } else if (type === 'pw') {
 
+      const coin2Decimals = orderUtils.parseMarket(config.pair).coin2Decimals;
+
       const pwSourceInput = params[1];
-      if (!pwSourceInput || pwSourceInput === undefined) {
+      if (!pwSourceInput) {
         return {
           msgNotify: '',
           msgSendBack: `Wrong parameters. Example: */enable pw 0.1—0.2 USDT* or */enable pw ADM/USDT@CoinDeal 0.5% smart*.`,
@@ -333,7 +343,8 @@ async function enable(params) {
         if (!pair || pair.length < 3 || pair.indexOf('/') === -1 || !exchange || exchange.length < 3) {
           return {
             msgNotify: '',
-            msgSendBack: `Wrong price source. Example: */enable pw ADM/USDT@CoinDeal 0.5% smart*.`,
+            isError: true,
+            msgSendBack: isWebApi ? `Trading pair ${pair.toUpperCase()} is not valid` : `Wrong price source. Example: */enable pw ADM/USDT@CoinDeal 0.5% smart*.`,
             notifyType: 'log',
           };
         }
@@ -344,19 +355,23 @@ async function enable(params) {
           }
         });
 
-        if (!exchangeName || exchangeName === undefined) {
+        if (!exchangeName) {
           return {
             msgNotify: '',
-            msgSendBack: `I don't support ${exchange} exchange. Supported exchanges: ${config.supported_exchanges}. Example: */enable pw ADM/USDT@CoinDeal 0.5% smart*.`,
+            isError: true,
+            msgSendBack: isWebApi ? `Unknown exchange: ${exchange}` : `I don't support ${exchange} exchange. Supported exchanges: ${config.supported_exchanges}. Example: */enable pw ADM/USDT@CoinDeal 0.5% smart*.`,
             notifyType: 'log',
           };
         }
 
         pairObj = orderUtils.parseMarket(pair, exchangeName);
 
+        // We don't actually check if this pair is exists on the exchange
+        // We check if pair string includes '/' sign
         if (!pairObj) {
           return {
             msgNotify: '',
+            isError: true,
             msgSendBack: `Trading pair ${pair.toUpperCase()} is not valid. Example: */enable pw ADM/USDT@CoinDeal 0.5% smart*.`,
             notifyType: 'log',
           };
@@ -365,7 +380,8 @@ async function enable(params) {
         if (pairObj.coin1 !== config.coin1) {
           return {
             msgNotify: '',
-            msgSendBack: `Base currency of a trading pair must be ${config.coin1}, like ${config.coin1}/USDT.`,
+            isError: true,
+            msgSendBack: isWebApi ? `Base currency of a trading pair must be ${config.coin1}` : `Base currency of a trading pair must be ${config.coin1}, like ${config.coin1}/USDT.`,
             notifyType: 'log',
           };
         }
@@ -376,17 +392,24 @@ async function enable(params) {
         ) {
           return {
             msgNotify: '',
-            msgSendBack: `Unable to set Price watcher to the same trading pair as I trade, ${pairObj.pair}@${exchangeName}. Set price in numbers or watch other trading pair/exchange. Example: */enable pw 0.1—0.2 USDT* or */enable pw ADM/USDT@CoinDeal 0.5% smart*.`,
+            isError: true,
+            msgSendBack: isWebApi ? `Unable to set Price watcher to the same trading pair as I trade, ${pairObj.pair}@${exchangeName}` : `Unable to set Price watcher to the same trading pair as I trade, ${pairObj.pair}@${exchangeName}. Set price in numbers or watch other trading pair/exchange. Example: */enable pw 0.1—0.2 USDT* or */enable pw ADM/USDT@CoinDeal 0.5% smart*.`,
             notifyType: 'log',
           };
         }
 
-        const exchangeapi = require('../trade/trader_' + exchange.toLowerCase())(null, null, null, log, true);
-        const orderBook = await exchangeapi.getOrderBook(pairObj.pair);
+        let orderBook;
+        if (exchange.toLowerCase() === config.exchange) {
+          orderBook = await traderapi.getOrderBook(pairObj.pair);
+        } else {
+          const exchangeapi = require('../trade/trader_' + exchange.toLowerCase())(null, null, null, log, true);
+          orderBook = await exchangeapi.getOrderBook(pairObj.pair);
+        }
         if (!orderBook || !orderBook.asks[0] || !orderBook.bids[0]) {
           return {
             msgNotify: '',
-            msgSendBack: `Unable to get the order book for ${pairObj.pair} at ${exchangeName} exchange. Check if you've specified trading pair correctly. It may be a temporary API error also.`,
+            isError: true,
+            msgSendBack: isWebApi ? `Unable to get the order book for ${pairObj.pair} at ${exchangeName} exchange` : `Unable to get the order book for ${pairObj.pair} at ${exchangeName} exchange. Check if you've specified trading pair correctly. It may be a temporary API error also.`,
             notifyType: 'log',
           };
         }
@@ -412,7 +435,7 @@ async function enable(params) {
         pwDeviationPercent = percentValue;
 
         pwSourcePolicy = params[3];
-        if (!pwSourcePolicy || pwSourcePolicy === undefined) {
+        if (!pwSourcePolicy) {
           pwSourcePolicy = 'smart';
         }
         pwSourcePolicy = pwSourcePolicy.toLowerCase();
@@ -428,7 +451,7 @@ async function enable(params) {
         pwHighPrice = 0;
         pwMidPrice = 0;
 
-        infoString = `based on ${pwSource} with ${pwSourcePolicy} policy and ${pwDeviationPercent.toFixed(2)}% deviation`;
+        infoString = ` based on _${pwSource}_ with _${pwSourcePolicy}_ policy and _${pwDeviationPercent.toFixed(2)}%_ deviation`;
 
       } else {
         // watch price in coin
@@ -462,13 +485,12 @@ async function enable(params) {
         if (rangeOrValue.isRange) {
           pwLowPrice = rangeOrValue.from;
           pwHighPrice = rangeOrValue.to;
-          pwMidPrice = (rangeOrValue.from + rangeOrValue.to) / 2;
-          pwDeviationPercent = (rangeOrValue.to - rangeOrValue.from) / 2 / pwMidPrice * 100;
+          pwMidPrice = (pwLowPrice + pwHighPrice) / 2;
+          pwDeviationPercent = (pwHighPrice - pwLowPrice) / 2 / pwMidPrice * 100;
           pwSource = coin;
         }
 
         if (rangeOrValue.isValue) {
-
           percentString = params[3];
           if (!percentString || (percentString.slice(-1) !== '%')) {
             return {
@@ -492,22 +514,54 @@ async function enable(params) {
           pwSource = coin;
         }
 
-        // let sourceString = pwSource === '#' ? `${config.coin2} (this pair rate)` : `${coin} (global rate)`;
-        const sourceString = coin === config.coin2 ? `${coin}` : `${coin} (global rate)`;
-        infoString = `from ${pwLowPrice.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} to ${pwHighPrice.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${sourceString}—${pwDeviationPercent.toFixed(2)}% price deviation`;
+        let convertedString;
+        let sourceString;
+        let pwLowPriceInCoin2;
+        let marketDecimals;
 
+        if (coin === config.coin2) {
+          pwLowPriceInCoin2 = pwLowPrice;
+          sourceString = `${coin}`;
+          convertedString = '';
+          marketDecimals = coin2Decimals;
+        } else {
+          pwLowPriceInCoin2 = exchangerUtils.convertCryptos(coin, config.coin2, pwLowPrice).outAmount;
+          sourceString = `${coin} (global rate)`;
+          convertedString = ` (${pwLowPrice} converted to ${config.coin2})`;
+          marketDecimals = 8;
+        }
+
+        if (!utils.isPositiveNumber(pwLowPriceInCoin2)) {
+          return {
+            msgNotify: '',
+            msgSendBack: `Unable to convert ${coin} to ${config.coin2}. Command works like this: */enable pw 0.1—0.2 USDT* or */enable pw 0.5 USDT 1%*.`,
+            notifyType: 'log',
+          };
+        }
+
+        if (tradeParams.mm_priceSupportLowPrice && tradeParams.mm_priceSupportLowPrice < pwLowPriceInCoin2) {
+          return {
+            msgNotify: '',
+            msgSendBack: `Support price ${tradeParams.mm_priceSupportLowPrice.toFixed(coin2Decimals)} ${config.coin2} is less, than Price watcher's lower bound of ${pwLowPriceInCoin2.toFixed(coin2Decimals)} ${coin}${convertedString}. Update support price with */enable sp* command, or set suitable Price watcher's range.`,
+            notifyType: 'log',
+          };
+        }
+
+        infoString = ` from ${pwLowPrice.toFixed(marketDecimals)} to ${pwHighPrice.toFixed(marketDecimals)} ${sourceString}—${pwDeviationPercent.toFixed(2)}% price deviation`;
       }
 
       optionsString = `Price watching`;
 
       let isConfirmed = params[params.length-1];
-      if (isConfirmed && (['-y', '-Y'].includes(isConfirmed))) {
+      if (['-y', '-Y'].includes(isConfirmed)) {
         isConfirmed = true;
       } else {
         isConfirmed = false;
       }
 
       if (isConfirmed) {
+        const pw = require('../trade/mm_price_watcher');
+        pw.setIsPriceActual(false, '/enable pw');
 
         tradeParams.mm_isPriceWatcherActive = true;
         tradeParams.mm_priceWatcherLowPriceInSourceCoin = pwLowPrice;
@@ -516,11 +570,8 @@ async function enable(params) {
         tradeParams.mm_priceWatcherDeviationPercent = pwDeviationPercent;
         tradeParams.mm_priceWatcherSource = pwSource;
         tradeParams.mm_priceWatcherSourcePolicy = pwSourcePolicy;
-
       } else {
-
         let priceInfoString = '';
-
         pairObj = orderUtils.parseMarket(config.pair);
 
         const currencies = exchangerUtils.currencies;
@@ -561,21 +612,16 @@ async function enable(params) {
           msgSendBack,
           notifyType: 'log',
         };
-
       }
 
     } // type === "pw"
 
-    if (tradeParams.mm_isActive) {
-      msgNotify = `${config.notifyName} enabled ${optionsString} for ${config.pair} pair ${infoString}.`;
-      msgSendBack = `${optionsString} is enabled for ${config.pair} pair ${infoString}.`;
-    } else {
-      notesStringNotify = ` Market making and ${optionsString} are not started yet.`;
-      notesStringMsg = ` To start Market making and ${optionsString}, type */start mm*.`;
-      msgNotify = `${config.notifyName} enabled ${optionsString} for ${config.pair} pair ${infoString}.${notesStringNotify}`;
-      msgSendBack = `${optionsString} is enabled for ${config.pair} pair ${infoString}.${notesStringMsg}`;
+    msgNotify = `${config.notifyName} enabled ${optionsString} for ${config.pair} pair${infoString}.`;
+    msgSendBack = `${optionsString} is enabled for ${config.pair} pair${infoString}.${infoStringSendBack}`;
+    if (!tradeParams.mm_isActive) {
+      msgNotify += ` Market making and ${optionsString} are not started yet.`;
+      msgSendBack += ` To start Market making and ${optionsString}, type */start mm*.`;
     }
-
   } catch (e) {
     log.error(`Error in enable() of ${utils.getModuleName(module.id)} module: ` + e);
   }
@@ -585,21 +631,22 @@ async function enable(params) {
     msgSendBack,
     notifyType: 'log',
   };
-
 }
 
 function disable(params) {
+  let msgNotify; let msgSendBack; let optionsString;
 
-  const type = (params[0] || '').trim();
-  if (!type || !type.length || !['ob', 'liq', 'pw'].includes(type)) {
+  const type = params[0]?.toLowerCase();
+  if (!['ob', 'liq', 'pw'].includes(type)) {
+    msgSendBack = `Indicate option:\n\n_ob_ for order book building,\n_liq_ for liquidity and spread maintenance,`;
+    msgSendBack += `\n_pw_ for price watching.`;
+    msgSendBack += `\n\nExample: */disable ob*.`;
     return {
       msgNotify: '',
-      msgSendBack: `Indicate option: _ob_ for order book building, _liq_ for liquidity and spread maintenance, _pw_ for price watching. Example: */disable ob*.`,
+      msgSendBack,
       notifyType: 'log',
     };
   }
-
-  let msgNotify; let msgSendBack; let optionsString;
 
   if (type === 'ob') {
     tradeParams.mm_isOrderBookActive = false;
@@ -612,12 +659,11 @@ function disable(params) {
     optionsString = `Price watching`;
   }
 
+  msgNotify = `${config.notifyName} disabled ${optionsString} for ${config.pair} pair on ${config.exchangeName}.`;
+  msgSendBack = `${optionsString} is disabled for ${config.pair} pair on ${config.exchangeName}.`;
   if (tradeParams.mm_isActive) {
-    msgNotify = `${config.notifyName} disabled ${optionsString} for ${config.pair} pair. Market making is still active.`;
-    msgSendBack = `${optionsString} is disabled for ${config.pair} pair. Market making is still active. To stop market making, type */stop mm*. To close current ob-orders, type */clear ob*. To close current liq-orders, type */clear liq*.`;
-  } else {
-    msgNotify = `${config.notifyName} disabled ${optionsString} for ${config.pair}.`;
-    msgSendBack = `${optionsString} is disabled for ${config.pair}.`;
+    msgNotify += ` Market making is still active.`;
+    msgSendBack += ` Market making is still active—to stop it, type */stop mm*.`;
   }
 
   return {
@@ -625,7 +671,6 @@ function disable(params) {
     msgSendBack,
     notifyType: 'log',
   };
-
 }
 
 function buypercent(param) {
@@ -672,11 +717,15 @@ function amount(param) {
       notifyType: 'log',
     };
   }
+
   tradeParams.mm_minAmount = min;
   tradeParams.mm_maxAmount = max;
+
+  const infoString = `to make market amounts from ${min} to ${max} ${config.coin1} for ${config.pair} pair.`;
+
   return {
-    msgNotify: `${config.notifyName} is set to make market with amounts from ${min} to ${max} ${config.coin1} for ${config.pair} pair.`,
-    msgSendBack: `Set to make market with amounts from ${min} to ${max} ${config.coin1} for ${config.pair} pair.`,
+    msgNotify: `${config.notifyName} is set ${infoString}`,
+    msgSendBack: `Set ${infoString}`,
     notifyType: 'log',
   };
 }
@@ -691,7 +740,7 @@ function interval(param) {
     };
   }
 
-  let time = (param[1] || '').trim();
+  const time = (param[1] || '').trim().toLowerCase();
   let multiplier;
 
   switch (time) {
@@ -705,8 +754,15 @@ function interval(param) {
       multiplier = 1000*60*60;
       break;
     default:
-      multiplier = 1000*60;
-      time = 'min';
+      break;
+  }
+
+  if (!multiplier) {
+    return {
+      msgNotify: '',
+      msgSendBack: `Invalid time unit for interval. Set _sec_, _min_, or _hour_. Example: */interval 1-5 min*.`,
+      notifyType: 'log',
+    };
   }
 
   const [minStr, maxStr] = val.split('-');
@@ -726,119 +782,133 @@ function interval(param) {
       notifyType: 'log',
     };
   }
+
   tradeParams.mm_minInterval = Math.round(min * multiplier);
   tradeParams.mm_maxInterval = Math.round(max * multiplier);
+
+  const infoString = `to make market in intervals from ${min} to ${max} ${time} for ${config.pair} pair.`;
+
   return {
-    msgNotify: `${config.notifyName} is set to make market in intervals from ${min} to ${max} ${time} for ${config.pair} pair.`,
-    msgSendBack: `Set to make market in intervals from ${min} to ${max} ${time} for ${config.pair} pair.`,
+    msgNotify: `${config.notifyName} is set ${infoString}`,
+    msgSendBack: `Set ${infoString}`,
     notifyType: 'log',
   };
 }
 
 async function clear(params) {
+  try {
+    let pair = params[0];
+    if (!pair || pair.indexOf('/') === -1) {
+      pair = config.pair;
+    }
+    const pairObj = orderUtils.parseMarket(pair);
 
-  let pair = params[0];
-  if (!pair || pair.indexOf('/') === -1) {
-    pair = config.pair;
-  }
-  const pairObj = orderUtils.parseMarket(pair);
+    let doForce;
+    let purposes;
+    let purposeString;
+    let type;
+    let filter;
+    let filerPriceString;
 
-  let doForce;
-  let purposes;
-  let purposeString;
+    const orderPurposes = utils.cloneObject(orderCollector.orderPurposes);
+    delete orderPurposes['all'];
 
-  params.forEach((param) => {
-    if (['force'].includes(param.toLowerCase())) {
-      doForce = true;
+    for (const param of params) {
+      if (['buy'].includes(param.toLowerCase())) {
+        type = 'buy';
+      }
+      if (['sell'].includes(param.toLowerCase())) {
+        type = 'sell';
+      }
+      if (['force'].includes(param.toLowerCase())) {
+        doForce = true;
+      }
+
+      if (['all'].includes(param.toLowerCase())) {
+        purposes = 'all';
+      }
+      if (['unk'].includes(param.toLowerCase())) {
+        purposes = 'unk';
+        purposeString = `unknown`;
+      }
+
+      Object.keys(orderPurposes).forEach((purpose) => {
+        if (param.toLowerCase() === purpose) {
+          purposes = [purpose];
+          purposeString = orderPurposes[purpose]?.toLowerCase();
+        }
+      });
+
+      if (param.startsWith('>') || param.startsWith('<')) {
+        if (['all', 'unk'].includes(purposes)) {
+          return {
+            msgNotify: '',
+            msgSendBack: `Price filter doesn't work with **all** and **unk** orders. Try: */clear mm sell >0.5 ${config.coin2}*.`,
+            notifyType: 'log',
+          };
+        }
+        filerPriceString = param;
+        let price = param;
+        const paramIndex = params.indexOf(param);
+        const operator = param.charAt(0);
+        price = +price.substring(1);
+        if (!utils.isPositiveOrZeroNumber(price)) {
+          return {
+            msgNotify: '',
+            msgSendBack: `Indicate price after '${operator}'. Example: */clear mm sell >0.5 ${config.coin2}*.`,
+            notifyType: 'log',
+          };
+        }
+        const priceCoin = params[paramIndex + 1]?.toUpperCase();
+        if (priceCoin !== pairObj.coin2) {
+          return {
+            msgNotify: '',
+            msgSendBack: `Price should be in ${pairObj.coin2} for ${pairObj.pair}. Example: */clear ${pairObj.pair} mm sell >0.5 ${pairObj.coin2}*.`,
+            notifyType: 'log',
+          };
+        }
+        filter = { };
+        if (operator === '<') {
+          filter.price = { $lt: price };
+        } else {
+          filter.price = { $gt: price };
+        }
+      }
     }
 
-    if (['all'].includes(param.toLowerCase())) {
-      // purposes = ['mm', 'tb', 'ob', 'liq', 'pw', 'man'];
-      purposes = 'all';
+    if (!purposes) {
+      return {
+        msgNotify: ``,
+        msgSendBack: 'Specify type of orders to clear. F. e., */clear mm sell*.',
+        notifyType: 'log',
+      };
     }
-    if (['unk'].includes(param.toLowerCase())) {
-      purposes = 'unk';
-      purposeString = `unknown`;
+
+    let output = '';
+    let clearedInfo = {};
+    const typeString = type ? `**${type}**-` : '';
+
+    if (purposes === 'all') {
+      clearedInfo = await orderCollector.clearAllOrders(pairObj.pair, doForce, type, 'User command', `${typeString}orders`);
+    } else { // Closing orders of specified type only
+      let filterString = '';
+      if (purposes === 'unk') {
+        clearedInfo = await orderCollector.clearUnknownOrders(pairObj.pair, doForce, type, 'User command', `**${purposeString}** ${typeString}orders${filterString}`);
+      } else {
+        if (filter) filterString = ` with price ${filerPriceString} ${config.coin2}`;
+        clearedInfo = await orderCollector.clearLocalOrders(purposes, pairObj.pair, doForce, type, filter, 'User command', `**${purposeString}** ${typeString}orders${filterString}`);
+      }
     }
-    if (['man'].includes(param.toLowerCase())) {
-      purposes = ['man'];
-      purposeString = `manual`;
-    }
-    if (['mm'].includes(param.toLowerCase())) {
-      purposes = ['mm'];
-      purposeString = `market making`;
-    }
-    if (['tb'].includes(param.toLowerCase())) {
-      purposes = ['tb'];
-      purposeString = `trade bot`;
-    }
-    if (['ob'].includes(param.toLowerCase())) {
-      purposes = ['ob'];
-      purposeString = `order book`;
-    }
-    if (['liq'].includes(param.toLowerCase())) {
-      purposes = ['liq'];
-      purposeString = `liquidity`;
-    }
-    if (['pw'].includes(param.toLowerCase())) {
-      purposes = ['pw'];
-      purposeString = `price watcher`;
-    }
-  });
-  if (!purposes) {
+    output = clearedInfo.logMessage;
+
     return {
       msgNotify: ``,
-      msgSendBack: 'Specify type of orders to clear. F. e., */clear mm*.',
+      msgSendBack: output,
       notifyType: 'log',
     };
+  } catch (e) {
+    log.error(`Error in clear() of ${utils.getModuleName(module.id)} module: ` + e);
   }
-
-  let output = '';
-  let clearedInfo = {};
-
-  if (purposes === 'all') {
-
-    clearedInfo = await orderCollector.clearAllOrders(pairObj.pair, doForce);
-    if (clearedInfo.totalOrders) {
-
-      if (clearedInfo.includesGeneralOrders) {
-        output = `Closed ${clearedInfo.clearedOrders} of ${clearedInfo.totalOrders} orders on ${config.exchangeName} for ${pairObj.pair}.`;
-      } else {
-        output = `Closed ${clearedInfo.clearedOrders} of ${clearedInfo.totalOrders} orders on ${config.exchangeName} for ${pairObj.pair}. Unable to get all of open orders because of API error. Try again.`;
-      }
-
-    } else {
-
-      if (clearedInfo.includesGeneralOrders) {
-        output = `No open orders on ${config.exchangeName} for ${pairObj.pair}.`;
-      } else {
-        output = `Unable to get all of open orders because of API error. Try again.`;
-      }
-
-    }
-
-  } else {
-
-    if (purposes === 'unk') {
-      clearedInfo = await orderCollector.clearUnknownOrders(pairObj.pair, doForce);
-    } else {
-      clearedInfo = await orderCollector.clearOrders(purposes, pairObj.pair, doForce);
-    }
-
-    if (clearedInfo.totalOrders) {
-      output = `Closed ${clearedInfo.clearedOrders} of ${clearedInfo.totalOrders} **${purposeString}** orders on ${config.exchangeName} for ${pairObj.pair}.`;
-    } else {
-      output = `No open **${purposeString}** orders on ${config.exchangeName} for ${pairObj.pair}.`;
-    }
-
-  }
-
-  return {
-    msgNotify: ``,
-    msgSendBack: `${output}`,
-    notifyType: 'log',
-  };
-
 }
 
 async function fill(params) {
@@ -872,7 +942,7 @@ async function fill(params) {
     }
   });
 
-  if (params.length < 3) {
+  if (params.length < 4) {
     return {
       msgNotify: ``,
       msgSendBack: 'Wrong arguments. It works like this: */fill ADM/BTC buy quote=0.00002000 low=0.00000100 high=0.00000132 count=7*.',
@@ -886,14 +956,22 @@ async function fill(params) {
   let pair = params[0];
   if (!pair || pair.indexOf('/') === -1) {
     pair = config.pair;
-    type = params[0].trim();
+    type = params[0]?.trim().toLowerCase();
   } else {
-    type = params[1].trim();
+    type = params[1]?.trim().toLowerCase();
+  }
+
+  if (!['buy', 'sell'].includes(type)) {
+    return {
+      msgNotify: ``,
+      msgSendBack: 'Specify _buy_ or _sell_ orders to fill. Example: */fill ADM/BTC buy quote=0.00002000 low=0.00000100 high=0.00000132 count=7*.',
+      notifyType: 'log',
+    };
   }
 
   const pairObj = orderUtils.parseMarket(pair);
 
-  if ( !amount || !amountName || (type === 'buy' && amountName === 'amount') || (type === 'sell' && amountName === 'quote')) {
+  if (!amount || !amountName || (type === 'buy' && amountName === 'amount') || (type === 'sell' && amountName === 'quote')) {
     output = 'Buy should follow with _quote_, sell with _amount_.';
     return {
       msgNotify: ``,
@@ -1017,8 +1095,8 @@ async function fill(params) {
   let placedOrders = 0; let notPlacedOrders = 0;
   let order;
   for (i=0; i < orderList.length; i++) {
-    order = await orderUtils.addOrder(type, pairObj.pair, orderList[i].price, orderList[i].amount, 1, null, pairObj);
-    if (order && order.orderid) {
+    order = await orderUtils.addGeneralOrder(type, pairObj.pair, orderList[i].price, orderList[i].amount, 1, null, pairObj);
+    if (order && order._id) {
       placedOrders += 1;
       total1 += +orderList[i].amount;
       total2 += +orderList[i].altAmount;
@@ -1129,8 +1207,17 @@ function getBuySellParams(params, type) {
     };
   }
 
+  if (price === 'market' && !traderapi.features().placeMarketOrder) {
+    return {
+      msgNotify: ``,
+      msgSendBack: `Placing Market orders on ${config.exchangeName} via API is not supported.`,
+      notifyType: 'log',
+    };
+  }
+
   // when Market order, buy should pass quote parameter, when sell — amount
   const allowBuyAmountExchanges = ['resfinex', 'atomars'];
+
   if (price === 'market' && !allowBuyAmountExchanges.includes(config.exchange)) {
     if ((type === 'buy' && !quote) || ((type === 'sell' && !amount))) {
       output = `When placing Market order, buy should follow with _quote_, sell with _amount_. Command works like this: */sell ADM/BTC amount=200 price=market*.`;
@@ -1183,14 +1270,18 @@ async function buy_sell(params, type) {
 
   let result; let msgNotify; let msgSendBack;
   if (params.price === 'market') {
-    result = await orderUtils.addOrder(type, params.pairObj.pair, null, params.amount, 0, params.quote, params.pairObj);
+    result = await orderUtils.addGeneralOrder(type, params.pairObj.pair, null,
+        params.amount, 0, params.quote, params.pairObj);
   } else {
-    result = await orderUtils.addOrder(type, params.pairObj.pair, params.price, params.amount, 1, params.quote, params.pairObj);
+    result = await orderUtils.addGeneralOrder(type, params.pairObj.pair, params.price,
+        params.amount, 1, params.quote, params.pairObj);
   }
 
   if (result !== undefined) {
     msgSendBack = result.message;
-    msgNotify = `${config.notifyName}: ${result.message}`;
+    if (result?._id) {
+      msgNotify = `${config.notifyName}: ${result.message}`;
+    }
   } else {
     msgSendBack = `Request to place an order with params ${JSON.stringify(params)} failed. It looks like an API temporary error. Try again.`;
     msgNotify = '';
@@ -1207,7 +1298,7 @@ async function buy_sell(params, type) {
 function params() {
 
   let output = `I am set to work with ${config.pair} pair on ${config.exchangeName}. Current trading settings:`;
-  output += '\n\n' + JSON.stringify(tradeParams, null, 3); ;
+  output += '\n\n' + JSON.stringify(tradeParams, null, 3);
 
   return {
     msgNotify: ``,
@@ -1314,166 +1405,182 @@ async function rates(params) {
 }
 
 async function deposit(params) {
-
   let output = '';
 
-  if (!params[0] || params[0].indexOf('/') !== -1) {
-    output = 'Please specify coin to get a deposit address. F. e., */deposit ADM*.';
-    return {
-      msgNotify: ``,
-      msgSendBack: `${output}`,
-      notifyType: 'log',
-    };
-  }
-
-  const coin1 = params[0].toUpperCase();
-
-  const depositAddress = await traderapi.getDepositAddress(coin1);
-  if (depositAddress) {
-    output = `The deposit address for ${coin1} on ${config.exchangeName}: ${depositAddress}`;
-  } else {
-    output = `Unable to get a deposit address for ${coin1}.`;
-    const dontCreateAddresses = ['coindeal'];
-    if (dontCreateAddresses.includes(config.exchange)) {
-      output += ` Note: ${config.exchangeName} don't create new deposit addresses via API. Create it manually with a website.`;
+  try {
+    if (!params[0] || params[0].indexOf('/') !== -1) {
+      output = 'Please specify coin to get a deposit address. F. e., */deposit ADM*.';
+      return {
+        msgNotify: ``,
+        msgSendBack: `${output}`,
+        notifyType: 'log',
+      };
     }
+
+    if (!traderapi.features().getDepositAddress) {
+      return {
+        msgNotify: ``,
+        msgSendBack: `The exchange doesn't support receiving a deposit address.`,
+        notifyType: 'log',
+      };
+    }
+
+    const coin1 = params[0].toUpperCase();
+    const depositAddresses = await traderapi.getDepositAddress(coin1);
+
+    if (depositAddresses?.length) {
+      output = `The deposit addresses for ${coin1} on ${config.exchangeName}:\n${depositAddresses.map(({ network, address }) => `${network ? `_${network}_: ` : ''}${address}`).join('\n')}`;
+    } else {
+      output = `Unable to get a deposit addresses for ${coin1}.`;
+
+      if (traderapi.features().createDepositAddressWithWebsiteOnly) {
+        output += ` Note: ${config.exchangeName} don't create new deposit addresses via API. Create it manually with a website.`;
+      }
+    }
+  } catch (e) {
+    log.error(`Error in deposit() of ${utils.getModuleName(module.id)} module: ` + e);
   }
 
   return {
     msgNotify: ``,
-    msgSendBack: `${output}`,
+    msgSendBack: output,
     notifyType: 'log',
   };
-
 }
 
 async function stats(params) {
-
   let output = '';
 
-  let pair = params[0];
-  if (!pair) {
-    pair = config.pair;
-  }
-  if (pair.indexOf('/') === -1) {
-    output = `Wrong pair '${pair}'. Try */stats ${config.pair}*.`;
-    return {
-      msgNotify: ``,
-      msgSendBack: `${output}`,
-      notifyType: 'log',
-    };
-  }
-
-  const pairObj = orderUtils.parseMarket(pair);
-
-  const exchangeRates = await traderapi.getRates(pairObj.pair);
-  if (exchangeRates) {
-
-    let volumeInCoin2 = '';
-    if (exchangeRates.volumeInCoin2) {
-      volumeInCoin2 = ` & ${utils.formatNumber(+exchangeRates.volumeInCoin2.toFixed(pairObj.coin2Decimals), true)} ${pairObj.coin2}`;
+  try {
+    let pair = params[0];
+    if (!pair) {
+      pair = config.pair;
     }
-    output += `${config.exchangeName} 24h stats for ${pairObj.pair} pair:`;
-    let delta = exchangeRates.high-exchangeRates.low;
-    let average = (exchangeRates.high+exchangeRates.low)/2;
-    let deltaPercent = delta/average * 100;
-    output += `\nVol: ${utils.formatNumber(+exchangeRates.volume.toFixed(pairObj.coin1Decimals), true)} ${pairObj.coin1}${volumeInCoin2}.`;
-    output += `\nLow: ${exchangeRates.low.toFixed(pairObj.coin2Decimals)}, high: ${exchangeRates.high.toFixed(pairObj.coin2Decimals)}, delta: _${(delta).toFixed(pairObj.coin2Decimals)}_ ${pairObj.coin2} (${(deltaPercent).toFixed(2)}%).`;
-    delta = exchangeRates.ask-exchangeRates.bid;
-    average = (exchangeRates.ask+exchangeRates.bid)/2;
-    deltaPercent = delta/average * 100;
-    output += `\nBid: ${exchangeRates.bid.toFixed(pairObj.coin2Decimals)}, ask: ${exchangeRates.ask.toFixed(pairObj.coin2Decimals)}, spread: _${(delta).toFixed(pairObj.coin2Decimals)}_ ${pairObj.coin2} (${(deltaPercent).toFixed(2)}%).`;
+    if (pair.indexOf('/') === -1) {
+      output = `Wrong pair '${pair}'. Try */stats ${config.pair}*.`;
+      return {
+        msgNotify: ``,
+        msgSendBack: `${output}`,
+        notifyType: 'log',
+      };
+    }
+    const pairObj = orderUtils.parseMarket(pair);
+    const coin1 = pairObj.coin1;
+    const coin2 = pairObj.coin2;
+    const coin1Decimals = pairObj.coin1Decimals;
+    const coin2Decimals = pairObj.coin2Decimals;
 
-  } else {
-    output += `Unable to get ${config.exchangeName} stats for ${pairObj.pair}.`;
-  }
-
-  const ordersByType = await orderStats.aggregate(true, true, false, 'mm', pairObj.pair);
-
-  if (ordersByType) {
-    if (ordersByType === 'Empty' || ordersByType.coin1AmountTotalAllCount === 0) {
-      output += '\n\n' + `There were no Market making orders for ${pairObj.pair} all time.`;
+    // First, get exchange 24h stats on pair: volume, low, high, spread
+    const exchangeRates = await traderapi.getRates(pairObj.pair);
+    const totalVolume24 = +exchangeRates?.volume;
+    if (exchangeRates) {
+      let volumeInCoin2String = '';
+      if (exchangeRates.volumeInCoin2) {
+        volumeInCoin2String = ` & ${utils.formatNumber(+exchangeRates.volumeInCoin2.toFixed(coin2Decimals), true)} ${coin2}`;
+      }
+      output += `${config.exchangeName} 24h stats for ${pairObj.pair} pair:`;
+      let delta = exchangeRates.high-exchangeRates.low;
+      let average = (exchangeRates.high+exchangeRates.low)/2;
+      let deltaPercent = delta/average * 100;
+      output += `\nVol: ${utils.formatNumber(+exchangeRates.volume.toFixed(coin1Decimals), true)} ${coin1}${volumeInCoin2String}.`;
+      output += `\nLow: ${exchangeRates.low.toFixed(coin2Decimals)}, high: ${exchangeRates.high.toFixed(coin2Decimals)}, delta: _${(delta).toFixed(coin2Decimals)}_ ${coin2} (${(deltaPercent).toFixed(2)}%).`;
+      delta = exchangeRates.ask-exchangeRates.bid;
+      average = (exchangeRates.ask+exchangeRates.bid)/2;
+      deltaPercent = delta/average * 100;
+      output += `\nBid: ${exchangeRates.bid.toFixed(coin2Decimals)}, ask: ${exchangeRates.ask.toFixed(coin2Decimals)}, spread: _${(delta).toFixed(coin2Decimals)}_ ${coin2} (${(deltaPercent).toFixed(2)}%).`;
     } else {
-      output += '\n\n' + `Market making stats for ${pairObj.pair} pair:` + '\n';
-      if (ordersByType.coin1AmountTotalDayCount !== 0) {
-        output += `24h: ${ordersByType.coin1AmountTotalDayCount} orders with ${utils.formatNumber(+ordersByType.coin1AmountTotalDay.toFixed(pairObj.coin1Decimals), true)} ${pairObj.coin1} and ${utils.formatNumber(+ordersByType.coin2AmountTotalDay.toFixed(pairObj.coin2Decimals), true)} ${pairObj.coin2}`;
-      } else {
-        output += `24h: no orders`;
-      }
-      if (ordersByType.coin1AmountTotalMonthCount > ordersByType.coin1AmountTotalDayCount) {
-        output += `, 30d: ${ordersByType.coin1AmountTotalMonthCount} orders with ${utils.formatNumber(+ordersByType.coin1AmountTotalMonth.toFixed(pairObj.coin1Decimals), true)} ${pairObj.coin1} and ${utils.formatNumber(+ordersByType.coin2AmountTotalMonth.toFixed(pairObj.coin2Decimals), true)} ${pairObj.coin2}`;
-      } else if (ordersByType.coin1AmountTotalMonthCount === 0) {
-        output += `30d: no orders`;
-      }
-      if (ordersByType.coin1AmountTotalAllCount > ordersByType.coin1AmountTotalMonthCount) {
-        output += `, all time: ${ordersByType.coin1AmountTotalAllCount} orders with ${utils.formatNumber(+ordersByType.coin1AmountTotalAll.toFixed(pairObj.coin1Decimals), true)} ${pairObj.coin1} and ${utils.formatNumber(+ordersByType.coin2AmountTotalAll.toFixed(pairObj.coin2Decimals), true)} ${pairObj.coin2}`;
-      }
-      output += '.';
+      output += `Unable to get ${config.exchangeName} stats for ${pairObj.pair}. Try again later.`;
     }
-  } else {
-    output += '\n\n' + `Unable to get Market making stats for ${pairObj.pair}.`;
+
+  } catch (e) {
+    log.error(`Error in stats() of ${utils.getModuleName(module.id)} module: ` + e);
   }
 
   return {
     msgNotify: ``,
-    msgSendBack: `${output}`,
+    msgSendBack: output,
     notifyType: 'log',
   };
-
 }
 
-async function orders(params, tx) {
-
+async function pair(params, tx = {}) {
   let output = '';
 
-  let pair = params[0];
-  if (!pair) {
-    pair = config.pair;
-  }
-  if (pair.indexOf('/') === -1) {
-    output = `Wrong pair '${pair}'. Try */orders ${config.pair}*.`;
-    return {
-      msgNotify: ``,
-      msgSendBack: `${output}`,
-      notifyType: 'log',
-    };
+  try {
+    let pair = params[0]?.toUpperCase();
+    if (!pair) {
+      pair = config.pair;
+    }
+    if (pair.indexOf('/') === -1) {
+      return {
+        msgNotify: ``,
+        msgSendBack: `Wrong pair '${pair}'. Try */pair ${config.pair}*.`,
+        notifyType: 'log',
+      };
+    }
+
+    if (!traderapi.features().getMarkets) {
+      return {
+        msgNotify: ``,
+        msgSendBack: `The exchange doesn't support receiving market info.`,
+        notifyType: 'log',
+      };
+    }
+
+    const info = traderapi.marketInfo(pair);
+    if (!info) {
+      return {
+        msgNotify: ``,
+        msgSendBack: `Unable to receive ${pair} market info. Try */pair ${config.pair}*.`,
+        notifyType: 'log',
+      };
+    }
+
+    output = `${config.exchangeName} reported these details on ${pair} market:\n\n`;
+    output += JSON.stringify(info, null, 3);
+  } catch (e) {
+    log.error(`Error in pair() of ${utils.getModuleName(module.id)} module: ` + e);
   }
 
+  return {
+    msgNotify: ``,
+    msgSendBack: output,
+    notifyType: 'log',
+  };
+}
+
+async function getOrdersInfo(accountNo = 0, tx = {}, pair) {
+  let output = '';
   const pairObj = orderUtils.parseMarket(pair);
-
-  const ordersByType = await orderStats.ordersByType(pairObj.pair);
   let diffStringUnknownOrdersCount = '';
 
-  const openOrders = await traderapi.getOpenOrders(pairObj.pair);
+  let ordersByType; let openOrders;
+  if (accountNo === 0) {
+    ordersByType = await orderStats.ordersByType(pairObj.pair);
+    openOrders = await traderapi.getOpenOrders(pairObj.pair);
+  }
+
   if (openOrders) {
 
     let diff; let sign;
-    let diffStringExchnageOrdersCount = '';
-    if (
-      previousOrders[tx.senderId] &&
-      previousOrders[tx.senderId][pairObj.pair] &&
-      previousOrders[tx.senderId][pairObj.pair].openOrdersCount
-    ) {
-      diff = openOrders.length - previousOrders[tx.senderId][pairObj.pair].openOrdersCount;
+    let diffStringExchangeOrdersCount = '';
+    if (previousOrders?.[accountNo]?.[tx.senderId]?.[pairObj?.pair]?.openOrdersCount) {
+      diff = openOrders.length - previousOrders[accountNo][tx.senderId][pairObj.pair].openOrdersCount;
       sign = diff > 0 ? '+' : '−';
       diff = Math.abs(diff);
-      if (diff) diffStringExchnageOrdersCount = ` (${sign}${diff})`;
+      if (diff) diffStringExchangeOrdersCount = ` (${sign}${diff})`;
     }
 
     if (openOrders.length > 0) {
-      output = `${config.exchangeName} open orders for ${pairObj.pair} pair: ${openOrders.length}${diffStringExchnageOrdersCount}.`;
+      output = `${config.exchangeName} open orders for ${pairObj.pair} pair: ${openOrders.length}${diffStringExchangeOrdersCount}.`;
     } else {
       output = `No open orders on ${config.exchangeName} for ${pairObj.pair}.`;
     }
 
     ordersByType.openOrdersCount = openOrders.length;
-    ordersByType.unkLength = openOrders.length - ordersByType.all.length;
-    if (
-      previousOrders[tx.senderId] &&
-      previousOrders[tx.senderId][pairObj.pair] &&
-      previousOrders[tx.senderId][pairObj.pair].unkLength
-    ) {
-      diff = ordersByType.unkLength - previousOrders[tx.senderId][pairObj.pair].unkLength;
+    ordersByType.unkLength = openOrders.length - ordersByType['all'].allOrders.length;
+    if (previousOrders?.[accountNo]?.[tx.senderId]?.[pairObj?.pair]?.unkLength) {
+      diff = ordersByType.unkLength - previousOrders[accountNo][tx.senderId][pairObj.pair].unkLength;
       sign = diff > 0 ? '+' : '−';
       diff = Math.abs(diff);
       if (diff) diffStringUnknownOrdersCount = ` (${sign}${diff})`;
@@ -1483,16 +1590,12 @@ async function orders(params, tx) {
     output = `Unable to get ${config.exchangeName} orders for ${pairObj.pair}.`;
   }
 
-  const getDiffString = function(orderType) {
+  const getDiffString = function(purpose) {
     let diff; let sign;
     let diffString = '';
-    if (
-      previousOrders[tx.senderId] &&
-      previousOrders[tx.senderId][pairObj.pair] &&
-      previousOrders[tx.senderId][pairObj.pair][orderType] &&
-      previousOrders[tx.senderId][pairObj.pair][orderType].length >= 0
-    ) {
-      diff = ordersByType[orderType].length - previousOrders[tx.senderId][pairObj.pair][orderType].length;
+    if (previousOrders?.[accountNo]?.[tx.senderId]?.[pairObj.pair]?.[purpose]?.allOrders.length >= 0) {
+      diff = ordersByType[purpose].allOrders.length -
+        previousOrders[accountNo][tx.senderId][pairObj.pair][purpose].allOrders.length;
       sign = diff > 0 ? '+' : '−';
       diff = Math.abs(diff);
       if (diff) diffString = ` (${sign}${diff})`;
@@ -1500,180 +1603,259 @@ async function orders(params, tx) {
     return diffString;
   };
 
-  if (ordersByType.all && ordersByType.all.length > 0) {
+  const getAmountsString = function(purpose) {
+    let amountsString = '';
+    if (ordersByType[purpose].buyOrdersQuote || ordersByType[purpose].sellOrdersAmount) {
+      amountsString = ` — ${ordersByType[purpose].buyOrdersQuote.toFixed(pairObj.coin2Decimals)} ${pairObj.coin2} buys & ${ordersByType[purpose].sellOrdersAmount.toFixed(pairObj.coin1Decimals)} ${pairObj.coin1} sells`;
+    }
+    return amountsString;
+  };
 
+  if (ordersByType?.['all']?.allOrders?.length > 0) {
     output += `\n\nOrders in my database:`;
-
-    output += `\nMarket making: ${ordersByType.mm.length}${getDiffString('mm')},`;
-    output += `\nDynamic order book: ${ordersByType.ob.length}${getDiffString('ob')},`;
-    output += `\nTradebot: ${ordersByType.tb.length}${getDiffString('tb')},`;
-    output += `\nLiquidity: ${ordersByType.liq.length}${getDiffString('liq')},`;
-    output += `\nPrice watching: ${ordersByType.pw.length}${getDiffString('pw')},`;
-    output += `\nManual orders: ${ordersByType.man.length}${getDiffString('man')},`;
-
-    output += `\nTotal — ${ordersByType.all.length}${getDiffString('all')}`;
-    output += '.';
-
+    Object.keys(orderCollector.orderPurposes).forEach((purpose) => {
+      output += `\n${orderCollector.orderPurposes[purpose]}: ${ordersByType[purpose].allOrders.length}${getDiffString(purpose)}${getAmountsString(purpose)},`;
+    });
+    output = utils.trimAny(output, ',') + '.';
   } else {
     output += '\n\n' + `No open orders in my database.`;
   }
 
   output += `\n\nOrders which are not in my database (Unknown orders): ${ordersByType.unkLength}${diffStringUnknownOrdersCount}.`;
 
-  previousOrders[tx.senderId] = {};
-  previousOrders[tx.senderId][pairObj.pair] = ordersByType;
+  previousOrders[accountNo][tx.senderId] = {};
+  previousOrders[accountNo][tx.senderId][pairObj.pair] = ordersByType;
 
-  return {
-    msgNotify: ``,
-    msgSendBack: `${output}`,
-    notifyType: 'log',
-  };
+  return output;
 
 }
 
-async function make(params, tx, confirmation) {
+async function orders(params, tx = {}) {
+  let pair = params[0];
+  if (!pair) {
+    pair = config.pair;
+  }
+  if (pair.indexOf('/') === -1) {
+    return {
+      msgNotify: ``,
+      msgSendBack: `Wrong pair '${pair}'. Try */orders ${config.pair}*.`,
+      notifyType: 'log',
+    };
+  }
+
+  const account0Orders = await getOrdersInfo(0, tx, pair);
+  const output = account0Orders;
+
+  return {
+    msgNotify: ``,
+    msgSendBack: output,
+    notifyType: 'log',
+  };
+}
+
+/**
+ * Makes a price with buy or sell order of type 'man'
+ * @param {Array} params Command parameters to parse
+ * @param {Object} tx Income ADM transaction
+ * @param {Boolean} isWebApi Other messages if isWebApi true
+ * @returns Notification messages
+ */
+async function make(params, tx, isWebApi = false) {
   // make price 1.1 — buy/sell to achieve target price of 1.1 COIN2
   try {
 
+    let msgNotify; let msgSendBack; let actionString; let priceString;
+
     const param = (params[0] || '').trim();
     if (!param || !['price'].includes(param)) {
+      msgSendBack = `Indicate option:\n`;
+      msgSendBack += `\n_price_ to buy/sell to achieve target price: */make price 1.1 ${config.coin2}.`;
       return {
         msgNotify: '',
-        msgSendBack: `Indicate option: _price_ to buy/sell to achieve target price. Example: */make price 1.1*.`,
+        msgSendBack,
         notifyType: 'log',
       };
     }
 
-    let msgNotify; let msgSendBack; let actionString; let priceString;
-
     if (param === 'price') {
+      try {
+        let priceInfoString = '';
 
-      let priceInfoString = '';
+        const pairObj = orderUtils.parseMarket(config.pair);
+        const pair = pairObj.pair;
+        const coin1 = pairObj.coin1;
+        const coin2 = pairObj.coin2;
+        const coin1Decimals = pairObj.coin1Decimals;
+        const coin2Decimals = pairObj.coin2Decimals;
 
-      const pairObj = orderUtils.parseMarket(config.pair);
-      const pair = pairObj.pair;
-      const coin1 = pairObj.coin1;
-      const coin2Decimals = pairObj.coin2Decimals;
+        const currencies = exchangerUtils.currencies;
+        const coin1Rates = Object
+            .keys(currencies)
+            .filter((t) => t.startsWith(coin1 + '/'))
+            .map((t) => {
+              const p = `${coin1}/**${t.replace(coin1 + '/', '')}**`;
+              return `${p}: ${currencies[t]}`;
+            })
+            .join(', ');
 
-      const currencies = exchangerUtils.currencies;
-      const res = Object
-          .keys(currencies)
-          .filter((t) => t.startsWith(coin1 + '/'))
-          .map((t) => {
-            const p = `${coin1}/**${t.replace(coin1 + '/', '')}**`;
-            return `${p}: ${currencies[t]}`;
-          })
-          .join(', ');
-
-      if (!res.length) {
-        if (!pair) {
-          priceInfoString = `I can’t get rates for *${coin1} from Infoservice*.`;
-        }
-      } else {
-        priceInfoString = `Global market rates for ${coin1}:\n${res}.`;
-      }
-
-      const exchangeRatesBefore = await traderapi.getRates(pair);
-      if (priceInfoString) {
-        priceInfoString += '\n\n';
-      }
-      if (exchangeRatesBefore) {
-        priceInfoString += `${config.exchangeName} rates for ${pair} pair:\nBid: ${exchangeRatesBefore.bid.toFixed(coin2Decimals)}, ask: ${exchangeRatesBefore.ask.toFixed(coin2Decimals)}.`;
-      } else {
-        priceInfoString += `Unable to get ${config.exchangeName} rates for ${pair}.`;
-      }
-
-      const targetPrice = +params[1];
-      if (!targetPrice || targetPrice === Infinity || targetPrice <= 0) {
-        return {
-          msgNotify: '',
-          msgSendBack: `Incorrect ${config.coin2} target price: ${targetPrice}. Example: */make price 1.1*.\n\n${priceInfoString}`,
-          notifyType: 'log',
-        };
-      }
-
-      isConfirmed = params[2];
-      if (isConfirmed && (['-y', '-Y'].includes(isConfirmed))) {
-        confirmation = true;
-      } else {
-        confirmation = false;
-      }
-
-      // get amount from orderBook to but or sell
-
-      /* reliabilityKoef: we must be sure that we'll fill all orders in the order book,
-         and users/bot can add more orders while filling these orders
-         Moreover, we should place counter-order to set new spread
-      */
-      const reliabilityKoef = utils.randomValue(1.05, 1.1);
-      const orderBookInfo = utils.getOrderBookInfo(await traderapi.getOrderBook(config.pair),
-          tradeParams.mm_liquiditySpreadPercent, targetPrice);
-      orderBookInfo.amountTargetPrice *= reliabilityKoef;
-      orderBookInfo.amountTargetPriceQuote *= reliabilityKoef;
-
-      priceString = `${config.pair} price of ${targetPrice} ${config.coin2}`;
-      if (orderBookInfo.typeTargetPrice === 'inSpread') {
-        return {
-          msgNotify: '',
-          msgSendBack: `${priceString} is already in spread. **No action needed**.\n\n${priceInfoString}`,
-          notifyType: 'log',
-        };
-      } else {
-        actionString = `${orderBookInfo.typeTargetPrice} ${orderBookInfo.amountTargetPrice.toFixed(orderUtils.parseMarket(config.pair).coin1Decimals)} ${config.coin1} ${orderBookInfo.typeTargetPrice === 'buy' ? 'with' : 'for'} ${orderBookInfo.amountTargetPriceQuote.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${config.coin2}`;
-      }
-
-      if (confirmation) {
-        // let order = true;
-        const order = await orderUtils.addOrder(orderBookInfo.typeTargetPrice,
-            config.pair, targetPrice, orderBookInfo.amountTargetPrice, 1, orderBookInfo.amountTargetPriceQuote, pairObj);
-        if (order && order.orderid) {
-          const showRatesAfterOrder = async function(exchangeRatesBefore, priceString, actionString) {
-            setTimeout(async () => {
-
-              priceInfoString = '';
-              const exchangeRatesAfter = await traderapi.getRates(pair);
-              if (exchangeRatesAfter) {
-                priceInfoString += `${config.exchangeName} rates for ${pair} pair:\nBefore action — bid: ${exchangeRatesBefore.bid.toFixed(coin2Decimals)}, ask: ${exchangeRatesBefore.ask.toFixed(coin2Decimals)}.\nAfter action — bid: ${exchangeRatesAfter.bid.toFixed(coin2Decimals)}, ask: ${exchangeRatesAfter.ask.toFixed(coin2Decimals)}.`;
-              } else {
-                priceInfoString += `Unable to get ${config.exchangeName} rates for ${pair}.`;
-              }
-
-              msgNotify = `Making ${priceString}: Successfully placed an order to *${actionString}*.\n\n${priceInfoString}`;
-              msgSendBack = `Making ${priceString}: Successfully placed an order to **${actionString}**.\n\n${priceInfoString}`;
-              notifyType = 'log';
-              notify(msgNotify, notifyType);
-              api.sendMessage(config.passPhrase, tx.senderId, msgSendBack).then((response) => {
-                if (!response.success) {
-                  log.warn(`Failed to send ADM message '${msgSendBack}' to ${tx.senderId}. ${response.errorMessage}.`);
-                }
-              });
-            }, 2000);
-          };
-          await showRatesAfterOrder(exchangeRatesBefore, priceString, actionString);
-
-        } else {
-
-          msgNotify = '';
-          msgSendBack = `Unable to make ${priceString}. I was unable to ${actionString}: it looks like a temporary API error. Try again.\n\n${priceInfoString}`;
-
-        }
-
-      } else {
-        pendingConfirmation.command = `/make ${params.join(' ')}`;
-        pendingConfirmation.timestamp = Date.now();
-        msgNotify = '';
-        let pwWarning = ' ';
-        const pw = require('../trade/mm_price_watcher');
-        if (tradeParams.mm_isActive && pw.getIsPriceActual()) {
-          pwWarning = `\n\n**Warning**: Price watcher is enabled for ${config.pair} from ${pw.getLowPrice().toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} to ${pw.getHighPrice().toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${config.coin2}.`;
-          if (targetPrice < pw.getLowPrice() || targetPrice > pw.getHighPrice()) {
-            pwWarning += ` **Target price ${targetPrice} ${config.coin2} is out of this range.** If you confirm change, the bot will try to restore a price then.`;
+        if (!coin1Rates.length) {
+          if (!pair) {
+            priceInfoString = `I can’t get rates for *${coin1} from Infoservice*.`;
           }
-          pwWarning += `\n\n`;
+        } else {
+          priceInfoString = `Global market rates for ${coin1}:\n${coin1Rates}.`;
         }
-        msgSendBack = `Are you sure to make ${priceString}? I am going to **${actionString}**.${pwWarning}Confirm with **/y** command or ignore.\n\n${priceInfoString}`;
-      }
 
+        const exchangeRatesBefore = await traderapi.getRates(pair);
+        if (priceInfoString) {
+          priceInfoString += '\n\n';
+        }
+        if (exchangeRatesBefore) {
+          priceInfoString += `${config.exchangeName} rates for ${pair} pair:\nBid: ${exchangeRatesBefore.bid.toFixed(coin2Decimals)}, ask: ${exchangeRatesBefore.ask.toFixed(coin2Decimals)}.`;
+        } else {
+          return {
+            msgNotify: '',
+            msgSendBack: `Unable to get ${config.exchangeName} rates for ${pair}. Try again.`,
+            notifyType: 'log',
+          };
+        }
+
+        let targetPrice = params[1];
+        targetPrice = +targetPrice;
+        if (!utils.isPositiveNumber(targetPrice)) {
+          return {
+            msgNotify: '',
+            msgSendBack: `Incorrect ${config.coin2} target price: ${targetPrice}. Example: */make price 1.1 ${config.coin2} now*.\n\n${priceInfoString}`,
+            notifyType: 'log',
+          };
+        }
+
+        const verifyCoin = params[2]?.toUpperCase();
+        if (!verifyCoin || verifyCoin !== config.coin2) {
+          return {
+            msgNotify: '',
+            msgSendBack: `You must set a price in ${config.coin2}. Example: */make price 1.1 ${config.coin2} now*.\n\n${priceInfoString}`,
+            notifyType: 'log',
+          };
+        }
+
+        const nowOrIn = params[3]?.toUpperCase();
+        let dateString = '';
+        if (!nowOrIn || !['NOW'].includes(nowOrIn)) {
+          return {
+            msgNotify: '',
+            msgSendBack: `Specify when to achieve target price of ${targetPrice.toFixed(coin2Decimals)} ${coin2}. Example: */make price 1.1 ${config.coin2} now*.\n\n${priceInfoString}`,
+            notifyType: 'log',
+          };
+        } else if (nowOrIn === 'NOW') {
+          dateString = 'now';
+        }
+
+        let isConfirmed = params[params.length-1];
+        if (['-y', '-Y'].includes(isConfirmed)) {
+          isConfirmed = true;
+        } else {
+          isConfirmed = false;
+        }
+
+        /*
+          Set amount to buy or sell
+          reliabilityKoef: we must be sure that we'll fill all orders in the order book,
+            as users/bot can add more orders while filling these orders.
+            Moreover, we should place counter-order to set new spread.
+        */
+        const reliabilityKoef = utils.randomValue(1.05, 1.1);
+        const orderBook = await traderapi.getOrderBook(config.pair);
+        const orderBookInfo = utils.getOrderBookInfo(orderBook, tradeParams.mm_liquiditySpreadPercent, targetPrice);
+        orderBookInfo.amountTargetPrice *= reliabilityKoef;
+        orderBookInfo.amountTargetPriceQuote *= reliabilityKoef;
+
+        const whichAccount = '';
+        let priceBefore; let priceChangeSign;
+        if (orderBookInfo.typeTargetPrice === 'buy') {
+          priceBefore = exchangeRatesBefore.ask;
+          priceChangeSign = '+';
+        } else {
+          priceBefore = exchangeRatesBefore.bid;
+          priceChangeSign = '–';
+        }
+        const priceChange = utils.numbersDifferencePercent(priceBefore, targetPrice);
+        priceString = `${config.pair} price of ${targetPrice.toFixed(coin2Decimals)} ${config.coin2} from ${priceBefore.toFixed(coin2Decimals)} ${config.coin2}`;
+        priceString += ` (${priceChangeSign}${priceChange.toFixed(2)}%)`;
+        priceString += ` ${dateString}`;
+
+        if (orderBookInfo.typeTargetPrice === 'inSpread') {
+          return {
+            msgNotify: '',
+            msgSendBack: `${priceString} is already in spread. **No action needed**.\n\n${priceInfoString}`,
+            notifyType: 'log',
+          };
+        } else {
+          actionString = `${orderBookInfo.typeTargetPrice} ${orderBookInfo.amountTargetPrice.toFixed(coin1Decimals)} ${config.coin1} ${orderBookInfo.typeTargetPrice === 'buy' ? 'with' : 'for'} ${orderBookInfo.amountTargetPriceQuote.toFixed(coin2Decimals)} ${config.coin2}`;
+        }
+
+        if (isConfirmed) {
+          if (nowOrIn === 'NOW') {
+            // Make price right now: place pm-order
+            const order = await orderUtils.addGeneralOrder(orderBookInfo.typeTargetPrice,
+                config.pair, targetPrice, orderBookInfo.amountTargetPrice, 1, orderBookInfo.amountTargetPriceQuote, pairObj,
+                'man');
+            if (order && order._id) {
+              // After we place an order, notify about price changes
+              setTimeout(async () => {
+                priceInfoString = '';
+                const exchangeRatesAfter = await traderapi.getRates(pair);
+                if (exchangeRatesAfter) {
+                  priceInfoString += `${config.exchangeName} rates for ${pair} pair:\nBefore action — bid: ${exchangeRatesBefore.bid.toFixed(coin2Decimals)}, ask: ${exchangeRatesBefore.ask.toFixed(coin2Decimals)}.`;
+                  priceInfoString += `\nAfter action — bid: ${exchangeRatesAfter.bid.toFixed(coin2Decimals)}, ask: ${exchangeRatesAfter.ask.toFixed(coin2Decimals)}`;
+                  priceInfoString += ` [May be not actual if cached by exchange].`;
+                } else {
+                  priceInfoString += `Unable to get ${config.exchangeName} rates for ${pair}.`;
+                }
+                msgNotify = `${config.notifyName}: Making ${priceString}: Successfully placed an order${whichAccount} to *${actionString}*.\n\n${priceInfoString}`;
+                msgSendBack = `Making ${priceString}: Successfully placed an order${whichAccount} to **${actionString}**.\n\n${priceInfoString}`;
+                notify(msgNotify, 'log');
+                if (!isWebApi) {
+                  api.sendMessage(config.passPhrase, tx.senderId, msgSendBack).then((response) => {
+                    if (!response.success) {
+                      log.warn(`Failed to send ADM message '${msgSendBack}' to ${tx.senderId}. ${response.errorMessage}.`);
+                    }
+                  });
+                }
+              }, 7000); // If exchange doesn't cache rates, 7 sec is enough to update
+            } else {
+              // Unable to place price change order
+              msgNotify = '';
+              msgSendBack = `Unable to make ${priceString}. The order to ${actionString} failed: it's likely not enough funds or a temporary API error. Check balances and try again.\n\n${priceInfoString}`;
+            }
+          }
+        } else {
+          // Ask for confirmation
+          pendingConfirmation.command = `/make ${params.join(' ')}`;
+          pendingConfirmation.timestamp = Date.now();
+          msgNotify = '';
+          let pwWarning = ' ';
+          const pw = require('../trade/mm_price_watcher');
+          if (tradeParams.mm_isActive && pw.getIsPriceActualAndEnabled()) {
+            if (targetPrice < pw.getLowPrice() || targetPrice > pw.getHighPrice()) {
+              pwWarning = `\n\n**Warning: Target price ${targetPrice} ${config.coin2} is out of ${pw.getPwRangeString()}**`;
+              if (nowOrIn === 'NOW') {
+                pwWarning += ` If you confirm, the bot will restore a price then.`;
+                pwWarning += pw.getIsPriceRangeSetWithSupportPrice() && targetPrice < pw.getLowPrice() ? ` If you don't want Support price/Price watcher to interfere, update them with  _/enable sp_ & _/enable pw_ commands first.` : ` If you don't want Price watcher to interfere, update its range with _/enable pw_ command first.`;
+              }
+              pwWarning += `\n\n`;
+            }
+          }
+          let actionNoteString= '';
+          if (nowOrIn === 'NOW') {
+            actionNoteString = `I am going to`;
+          }
+          msgSendBack = isWebApi ? `Are you sure to make ${priceString}? ${actionNoteString} **${actionString}**.${pwWarning}` :`Are you sure to make ${priceString}? ${actionNoteString} **${actionString}**.${pwWarning}Confirm with **/y** command or ignore.\n\n${priceInfoString}`;
+        }
+
+      } catch (e) {
+        log.error(`Error in make()-price of ${utils.getModuleName(module.id)} module: ` + e);
+      }
     } // if (param === "price")
 
     return {
@@ -1685,91 +1867,101 @@ async function make(params, tx, confirmation) {
   } catch (e) {
     log.error(`Error in make() of ${utils.getModuleName(module.id)} module: ` + e);
   }
-
 }
 
-async function calc(params) {
-
-  if (params.length !== 4) {
-    return {
-      msgNotify: ``,
-      msgSendBack: 'Wrong arguments. Command works like this: */calc 2.05 BTC in USDT*.',
-      notifyType: 'log',
-    };
-  }
-
+async function calc(params, tx, isWebApi = false) {
   let output = '';
-  const amount = +params[0];
-  const inCurrency = params[1].toUpperCase().trim();
-  const outCurrency = params[3].toUpperCase().trim();
-  const pair = inCurrency + '/' + outCurrency;
-  const pair2 = outCurrency + '/' + inCurrency;
+  try {
 
-  if (!utils.isPositiveOrZeroNumber(amount)) {
-    output = `Wrong amount: _${params[0]}_. Command works like this: */calc 2.05 BTC in USD*.`;
-    return {
-      msgNotify: ``,
-      msgSendBack: `${output}`,
-      notifyType: 'log',
-    };
-  }
-  if (!exchangerUtils.hasTicker(inCurrency)) {
-    output = `I don’t have rates of crypto *${inCurrency}* from Infoservice. Made a typo? Try */calc 2.05 BTC in USDT*.`;
-  }
-  if (!exchangerUtils.hasTicker(outCurrency)) {
-    output = `I don’t have rates of crypto *${outCurrency}* from Infoservice. Made a typo? Try */calc 2.05 BTC in USDT*.`;
-  }
+    if (params.length !== 4) {
+      return {
+        msgNotify: ``,
+        msgSendBack: 'Wrong arguments. Command works like this: */calc 2.05 BTC in USDT*.',
+        notifyType: 'log',
+      };
+    }
 
-  let result;
-  if (!output) {
-    result = exchangerUtils.convertCryptos(inCurrency, outCurrency, amount).outAmount;
-    if (!utils.isPositiveOrZeroNumber(result)) {
-      output = `Unable to calc _${params[0]}_ ${inCurrency} in ${outCurrency}.`;
+    const amount = +params[0];
+    const inCurrency = params[1].toUpperCase().trim();
+    const outCurrency = params[3].toUpperCase().trim();
+    const pair = inCurrency + '/' + outCurrency;
+    const pair2 = outCurrency + '/' + inCurrency;
+
+    if (!utils.isPositiveOrZeroNumber(amount)) {
+      output = `Wrong amount: _${params[0]}_. Command works like this: */calc 2.05 BTC in USD*.`;
       return {
         msgNotify: ``,
         msgSendBack: `${output}`,
         notifyType: 'log',
       };
     }
-
-    const precision = exchangerUtils.isFiat(outCurrency) ? 2 : constants.PRECISION_DECIMALS;
-    output = `Global market value of ${utils.formatNumber(amount)} ${inCurrency} equals ${utils.formatNumber(result.toFixed(precision), true)} ${outCurrency}.`;
-  } else {
-    output = '';
-  }
-
-  if (output) {
-    output += '\n\n';
-  }
-  let askValue; let bidValue;
-
-  let exchangeRates = await traderapi.getRates(pair);
-  if (exchangeRates) {
-    askValue = exchangeRates.ask * amount;
-    bidValue = exchangeRates.bid * amount;
-    output += `${config.exchangeName} value of ${utils.formatNumber(amount)} ${inCurrency}:\nBid: **${utils.formatNumber(bidValue.toFixed(8))} ${outCurrency}**, ask: **${utils.formatNumber(askValue.toFixed(8))} ${outCurrency}**.`;
-  } else {
-    exchangeRates = await traderapi.getRates(pair2);
-    if (exchangeRates) {
-      askValue = amount / exchangeRates.ask;
-      bidValue = amount / exchangeRates.bid;
-      output += `${config.exchangeName} value of ${utils.formatNumber(amount)} ${inCurrency}:\nBid: **${utils.formatNumber(bidValue.toFixed(8))} ${outCurrency}**, ask: **${utils.formatNumber(askValue.toFixed(8))} ${outCurrency}**.`;
-    } else {
-      output += `Unable to get ${config.exchangeName} rates for ${pair}.`;
+    if (!exchangerUtils.hasTicker(inCurrency)) {
+      output = `I don’t have rates of crypto *${inCurrency}* from Infoservice. Made a typo? Try */calc 2.05 BTC in USDT*.`;
     }
+    if (!exchangerUtils.hasTicker(outCurrency)) {
+      output = `I don’t have rates of crypto *${outCurrency}* from Infoservice. Made a typo? Try */calc 2.05 BTC in USDT*.`;
+    }
+
+    let result;
+    if (!output) {
+      result = exchangerUtils.convertCryptos(inCurrency, outCurrency, amount).outAmount;
+      if (!utils.isPositiveOrZeroNumber(result)) {
+        output = `Unable to calc _${params[0]}_ ${inCurrency} in ${outCurrency}.`;
+        return {
+          msgNotify: ``,
+          msgSendBack: `${output}`,
+          notifyType: 'log',
+        };
+      }
+
+      const precision = exchangerUtils.isFiat(outCurrency) ? 2 : constants.PRECISION_DECIMALS;
+      output = isWebApi ? utils.formatNumber(result.toFixed(precision), false) : `Global market value of ${utils.formatNumber(amount)} ${inCurrency} equals ${utils.formatNumber(result.toFixed(precision), true)} ${outCurrency}.`;
+    } else {
+      output = '';
+    }
+
+    if (output && !isWebApi) {
+      output += '\n\n';
+    }
+    let askValue; let bidValue;
+
+    let exchangeRates = await traderapi.getRates(pair);
+    if (!isWebApi) {
+      if (exchangeRates) {
+        askValue = exchangeRates.ask * amount;
+        bidValue = exchangeRates.bid * amount;
+        output += `${config.exchangeName} value of ${utils.formatNumber(amount)} ${inCurrency}:\nBid: **${utils.formatNumber(bidValue.toFixed(8))} ${outCurrency}**, ask: **${utils.formatNumber(askValue.toFixed(8))} ${outCurrency}**.`;
+      } else {
+        exchangeRates = await traderapi.getRates(pair2);
+        if (exchangeRates) {
+          askValue = amount / exchangeRates.ask;
+          bidValue = amount / exchangeRates.bid;
+          output += `${config.exchangeName} value of ${utils.formatNumber(amount)} ${inCurrency}:\nBid: **${utils.formatNumber(bidValue.toFixed(8))} ${outCurrency}**, ask: **${utils.formatNumber(askValue.toFixed(8))} ${outCurrency}**.`;
+        } else {
+          output += `Unable to get ${config.exchangeName} rates for ${pair}.`;
+        }
+      }
+    }
+
+  } catch (e) {
+    log.error(`Error in calc() of ${utils.getModuleName(module.id)} module: ` + e);
   }
 
   return {
     msgNotify: ``,
-    msgSendBack: `${output}`,
+    msgSendBack: output,
     notifyType: 'log',
   };
 
 }
 
-async function balances({}, tx) {
-
-  const balances = await traderapi.getBalances();
+/**
+ * Creates a string for balances object
+ * Adds totalBTC and totalUSD to balances object
+ * @param {Array of Object} balances Balances
+ * @return {String, Object} String of balances info and balances object with totalBTC and totalUSD
+ */
+function balancesString(balances, caption) {
   let output = '';
   let totalBTC = 0; let totalUSD = 0;
   const unknownCryptos = [];
@@ -1777,9 +1969,9 @@ async function balances({}, tx) {
   if (balances.length === 0) {
     output = `All empty.`;
   } else {
-    output = `${config.exchangeName} balances:\n`;
+    output = caption;
+    balances = balances.filter((crypto) => !['totalBTC', 'totalUSD'].includes(crypto.code));
     balances.forEach((crypto) => {
-
       output += `${utils.formatNumber(+(crypto.total).toFixed(8), true)} _${crypto.code}_`;
       if (crypto.total !== crypto.free) {
         output += ` (${utils.formatNumber(+crypto.free.toFixed(8), true)} available`;
@@ -1791,13 +1983,14 @@ async function balances({}, tx) {
       output += '\n';
 
       let value;
+      const skipUnknownCryptos = ['BTXCRD'];
       if (crypto.usd) {
         totalUSD += crypto.usd;
       } else {
         value = exchangerUtils.convertCryptos(crypto.code, 'USD', crypto.total).outAmount;
         if (value) {
           totalUSD += value;
-        } else {
+        } else if (!skipUnknownCryptos.includes(crypto.code)) {
           unknownCryptos.push(crypto.code);
         }
       }
@@ -1827,54 +2020,54 @@ async function balances({}, tx) {
     });
 
   }
+  return { output, balances };
+}
 
-  const diff = utils.difference(balances, previousBalances[tx.senderId]);
-  if (diff) {
-    if (diff[0]) {
-      output += '\nChanges:\n';
-      let delta; let deltaUSD = 0; let deltaBTC = 0; let deltaCoin1 = 0; let deltaCoin2 = 0;
-      let sign; let signUSD = ''; let signBTC = ''; let signCoin1 = ''; let signCoin2 = '';
-      diff.forEach((crypto) => {
-        delta = Math.abs(crypto.now - crypto.prev);
-        sign = crypto.now > crypto.prev ? '+' : '−';
-        if (crypto.code === 'totalUSD') {
-          deltaUSD = delta;
-          signUSD = sign;
-          return;
-        }
-        if (crypto.code === 'totalBTC') {
-          deltaBTC = delta;
-          signBTC = sign;
-          return;
-        }
-        if (crypto.code === config.coin1) {
-          deltaCoin1 = delta;
-          signCoin1 = sign;
-        }
-        if (crypto.code === config.coin2) {
-          deltaCoin2 = delta;
-          signCoin2 = sign;
-        }
-        output += `_${crypto.code}_: ${sign}${utils.formatNumber(+(delta).toFixed(8), true)}`;
-        output += '\n';
-      });
+async function getBalancesInfo(accountNo = 0, tx, isWebApi = false) {
 
-      output += `Total holdings ${signUSD}${utils.formatNumber(+deltaUSD.toFixed(2), true)} _USD_ or ${signBTC}${utils.formatNumber(deltaBTC.toFixed(8), true)} _BTC_`;
-      if (deltaCoin1 && deltaCoin2 && (signCoin1 !== signCoin2)) {
-        const price = deltaCoin2 / deltaCoin1;
-        output += `\n${signCoin1 === '+' ? 'I\'ve bought' : 'I\'ve sold'} ${utils.formatNumber(+deltaCoin1.toFixed(orderUtils.parseMarket(config.pair).coin1Decimals), true)} _${config.coin1}_ at ${utils.formatNumber(price.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals), true)} _${config.coin2}_ price.`;
-      }
+  let output = '';
+  try {
 
-    } else {
-      output += '\nNo changes.\n';
+    let balances =
+      await traderapi.getBalances();
+
+    const caption = `${config.exchangeName} balances:\n`;
+    const balancesObject = balancesString(balances, caption);
+    output = balancesObject.output;
+    balances = balancesObject.balances;
+
+    if (!isWebApi) {
+      output += utils.differenceInBalancesString(
+          balances,
+          previousBalances[accountNo][tx.senderId],
+          orderUtils.parseMarket(config.pair),
+      );
+
+      previousBalances[accountNo][tx.senderId] = balances;
     }
+  } catch (e) {
+    log.error(`Error in getBalancesInfo() of ${utils.getModuleName(module.id)} module: ` + e);
   }
 
-  previousBalances[tx.senderId] = balances;
+  return output;
+}
+
+async function balances({}, tx, isWebApi = false) {
+
+  let output = '';
+  try {
+
+    const account0Balances = await getBalancesInfo(0, tx, isWebApi);
+    const account1Balances = undefined;
+    output = account1Balances ? account0Balances + '\n\n' + account1Balances : account0Balances;
+
+  } catch (e) {
+    log.error(`Error in balances() of ${utils.getModuleName(module.id)} module: ` + e);
+  }
 
   return {
     msgNotify: ``,
-    msgSendBack: `${output}`,
+    msgSendBack: output,
     notifyType: 'log',
   };
 
@@ -1888,15 +2081,11 @@ function version() {
   };
 }
 
-function saveConfig() {
-  const toSave = 'module.exports = ' + JSON.stringify(tradeParams, null, 2).replace(/"/g, '\'').replace(/\n\}/g, ',\n};\n');
-  fs.writeFileSync('./trade/settings/tradeParams_' + config.exchange + '.js', toSave);
-}
-
 const commands = {
   help,
   rates,
   stats,
+  pair,
   orders,
   calc,
   balances,
@@ -1916,4 +2105,7 @@ const commands = {
   deposit,
   make,
   y,
+  saveConfig: utils.saveConfig,
 };
+
+module.exports.commands = commands;
