@@ -345,7 +345,7 @@ async function setPrice(type, coin1Amount) {
 
     let ask_high; let bid_low; let price;
     const orderBook = await traderapi.getOrderBook(config.pair);
-    let orderBookInfo = utils.getOrderBookInfo(orderBook, tradeParams.mm_liquiditySpreadPercent);
+    const orderBookInfo = utils.getOrderBookInfo(orderBook, tradeParams.mm_liquiditySpreadPercent);
     if (!orderBookInfo) {
       log.warn(`Market-making: Order books are empty for ${config.pair}, or temporary API error. Unable to set a price while placing mm-order.`);
       return {

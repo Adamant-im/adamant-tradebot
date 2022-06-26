@@ -171,7 +171,7 @@ function stop(params) {
 }
 
 async function enable(params, isWebApi = false) {
-  let msgNotify; let msgSendBack; let infoString; let infoStringSendBack = ''; let optionsString;
+  let msgNotify; let msgSendBack; let infoString; const infoStringSendBack = ''; let optionsString;
 
   try {
     const type = params[0]?.toLowerCase();
