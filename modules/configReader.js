@@ -86,14 +86,17 @@ const fields = {
     type: String,
     default: 'Hello 😊. This is a stub. I have nothing to say. Please check my config.',
   },
+  debug_api: {
+    type: Number,
+  },
 };
 
 try {
-
-  if (isDev) {
+  if (isDev || process.env.JEST_WORKER_ID) {
     config = JSON.parse(jsonminify(fs.readFileSync('./config.test', 'utf-8')));
   } else {
-    config = JSON.parse(jsonminify(fs.readFileSync('./config.json', 'utf-8')));
+    const configFile = fs.existsSync('./config.json') ? './config.json' : './config.default.json';
+    config = JSON.parse(jsonminify(fs.readFileSync(configFile, 'utf-8')));
   }
 
   if (!config.node_ADM) {

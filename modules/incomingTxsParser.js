@@ -22,7 +22,7 @@ module.exports = async (tx) => {
     return;
   }
   const { incomingTxsDb } = db;
-  const knownTx = await incomingTxsDb.findOne({ txid: tx.id });
+  const knownTx = await incomingTxsDb.findOne({ _id: tx.id });
   if (knownTx !== null) {
     if (!knownTx.height || !processedTxs[tx.id]) {
       await updateProcessedTx(tx, knownTx, knownTx.height && processedTxs[tx.id]); // update height of Tx and last processed block
@@ -55,16 +55,16 @@ module.exports = async (tx) => {
     messageDirective = 'command';
   }
 
-  const spamerIsNotyfy = await incomingTxsDb.findOne({
+  const spamerAlreadyNotified = await incomingTxsDb.findOne({
     senderId: tx.senderId,
     isSpam: true,
-    date: { $gt: (utils.unix() - 24 * 3600 * 1000) }, // last 24h
+    date: { $gt: (utils.unixTimeStampMs() - 24 * 3600 * 1000) }, // last 24h
   });
 
   const itx = new incomingTxsDb({
     _id: tx.id,
     txid: tx.id,
-    date: utils.unix(),
+    date: utils.unixTimeStampMs(),
     timestamp: tx.timestamp,
     amount: tx.amount,
     fee: tx.fee,
@@ -91,20 +91,25 @@ module.exports = async (tx) => {
   let msgSendBack; let msgNotify;
   const admTxDescription = `Income ADAMANT Tx: ${constants.ADM_EXPLORER_URL}/tx/${tx.id} from ${tx.senderId}`;
 
-  const countRequestsUser = (await incomingTxsDb.find({
+  const userRequestsCount = await incomingTxsDb.count({
     senderId: tx.senderId,
-    date: { $gt: (utils.unix() - 24 * 3600 * 1000) }, // last 24h
-  })).length;
+    date: { $gt: (utils.unixTimeStampMs() - 24 * 3600 * 1000) }, // last 24h
+  });
 
-  if (countRequestsUser > 100000 || spamerIsNotyfy) { // 100000 per 24h is a limit for accepting commands, otherwise user will be considered as spammer
+  if (userRequestsCount > 100000 || spamerAlreadyNotified) { // 100000 per 24h is a limit for accepting commands, otherwise user will be considered as spammer
     await itx.update({
       isProcessed: true,
       isSpam: true,
     });
+    log.warn(`${config.notifyName} received a message from spam-user _${tx.senderId}_. Ignoring. Income ADAMANT Tx: https://explorer.adamant.im/tx/${tx.id}.`);
   }
 
   // do not process messages from non-admin accounts
-  if (!config.admin_accounts.includes(tx.senderId) && (type === 'command' || type === 'unknown')) {
+  if (
+    !config.admin_accounts.includes(tx.senderId) &&
+    !itx.isSpam &&
+    (messageDirective === 'command' || messageDirective === 'unknown')
+  ) {
     log.warn(`${config.notifyName} received a message from non-admin user _${tx.senderId}_. Ignoring. Income ADAMANT Tx: https://explorer.adamant.im/tx/${tx.id}.`);
     itx.update({
       isProcessed: true,
@@ -123,24 +128,36 @@ module.exports = async (tx) => {
   await itx.save();
   await updateProcessedTx(tx, itx, false);
 
-  if (itx.isSpam && !spamerIsNotyfy) {
+  if (itx.isSpam && !spamerAlreadyNotified) {
     msgNotify = `${config.notifyName} notifies _${tx.senderId}_ is a spammer or talks too much. ${admTxDescription}.`;
-    msgSendBack = `I’ve _banned_ you. No, really. **Don’t send any transfers as they will not be processed**. Come back tomorrow but less talk, more deal.`;
+    msgSendBack = `I’ve _banned_ you as you talk too much. Connect with my master.`;
     notify(msgNotify, 'warn');
     api.sendMessage(config.passPhrase, tx.senderId, msgSendBack).then((response) => {
       if (!response.success) {
         log.warn(`Failed to send ADM message '${msgSendBack}' to ${tx.senderId}. ${response.errorMessage}.`);
       }
     });
-    return;
   }
+
+  if (itx.isProcessed) return;
 
   switch (messageDirective) {
     case ('transfer'):
       transferTxs(itx, tx);
       break;
     case ('command'):
-      commandTxs(decryptedMessage, tx, itx);
+      const commandResult = await commandTxs(decryptedMessage, tx, itx);
+
+      if (commandResult?.msgSendBack) {
+        const chunks = utils.chunkString(commandResult.msgSendBack, constants.MAX_ADM_MESSAGE_LENGTH);
+        for (const chunk of chunks) {
+          const response = await api.sendMessage(config.passPhrase, tx.senderId, chunk);
+          if (!response?.success) {
+            log.warn(`Failed to send ADM message '${commandResult.msgSendBack}' to ${tx.senderId}. ${response?.errorMessage}.`);
+          }
+        }
+      }
+
       break;
     default:
       unknownTxs(tx, itx);
@@ -152,7 +169,7 @@ module.exports = async (tx) => {
 async function updateProcessedTx(tx, itx, updateDb) {
 
   processedTxs[tx.id] = {
-    updated: utils.unix(),
+    updated: utils.unixTimeStampMs(),
     height: tx.height,
   };
 
