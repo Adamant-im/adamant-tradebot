@@ -35,6 +35,13 @@ module.exports = (db) => {
         });
       });
     }
+    static count(a) {
+      return new Promise((resolve, reject) => {
+        db.count(a).then((count) => {
+          resolve(count);
+        });
+      });
+    }
     _data() {
       const data = {};
       for (const field in this) {
