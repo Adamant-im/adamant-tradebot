@@ -306,7 +306,7 @@ async function isEnoughCoins(coin1, coin2, amount1, amount2, type, mmCurrentActi
           output = `Not enough balance${onWhichAccount} to place ${amount1.toFixed(coin1Decimals)} ${coin1} ${type} mm-order (in order book). Free: ${coin1Balance.free.toFixed(coin1Decimals)} ${coin1}, frozen: ${coin1Balance.freezed.toFixed(coin1Decimals)} ${coin1}.`;
         }
       } else { // type === 'buy'
-        coin2Balance = takerCoin1Balance;
+        coin2Balance = takerCoin2Balance;
         if (!coin2Balance.free || coin2Balance.free < amount2) {
           isBalanceEnough = false;
           onWhichAccount = traderapi2 ? ' on second account' : '';

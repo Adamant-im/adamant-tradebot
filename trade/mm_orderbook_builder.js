@@ -280,10 +280,10 @@ async function isEnoughCoins(coin1, coin2, amount1, amount2, type) {
 
   if (balances) {
     try {
-      balance1free = balances.filter((crypto) => crypto.code === coin1)[0].free;
-      balance2free = balances.filter((crypto) => crypto.code === coin2)[0].free;
-      balance1freezed = balances.filter((crypto) => crypto.code === coin1)[0].freezed;
-      balance2freezed = balances.filter((crypto) => crypto.code === coin2)[0].freezed;
+      balance1free = balances.filter((crypto) => crypto.code === coin1)[0]?.free || 0;
+      balance2free = balances.filter((crypto) => crypto.code === coin2)[0]?.free || 0;
+      balance1freezed = balances.filter((crypto) => crypto.code === coin1)[0]?.freezed || 0;
+      balance2freezed = balances.filter((crypto) => crypto.code === coin2)[0]?.freezed || 0;
 
       if ((!balance1free || balance1free < amount1) && type === 'sell') {
         output = `Not enough balance to place ${amount1.toFixed(orderUtils.parseMarket(config.pair).coin1Decimals)} ${coin1} ${type} ob-order. Free: ${balance1free.toFixed(orderUtils.parseMarket(config.pair).coin1Decimals)} ${coin1}, frozen: ${balance1freezed.toFixed(orderUtils.parseMarket(config.pair).coin1Decimals)} ${coin1}.`;

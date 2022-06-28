@@ -202,10 +202,10 @@ module.exports = {
       if (!balances.result) {
         if (balances.message) {
           if (Date.now()-lastNotifyBalancesTimestamp > constants.HOUR) {
-            notify(balances.message, 'warn', config.silent_mode);
+            notify(`${config.notifyName}: ${balances.message}`, 'warn', config.silent_mode);
             lastNotifyBalancesTimestamp = Date.now();
           } else {
-            log.log(balances.message);
+            log.log(`Liquidity: ${balances.message}`);
           }
         }
         return;
@@ -263,17 +263,17 @@ async function isEnoughCoins(coin1, coin2, amount1, amount2, type) {
 
   if (balances) {
     try {
-      balance1free = balances.filter((crypto) => crypto.code === coin1)[0].free;
-      balance2free = balances.filter((crypto) => crypto.code === coin2)[0].free;
-      balance1freezed = balances.filter((crypto) => crypto.code === coin1)[0].freezed;
-      balance2freezed = balances.filter((crypto) => crypto.code === coin2)[0].freezed;
+      balance1free = balances.filter((crypto) => crypto.code === coin1)[0]?.free || 0;
+      balance2free = balances.filter((crypto) => crypto.code === coin2)[0]?.free || 0;
+      balance1freezed = balances.filter((crypto) => crypto.code === coin1)[0]?.freezed || 0;
+      balance2freezed = balances.filter((crypto) => crypto.code === coin2)[0]?.freezed || 0;
 
       if ((!balance1free || balance1free < amount1) && type === 'sell') {
-        output = `${config.notifyName}: Not enough balance to place ${amount1.toFixed(orderUtils.parseMarket(config.pair).coin1Decimals)} ${coin1} ${type} liq-order. Free: ${balance1free.toFixed(orderUtils.parseMarket(config.pair).coin1Decimals)} ${coin1}, frozen: ${balance1freezed.toFixed(orderUtils.parseMarket(config.pair).coin1Decimals)} ${coin1}.`;
+        output = `Not enough balance to place ${amount1.toFixed(orderUtils.parseMarket(config.pair).coin1Decimals)} ${coin1} ${type} liq-order. Free: ${balance1free.toFixed(orderUtils.parseMarket(config.pair).coin1Decimals)} ${coin1}, frozen: ${balance1freezed.toFixed(orderUtils.parseMarket(config.pair).coin1Decimals)} ${coin1}.`;
         isBalanceEnough = false;
       }
       if ((!balance2free || balance2free < amount2) && type === 'buy') {
-        output = `${config.notifyName}: Not enough balance to place ${amount2.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${coin2} ${type} liq-order. Free: ${balance2free.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${coin2}, frozen: ${balance2freezed.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${coin2}.`;
+        output = `Not enough balance to place ${amount2.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${coin2} ${type} liq-order. Free: ${balance2free.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${coin2}, frozen: ${balance2freezed.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${coin2}.`;
         isBalanceEnough = false;
       }
 
@@ -385,7 +385,7 @@ function setAmount(type, price) {
     const max = min * 2;
 
     const pairObj = orderUtils.parseMarket(config.pair);
-    log.log(`Liquidity: Setting maximum number of ${type}-orders to ${maxOrderNumber}. Each order amount is from ${min.toFixed(pairObj.coin1Decimals)} ${pairObj.coin1} to ${max.toFixed(pairObj.coin1Decimals)} ${pairObj.coin1}.`);
+    log.log(`Liquidity: Setting maximum number of ${type}-orders to ${maxOrderNumber}. Order amount is from ${min.toFixed(pairObj.coin1Decimals)} ${pairObj.coin1} to ${max.toFixed(pairObj.coin1Decimals)} ${pairObj.coin1}.`);
 
     return utils.randomValue(min, max);
   } catch (e) {
@@ -414,7 +414,7 @@ function getMaxOrderNumber(type) {
     } else if (valueInUSD <= 1000) {
       return 9;
     } else {
-      return Math.ceil(Math.sqrt(Math.sqrt(valueInUSD)));
+      return Math.ceil(Math.sqrt(Math.sqrt(valueInUSD))) || DEFAULT_MAX_ORDERS;
     }
   } catch (e) {
     log.error(`Error in getMaxOrderNumber() of ${utils.getModuleName(module.id)} module: ` + e);

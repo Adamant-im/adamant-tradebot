@@ -411,10 +411,10 @@ async function isEnoughCoins(coin1, coin2, amount1, amount2, type, noCache = fal
 
   if (balances) {
     try {
-      balance1free = balances.filter((crypto) => crypto.code === coin1)[0].free;
-      balance2free = balances.filter((crypto) => crypto.code === coin2)[0].free;
-      balance1freezed = balances.filter((crypto) => crypto.code === coin1)[0].freezed;
-      balance2freezed = balances.filter((crypto) => crypto.code === coin2)[0].freezed;
+      balance1free = balances.filter((crypto) => crypto.code === coin1)[0]?.free || 0;
+      balance2free = balances.filter((crypto) => crypto.code === coin2)[0]?.free || 0;
+      balance1freezed = balances.filter((crypto) => crypto.code === coin1)[0]?.freezed || 0;
+      balance2freezed = balances.filter((crypto) => crypto.code === coin2)[0]?.freezed || 0;
 
       if ((!balance1free || balance1free < amount1) && type === 'sell') {
         output = `Not enough balance${onWhichAccount} to place ${amount1.toFixed(orderUtils.parseMarket(config.pair).coin1Decimals)} ${coin1} ${type} pw-order. Free: ${balance1free.toFixed(orderUtils.parseMarket(config.pair).coin1Decimals)} ${coin1}, frozen: ${balance1freezed.toFixed(orderUtils.parseMarket(config.pair).coin1Decimals)} ${coin1}.`;
@@ -502,8 +502,8 @@ async function setPriceRange() {
 
       }
 
-      lowPrice = l * utils.randomValue(1 - tradeParams.mm_priceWatcherDeviationPercent/100, 1) * utils.randomValue(0.99, 1.005);
-      highPrice = h * utils.randomValue(1, 1 + tradeParams.mm_priceWatcherDeviationPercent/100) * utils.randomValue(0.995, 1.01);
+      lowPrice = l * utils.randomValue(1 - tradeParams.mm_priceWatcherDeviationPercent/100, 1) * utils.randomValue(1, 1.005);
+      highPrice = h * utils.randomValue(1, 1 + tradeParams.mm_priceWatcherDeviationPercent/100) * utils.randomValue(0.995, 1);
       if (lowPrice >= highPrice) {
         lowPrice = l;
         highPrice = h;
@@ -527,8 +527,8 @@ async function setPriceRange() {
 
       } else {
 
-        lowPrice = l * utils.randomValue(0.98, 1.01);
-        highPrice = h * utils.randomValue(0.99, 1.02);
+        lowPrice = l * utils.randomValue(1, 1.005);
+        highPrice = h * utils.randomValue(0.995, 1);
         if (lowPrice >= highPrice) {
           lowPrice = l;
           highPrice = h;
