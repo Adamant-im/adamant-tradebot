@@ -49,8 +49,8 @@ We can run market-making for you, see [marketmaking.app/services](https://market
 
 ## Requirements
 
-* Ubuntu 18 or 20, centOS 7 or 8 (we didn't test others)
-* NodeJS v14+
+* Ubuntu 18–22, centOS 7 or 8 (we didn't test others)
+* NodeJS v16+
 * MongoDB ([installation instructions](https://docs.mongodb.com/manual/tutorial/install-mongodb-on-ubuntu/))
 
 ## Setup
@@ -99,7 +99,10 @@ Add string:
 su - adamant
 cd ./adamant-tradebot
 pm2 stop tradebot
-mv config.json config_bup.json && git pull && mv config_bup.json config.json
+git pull
 npm i
-pm2 start --name tradebot app.js
 ```
+
+Update `config.json` if `config.default.json` changed.
+
+Then `pm2 restart tradebot`.
