@@ -1,3 +1,9 @@
+/**
+ * Watch a coin price in a constant range or using other source
+ * If a price is out of this range, buys or sells coins to fit this range (exception: 'depth' mm_Policy)
+ * Provides pw range for other modules
+ */
+
 const constants = require('../helpers/const');
 const utils = require('../helpers/utils');
 const exchangerUtils = require('../helpers/cryptos/exchanger');
@@ -9,13 +15,16 @@ const traderapi = require('./trader_' + config.exchange)(config.apikey, config.a
 const db = require('../modules/DB');
 const orderUtils = require('./orderUtils');
 
+const priceWatcherApi = traderapi;
+
 let lastNotifyBalancesTimestamp = 0;
 let lastNotifyPriceTimestamp = 0;
 
 const INTERVAL_MIN = 10000;
 const INTERVAL_MAX = 30000;
-const LIFETIME_MIN = constants.HOUR * 5;
-const LIFETIME_MAX = constants.HOUR * 10;
+
+const LIFETIME_MIN = 2 * constants.MINUTE;
+const LIFETIME_MAX = 10 * constants.MINUTE; // Don't set Lifetime too long—not to freeze funds, orders can be big
 
 const priceChangeWarningPercent = 20;
 const priceChangeNotifyPercent = 1;
@@ -30,40 +39,148 @@ let pwExchange; let pwExchangeApi;
 log.log(`Module ${utils.getModuleName(module.id)} is loaded.`);
 
 module.exports = {
+  /**
+   * Returns lower bound of Price watcher's range
+   * It's in coin2
+   * @returns {Number}
+   */
   getLowPrice() {
     return lowPrice;
   },
+
+  /**
+   * Returns upper bound of Price watcher's range
+   * It's in coin2
+   * @returns {Number}
+   */
   getHighPrice() {
     return highPrice;
   },
+
+  /**
+   * Returns if price range is set and Pw/Sp is active
+   * Note: also check if Market-making is active
+   * @returns {Boolean}
+   */
+  getIsPriceActualAndEnabled() {
+    return isPriceActual && tradeParams.mm_isPriceWatcherActive;
+  },
+
+  /**
+   * Returns if price range is set
+   * Note: also check if Pw/Sp/Mm is active
+   * @returns {Boolean}
+   */
   getIsPriceActual() {
     return isPriceActual;
   },
+
+  getIsPriceRangeSetWithSupportPrice() {
+    return false;
+  },
+
+  /**
+   * Returns Pw's parameters for other modules
+   * @returns {String} Log string
+   */
+  getPwInfoString() {
+    const coin2Decimals = orderUtils.parseMarket(config.pair).coin2Decimals;
+    let pwInfoString;
+    let sourceString;
+    let marketDecimals;
+
+    if (tradeParams.mm_priceWatcherSource?.indexOf('@') > -1) {
+      pwInfoString = `based on _${tradeParams.mm_priceWatcherSource}_ with _${tradeParams.mm_priceWatcherSourcePolicy}_ policy and _${tradeParams.mm_priceWatcherDeviationPercent.toFixed(2)}%_ deviation`;
+    } else {
+      if (tradeParams.mm_priceWatcherSource === config.coin2) {
+        sourceString = `${tradeParams.mm_priceWatcherSource}`;
+        marketDecimals = coin2Decimals;
+      } else {
+        sourceString = `${tradeParams.mm_priceWatcherSource} (global rate)`;
+        marketDecimals = 8;
+      }
+      pwInfoString = `from ${tradeParams.mm_priceWatcherLowPriceInSourceCoin.toFixed(marketDecimals)} to ${tradeParams.mm_priceWatcherHighPriceInSourceCoin.toFixed(marketDecimals)} ${sourceString}—${tradeParams.mm_priceWatcherDeviationPercent.toFixed(2)}% price deviation`;
+    }
+
+    return pwInfoString;
+  },
+
+  /**
+   * Returns log string for other modules
+   * @returns {String} Log string
+   */
+  getPwRangeString() {
+    const coin2Decimals = orderUtils.parseMarket(config.pair).coin2Decimals;
+    const upperBound = highPrice === Number.MAX_VALUE ? 'Infinity' : `${highPrice.toFixed(coin2Decimals)}`;
+    return `Pw's range ${lowPrice.toFixed(coin2Decimals)}–${upperBound} ${config.coin2}.${this.getSetWithSupportPriceString()}`;
+  },
+
+  /**
+   * Returns log string if price range is set with support price
+   * @returns {String} Log string
+   */
+  getSetWithSupportPriceString() {
+    return '';
+  },
+
+  /**
+   * Sets isPriceActual by other modules. This module sets isPriceActual directly
+   * Goal to force price range update
+   * @param {Boolean} value If price is actual
+   * @param {String} callerName Caller for logging
+   */
+  setIsPriceActual(value, callerName) {
+    let logString = `Price watcher: Manually set isPriceActual to ${value} by ${callerName}.`;
+    if (!value) {
+      logString += ` This will force the bot to wait until pw range updated.`;
+    }
+    log.log(logString);
+    isPriceActual = value;
+  },
+
+  /**
+   * Sets Price watcher exchange traderapi and stores it as pwExchangeApi (and exchange name as pwExchange)
+   * It can be same traderapi as set in config, or it will create one with no keys (only public endpoints)
+   * @param {String} exchange Exchange name, as 'Bittrex'
+   */
   setPwExchangeApi(exchange) {
     if (pwExchange !== exchange) {
-      pwExchangeApi = require('./trader_' + exchange.toLowerCase())(null, null, null, log, true);
+      if (exchange.toLowerCase() === config.exchange) {
+        pwExchangeApi = traderapi;
+      } else {
+        pwExchangeApi = require('./trader_' + exchange.toLowerCase())(null, null, null, log, true);
+      }
       pwExchange = exchange;
-      log.log(`Price watcher switched to ${exchange} exchange API.`);
+      log.log(`Price watcher: Switched to ${exchange} exchange API.`);
     }
   },
-  getPwExchangeApi() {
-    return pwExchangeApi;
+
+  /**
+   * Checks if the Price watcher is set to the same exchange
+   * If we trade on Gateio, will be true for ADM/BTC@Gateio, ADM/ETH@Gateio, etc.
+   * @return {Boolean}
+   */
+  getIsSameExchangePw() {
+    return (tradeParams.mm_priceWatcherSource?.indexOf('@') > -1) && (pwExchange?.toLowerCase() === config.exchange);
   },
+
   run() {
-    // isPriceActual = true;
-    // console.log(`isPriceActual: ${this.getIsPriceActual()}`);
     this.iteration();
   },
+
   async iteration() {
     const interval = setPause();
-    // console.log(interval);
-    if (interval && tradeParams.mm_isActive && tradeParams.mm_isPriceWatcherActive) {
+    if (
+      interval &&
+      tradeParams.mm_isActive &&
+      tradeParams.mm_isPriceWatcherActive
+    ) {
       if (isPreviousIterationFinished) {
         isPreviousIterationFinished = false;
-        this.reviewPrices();
+        await this.reviewPrices();
         isPreviousIterationFinished = true;
       } else {
-        log.log(`Postponing iteration of the price watcher for ${interval} ms. Previous iteration is in progress yet.`);
+        log.log(`Price watcher: Postponing iteration of the price watcher for ${interval} ms. Previous iteration is in progress yet.`);
       }
       setTimeout(() => {
         this.iteration();
@@ -74,10 +191,9 @@ module.exports = {
       }, 3000); // Check for config.mm_isActive every 3 seconds
     }
   },
+
   async reviewPrices() {
-
     try {
-
       const { ordersDb } = db;
       let pwOrders = await ordersDb.find({
         isProcessed: false,
@@ -86,73 +202,100 @@ module.exports = {
         exchange: config.exchange,
       });
 
-      // console.log('pwOrders-Untouched', pwOrders.length);
-      // pwOrders = await this.updatePriceWatcherOrders(pwOrders); // update orders which partially filled or not found
-      pwOrders = await orderUtils.updateOrders(pwOrders, config.pair); // update orders which partially filled or not found
-      // console.log('pwOrders-AfterUpdate', pwOrders.length);
+      pwOrders = await orderUtils.updateOrders(pwOrders, config.pair, utils.getModuleName(module.id), false); // update orders which partially filled or not found
       pwOrders = await this.closePriceWatcherOrders(pwOrders); // close orders which expired
-      // console.log('pwOrders-AfterClose', pwOrders.length);
 
-      setPriceRange();
+      await setPriceRange();
 
       if (isPriceActual) {
-
         const orderBook = await traderapi.getOrderBook(config.pair);
         if (!orderBook || !orderBook.asks[0] || !orderBook.bids[0]) {
-          log.warn(`${config.notifyName}: Order books are empty for ${config.pair}, or temporary API error. Unable to check if I need to place pw-order.`);
+          log.warn(`Price watcher: Order books are empty for ${config.pair}, or temporary API error. Unable to check if I need to place pw-order.`);
           return;
         }
 
-        let targetPrice = 0;
+        const coin2Decimals = orderUtils.parseMarket(config.pair).coin2Decimals;
+
+        let bidOrAsk; let targetPrice; let currentPrice; let orderType;
+        const midPrice = (orderBook.asks[0].price + orderBook.bids[0].price) / 2;
         if (orderBook.asks[0].price < lowPrice) {
+          bidOrAsk = 'ask';
+          orderType = 'buy';
+          currentPrice = orderBook.asks[0].price;
           targetPrice = lowPrice;
         } else if (orderBook.bids[0].price > highPrice) {
+          bidOrAsk = 'bid';
+          orderType = 'sell';
+          currentPrice = orderBook.bids[0].price;
           targetPrice = highPrice;
         }
 
-        // console.log('highestBid:', orderBook.bids[0].price, 'lowestAsk:', orderBook.asks[0].price);
-        // console.log('targetPrice:', targetPrice, 'lowPrice:', lowPrice, 'highPrice:', highPrice);
-
         if (targetPrice) {
-
+          const targetPriceString = `Price watcher: Target price is ${targetPrice.toFixed(coin2Decimals)} ${config.coin2} (from ${bidOrAsk} ${currentPrice.toFixed(coin2Decimals)}).`;
           const orderBookInfo = utils.getOrderBookInfo(orderBook, tradeParams.mm_liquiditySpreadPercent, targetPrice);
-          const reliabilityKoef = utils.randomValue(1.05, 1.1);
-          orderBookInfo.amountTargetPrice *= reliabilityKoef;
-          orderBookInfo.amountTargetPriceQuote *= reliabilityKoef;
+          let placingInSpreadNote = '';
+          if (orderBookInfo.typeTargetPrice === 'inSpread') {
+            // If we've cancelled bot's orders, there may be no orders up to targetPrice
+            orderBookInfo.typeTargetPrice = orderType;
+            orderBookInfo.amountTargetPrice = utils.randomValue(tradeParams.mm_minAmount, tradeParams.mm_maxAmount);
+            orderBookInfo.amountTargetPriceQuote = orderBookInfo.amountTargetPrice * targetPrice;
+            placingInSpreadNote = `(After cancelling bot's orders, no orders to match; Placing order in spread) `;
+          } else {
+            const reliabilityKoef = utils.randomValue(1.05, 1.1);
+            orderBookInfo.amountTargetPrice *= reliabilityKoef;
+            orderBookInfo.amountTargetPriceQuote *= reliabilityKoef;
+          }
 
-          // console.log(orderBookInfo);
-          const priceString = `${config.pair} price of ${targetPrice.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${config.coin2}`;
-          const actionString = `${orderBookInfo.typeTargetPrice} ${orderBookInfo.amountTargetPrice.toFixed(orderUtils.parseMarket(config.pair).coin1Decimals)} ${config.coin1} ${orderBookInfo.typeTargetPrice === 'buy' ? 'with' : 'for'} ${orderBookInfo.amountTargetPriceQuote.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${config.coin2}`;
-          const logMessage = `To make ${priceString}, the bot is going to ${actionString}.`;
-          log.info(logMessage);
-          await this.placePriceWatcherOrder(targetPrice, orderBookInfo);
+          const priceString = `${config.pair} price of ${targetPrice.toFixed(coin2Decimals)} ${config.coin2}`;
+          const actionString = `${orderBookInfo.typeTargetPrice} ${orderBookInfo.amountTargetPrice.toFixed(orderUtils.parseMarket(config.pair).coin1Decimals)} ${config.coin1} ${orderBookInfo.typeTargetPrice === 'buy' ? 'with' : 'for'} ${orderBookInfo.amountTargetPriceQuote.toFixed(coin2Decimals)} ${config.coin2}`;
+          const logMessage = `${placingInSpreadNote}To make ${priceString}, the bot is going to ${actionString}.`;
+          log.info(`${targetPriceString} ${logMessage} ${this.getPwRangeString()}`);
 
+          const placedOrder = await this.placePriceWatcherOrder(targetPrice, orderBookInfo);
+        } else {
+          log.info(`Price watcher: Current price ${midPrice.toFixed(coin2Decimals)} ${config.coin2} is within Pw's range, no action needed. ${this.getPwRangeString()}`);
         }
-
       }
-
     } catch (e) {
       log.error(`Error in reviewPrices() of ${utils.getModuleName(module.id)} module: ` + e);
     }
-
   },
-  async closePriceWatcherOrders(pwOrders) {
 
+  /**
+   * Closes Price watcher orders, if any
+   * @param {Array<Object>} fsOrders Price watcher orders from the DB
+   * @returns {Array<Object>} updatedPwOrders
+   */
+  async closePriceWatcherOrders(pwOrders) {
+    const onWhichAccount = '';
     const updatedPwOrders = [];
+
     for (const order of pwOrders) {
       try {
-        if (order.dateTill < utils.unix()) {
+        if (order.dateTill < utils.unixTimeStampMs()) {
 
-          const cancelReq = await traderapi.cancelOrder(order._id, order.type, order.pair);
+          const cancelReq = await priceWatcherApi.cancelOrder(order._id, order.type, order.pair);
+          const orderInfoString = `pw-order${onWhichAccount} with id=${order._id}, type=${order.type}, pair=${order.pair}, price=${order.price}, coin1Amount=${order.coin1Amount}, coin2Amount=${order.coin2Amount}`;
           if (cancelReq !== undefined) {
-            log.log(`Closing pw-order with params: id=${order._id}, type=${order.type}, pair=${order.pair}, price=${order.price}, coin1Amount=${order.coin1Amount}, coin2Amount=${order.coin2Amount}. It is expired.`);
-            await order.update({
-              isProcessed: true,
-              isClosed: true,
-              isExpired: true,
-            }, true);
+            if (cancelReq) {
+              order.update({
+                isProcessed: true,
+                isCancelled: true,
+                isClosed: true,
+                isExpired: true,
+              });
+              log.log(`Price watcher: Successfully cancelled ${orderInfoString}. It is expired.`);
+            } else {
+              order.update({
+                isProcessed: true,
+                isClosed: true,
+                isExpired: true,
+              });
+              log.log(`Price watcher: Unable to cancel ${orderInfoString}. It is expired and probably it doesn't exist anymore. Making it as closed.`);
+            }
+            await order.save();
           } else {
-            log.log(`Request to close expired pw-order with id=${order._id} failed. Will try next time, keeping this order in the DB for now.`);
+            log.log(`Price watcher: Request to close expired ${orderInfoString} failed. Will try next time, keeping this order in the DB for now.`);
           }
 
         } else {
@@ -162,13 +305,22 @@ module.exports = {
         log.error(`Error in closePriceWatcherOrders() of ${utils.getModuleName(module.id)} module: ` + e);
       }
     }
+
     return updatedPwOrders;
-
   },
+
+  /**
+   * Places a new Price watcher order (pw type)
+   * Checks for balances. If not enough balances,
+   *   Notify/log, and return false/undefined
+   * It uses second keypair, if set. Then make sure to close placed order to eliminate possible SELF_TRADE.
+   * @param {Number} targetPrice New token price to be set
+   * @param {Object} orderBookInfo Order book snapshot with additional calculated info
+   * @return {Boolean} True in case of successfully placed pw-order
+   */
   async placePriceWatcherOrder(targetPrice, orderBookInfo) {
-
     try {
-
+      const whichAccount = '';
       const type = orderBookInfo.typeTargetPrice;
       const price = targetPrice;
       const coin1Amount = orderBookInfo.amountTargetPrice;
@@ -180,33 +332,31 @@ module.exports = {
 
       orderParamsString = `type=${type}, pair=${config.pair}, price=${price}, coin1Amount=${coin1Amount}, coin2Amount=${coin2Amount}`;
       if (!type || !price || !coin1Amount || !coin2Amount) {
-        log.warn(`${config.notifyName} unable to run pw-order with params: ${orderParamsString}.`);
+        log.warn(`Price watcher: Unable to run pw-order${whichAccount} with params: ${orderParamsString}.`);
         return;
       }
 
-      console.log(type, price.toFixed(8), coin1Amount.toFixed(2), coin2Amount.toFixed(2), 'lifeTime:', lifeTime);
-
-      // Check balances
-      const balances = await isEnoughCoins(config.coin1, config.coin2, coin1Amount, coin2Amount, type);
+      // Check balances first time
+      const balances = await isEnoughCoins(config.coin1, config.coin2, coin1Amount, coin2Amount, type, false);
       if (!balances.result) {
         if (balances.message) {
           if (Date.now()-lastNotifyBalancesTimestamp > constants.HOUR) {
-            notify(balances.message, 'warn', config.silent_mode);
+            notify(`${config.notifyName}: ${balances.message}`, 'warn', config.silent_mode);
             lastNotifyBalancesTimestamp = Date.now();
           } else {
-            log.log(balances.message);
+            log.log(`Price watcher: ${balances.message}`);
           }
         }
         return;
       }
 
-      const orderReq = await traderapi.placeOrder(type, config.pair, price, coin1Amount, 1, null);
+      const orderReq = await priceWatcherApi.placeOrder(type, config.pair, price, coin1Amount, 1, null);
       if (orderReq && orderReq.orderid) {
         const { ordersDb } = db;
         const order = new ordersDb({
           _id: orderReq.orderid,
-          date: utils.unix(),
-          dateTill: utils.unix() + lifeTime,
+          date: utils.unixTimeStampMs(),
+          dateTill: utils.unixTimeStampMs() + lifeTime,
           purpose: 'pw', // pw: price watcher order
           type: type,
           // targetType: type,
@@ -219,30 +369,41 @@ module.exports = {
           coin2Amount: coin2Amount,
           LimitOrMarket: 1, // 1 for limit price. 0 for Market price.
           isProcessed: false,
-          isExecuted: false,
+          isExecuted: true,
           isCancelled: false,
           isClosed: false,
+          isSecondAccountOrder: undefined,
         }, true);
 
-        output = `${type} ${coin1Amount.toFixed(orderUtils.parseMarket(config.pair).coin1Decimals)} ${config.coin1} for ${coin2Amount.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${config.coin2}`;
-        log.info(`Successfully placed pw-order to ${output}.`);
+        output = `${type} ${coin1Amount.toFixed(orderUtils.parseMarket(config.pair).coin1Decimals)} ${config.coin1} for ${coin2Amount.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${config.coin2} at ${price.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${config.coin2}`;
+        log.info(`Price watcher: Successfully placed pw-order${whichAccount} to ${output}.`);
 
+        return true;
       } else {
-        log.warn(`${config.notifyName} unable to execute pw-order with params: ${orderParamsString}. No order id returned.`);
+        log.warn(`Price watcher: Unable to execute pw-order${whichAccount} with params: ${orderParamsString}. No order id returned.`);
         return false;
       }
-
     } catch (e) {
       log.error(`Error in placePriceWatcherOrder() of ${utils.getModuleName(module.id)} module: ` + e);
     }
-
   },
-
 };
 
-async function isEnoughCoins(coin1, coin2, amount1, amount2, type) {
-
+/**
+ * Checks if enough funds to place pw-order
+ * @param {String} coin1 = config.coin1 (base)
+ * @param {String} coin2 = config.coin2 (quote)
+ * @param {Number} amount1 Amount in coin1 (base)
+ * @param {Number} amount2 Amount in coin2 (quote)
+ * @param {String} type 'buy' or 'sell'
+ * @returns {Object<Boolean, String>}
+ *  result: if enough funds to place order
+ *  message: error message
+ */
+async function isEnoughCoins(coin1, coin2, amount1, amount2, type, noCache = false) {
+  const onWhichAccount = '';
   const balances = await traderapi.getBalances(false);
+
   let balance1free; let balance2free;
   let balance1freezed; let balance2freezed;
   let isBalanceEnough = true;
@@ -250,17 +411,17 @@ async function isEnoughCoins(coin1, coin2, amount1, amount2, type) {
 
   if (balances) {
     try {
-      balance1free = balances.filter((crypto) => crypto.code === coin1)[0].free;
-      balance2free = balances.filter((crypto) => crypto.code === coin2)[0].free;
-      balance1freezed = balances.filter((crypto) => crypto.code === coin1)[0].freezed;
-      balance2freezed = balances.filter((crypto) => crypto.code === coin2)[0].freezed;
+      balance1free = balances.filter((crypto) => crypto.code === coin1)[0]?.free || 0;
+      balance2free = balances.filter((crypto) => crypto.code === coin2)[0]?.free || 0;
+      balance1freezed = balances.filter((crypto) => crypto.code === coin1)[0]?.freezed || 0;
+      balance2freezed = balances.filter((crypto) => crypto.code === coin2)[0]?.freezed || 0;
 
       if ((!balance1free || balance1free < amount1) && type === 'sell') {
-        output = `${config.notifyName}: Not enough balance to place ${amount1.toFixed(orderUtils.parseMarket(config.pair).coin1Decimals)} ${coin1} ${type} pw-order. Free: ${balance1free.toFixed(orderUtils.parseMarket(config.pair).coin1Decimals)} ${coin1}, frozen: ${balance1freezed.toFixed(orderUtils.parseMarket(config.pair).coin1Decimals)} ${coin1}.`;
+        output = `Not enough balance${onWhichAccount} to place ${amount1.toFixed(orderUtils.parseMarket(config.pair).coin1Decimals)} ${coin1} ${type} pw-order. Free: ${balance1free.toFixed(orderUtils.parseMarket(config.pair).coin1Decimals)} ${coin1}, frozen: ${balance1freezed.toFixed(orderUtils.parseMarket(config.pair).coin1Decimals)} ${coin1}.`;
         isBalanceEnough = false;
       }
       if ((!balance2free || balance2free < amount2) && type === 'buy') {
-        output = `${config.notifyName}: Not enough balance to place ${amount2.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${coin2} ${type} pw-order. Free: ${balance2free.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${coin2}, frozen: ${balance2freezed.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${coin2}.`;
+        output = `Not enough balance${onWhichAccount} to place ${amount2.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${coin2} ${type} pw-order. Free: ${balance2free.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${coin2}, frozen: ${balance2freezed.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${coin2}.`;
         isBalanceEnough = false;
       }
 
@@ -268,27 +429,18 @@ async function isEnoughCoins(coin1, coin2, amount1, amount2, type) {
         result: isBalanceEnough,
         message: output,
       };
-
     } catch (e) {
-      log.warn(`Unable to process balances for placing pw-order: ` + e);
+      log.warn(`Price watcher: Unable to process balances for placing pw-order: ` + e);
       return {
         result: false,
       };
     }
   } else {
-    log.warn(`Unable to get balances for placing pw-order.`);
+    log.warn(`Price watcher: Unable to get balances${onWhichAccount} for placing pw-order.`);
     return {
       result: false,
     };
   }
-}
-
-function setLifeTime() {
-  return utils.randomValue(LIFETIME_MIN, LIFETIME_MAX, true);
-}
-
-function setPause() {
-  return utils.randomValue(INTERVAL_MIN, INTERVAL_MAX, true);
 }
 
 async function setPriceRange() {
@@ -350,8 +502,8 @@ async function setPriceRange() {
 
       }
 
-      lowPrice = l * utils.randomValue(1 - tradeParams.mm_priceWatcherDeviationPercent/100, 1) * utils.randomValue(0.99, 1.005);
-      highPrice = h * utils.randomValue(1, 1 + tradeParams.mm_priceWatcherDeviationPercent/100) * utils.randomValue(0.995, 1.01);
+      lowPrice = l * utils.randomValue(1 - tradeParams.mm_priceWatcherDeviationPercent/100, 1) * utils.randomValue(1, 1.005);
+      highPrice = h * utils.randomValue(1, 1 + tradeParams.mm_priceWatcherDeviationPercent/100) * utils.randomValue(0.995, 1);
       if (lowPrice >= highPrice) {
         lowPrice = l;
         highPrice = h;
@@ -375,8 +527,8 @@ async function setPriceRange() {
 
       } else {
 
-        lowPrice = l * utils.randomValue(0.98, 1.01);
-        highPrice = h * utils.randomValue(0.99, 1.02);
+        lowPrice = l * utils.randomValue(1, 1.005);
+        highPrice = h * utils.randomValue(0.995, 1);
         if (lowPrice >= highPrice) {
           lowPrice = l;
           highPrice = h;
@@ -429,33 +581,40 @@ async function setPriceRange() {
 
 }
 
+/**
+ * General function to log/notify about setting price range errors
+ * It concatenates base error message with a specific error message
+ * @param {String} errorMessage Specific error message
+ */
 function errorSettingPriceRange(errorMessage) {
-
   try {
-
     const baseNotifyMessage = `Unable to set the Price Watcher's price range ${setPriceRangeCount} times in series. I've temporary turned off watching the ${config.coin1} price.`;
-    const baseMessage = `Unable to set the Price Watcher's price range ${setPriceRangeCount} times.`;
+    const baseMessage = `Price watcher: Unable to set the Price Watcher's price range ${setPriceRangeCount} times.`;
 
     if (setPriceRangeCount > 10) {
-
       isPriceActual = false;
       if (Date.now()-lastNotifyPriceTimestamp > constants.HOUR) {
         notify(`${config.notifyName}: ${baseNotifyMessage} ${errorMessage}`, 'warn');
         lastNotifyPriceTimestamp = Date.now();
       } else {
-        log.log(`${baseNotifyMessage} ${errorMessage}`);
+        log.log(`${baseMessage} ${errorMessage}`);
       }
-
     } else {
       if (isPriceActual) {
         log.log(`${baseMessage} ${errorMessage} I will continue watching ${config.coin1} price according to previous values.`);
       } else {
-        log.log(`${baseMessage} ${errorMessage} No data to watch ${config.coin1} price. Price watching is disabled.`);
+        log.log(`${baseMessage} ${errorMessage} No data to watch ${config.coin1} price. Price watching is temporary disabled.`);
       }
     }
-
   } catch (e) {
     log.error(`Error in errorSettingPriceRange() of ${utils.getModuleName(module.id)} module: ` + e);
   }
+}
 
+function setLifeTime() {
+  return utils.randomValue(LIFETIME_MIN, LIFETIME_MAX, true);
+}
+
+function setPause() {
+  return utils.randomValue(INTERVAL_MIN, INTERVAL_MAX, true);
 }

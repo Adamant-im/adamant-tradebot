@@ -13,13 +13,13 @@ module.exports = class baseCoin {
       this[data].value = value;
       this[data].timestamp = Date.now();
     },
-  }
+  };
 
   account = {
     passPhrase: undefined,
     privateKey: undefined,
     keyPair: undefined,
     address: undefined,
-  }
+  };
 
 };

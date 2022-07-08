@@ -5,8 +5,8 @@ const config = require('../../modules/configReader');
 const utils = require('../utils');
 
 const baseCoin = require('./baseCoin');
-module.exports = class admCoin extends baseCoin {
 
+module.exports = class admCoin extends baseCoin {
   constructor() {
     super();
     this.token = 'ADM';

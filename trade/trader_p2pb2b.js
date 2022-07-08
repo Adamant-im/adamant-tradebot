@@ -2,13 +2,14 @@ const P2PB2B = require('./api/p2pb2b_api');
 const utils = require('../helpers/utils');
 
 // API endpoints:
-// https://api.p2pb2b.io
-const apiServer = 'https://api.p2pb2b.io';
+// Base URL for requests is https://api.p2pb2b.com
+const apiServer = 'https://api.p2pb2b.com';
 const exchangeName = 'P2PB2B';
 
 module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
+  const P2PB2BClient = P2PB2B();
 
-  P2PB2B.setConfig(apiServer, apiKey, secretKey, pwd, log, publicOnly);
+  P2PB2BClient.setConfig(apiServer, apiKey, secretKey, pwd, log, publicOnly);
 
   // Fulfill markets on initialization
   let exchangeMarkets;
@@ -21,7 +22,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
 
     module.exports.gettingMarkets = true;
     return new Promise((resolve, reject) => {
-      P2PB2B.markets().then(function(data) {
+      P2PB2BClient.markets().then(function(data) {
         try {
           let markets = data.result;
           if (!markets) {
@@ -36,9 +37,8 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
               coin2: markets[market].money.toUpperCase(),
               coin1Decimals: Number(markets[market].precision.stock),
               coin2Decimals: Number(markets[market].precision.money),
-              // Not necessary
               // If the limit is 0, then this limit does not apply to this market
-              coin1Precision: Number(markets[market].limits.step_size), // ~ if !== 0, utils.getPrecision(3) = 0.001
+              coin1Precision: Number(markets[market].limits.step_size),
               coin2Precision: Number(markets[market].limits.tick_size),
               coin1MinAmount: Number(markets[market].limits.min_amount),
               coin1MaxAmount: Number(markets[market].limits.max_amount),
@@ -78,12 +78,13 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
         getMarkets: true,
         placeMarketOrder: false,
         getDepositAddress: false,
+        createDepositAddressWithWebsiteOnly: false,
       };
     },
 
     getBalances(nonzero = true) {
       return new Promise((resolve, reject) => {
-        P2PB2B.getBalances().then(function(data) {
+        P2PB2BClient.getBalances().then(function(data) {
           try {
             let assets = data.result;
             if (!assets) {
@@ -121,6 +122,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
 
       do {
         ordersInfo = await this.getOpenOrdersPage(pair, offset, limit);
+        if (!ordersInfo) return undefined;
         allOrders = allOrders.concat(ordersInfo.result);
         offset += limit;
       } while (ordersInfo.result.length === limit);
@@ -131,7 +133,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
     getOpenOrdersPage(pair, offset = 0, limit = 100) {
       pair_ = formatPairName(pair);
       return new Promise((resolve, reject) => {
-        P2PB2B.getOrders(pair_.pair, offset, limit).then(function(data) {
+        P2PB2BClient.getOrders(pair_.pair, offset, limit).then(function(data) {
           try {
             let openOrders = data.result;
             if (!openOrders) {
@@ -185,15 +187,15 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
     },
 
     cancelOrder(orderId, side, pair) {
-      pair_ = formatPairName(pair);
+      const pair_ = formatPairName(pair);
       return new Promise((resolve, reject) => {
-        P2PB2B.cancelOrder(orderId, pair_.pair).then(function(data) {
+        P2PB2BClient.cancelOrder(orderId, pair_.pair).then(function(data) {
           try {
             if (data.success) {
               log.log(`Cancelling order ${orderId}…`);
               resolve(true);
             } else {
-              log.log(`Unable to cancel ${orderId}: ${data ? data.errorCode + ' ' + data.message : ' no details'}.`);
+              log.log(`Unable to cancel ${orderId}: ${data ? data.errorCode + ' ' + data.message : 'no details'}.`);
               resolve(false);
             }
           } catch (e) {
@@ -201,7 +203,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
             log.warn('Error while processing cancelOrder() request: ' + e);
           };
         }).catch((err) => {
-          log.warn(`API request ${arguments.callee.name}(orderId: ${orderId}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
+          log.warn(`API request cancelOrder(orderId: ${orderId}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
           resolve(undefined);
         });
       });
@@ -210,7 +212,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
     getRates(pair) {
       pair_ = formatPairName(pair);
       return new Promise((resolve, reject) => {
-        P2PB2B.ticker(pair_.pair).then(function(data) {
+        P2PB2BClient.ticker(pair_.pair).then(function(data) {
           try {
             ticker = data.result;
             if (ticker && data.success) {
@@ -263,7 +265,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
         output = `${orderType} ${coin1Amount} ${pair_.coin1.toUpperCase()} at ${price} ${pair_.coin2.toUpperCase()}.`;
 
         return new Promise((resolve, reject) => {
-          P2PB2B.addOrder(pair_.pair, coin1Amount, price, type).then(function(data) {
+          P2PB2BClient.addOrder(pair_.pair, coin1Amount, price, type).then(function(data) {
             try {
               const result = data.result;
               if (data.success && result && result.orderId) {
@@ -287,7 +289,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
               resolve(order);
             };
           }).catch((err) => {
-            log.warn(`API request P2PB2B.addOrder-limit(pair: ${pair_.pair}, coin1Amount: ${coin1Amount}, price: ${price}, type: ${type}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
+            log.warn(`API request P2PB2BClient.addOrder-limit(pair: ${pair_.pair}, coin1Amount: ${coin1Amount}, price: ${price}, type: ${type}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
             resolve(undefined);
           });
         });
@@ -328,7 +330,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
     getOrderBook(pair) {
       const pair_ = formatPairName(pair);
       return new Promise((resolve, reject) => {
-        P2PB2B.orderBook(pair_.pair).then(function(data) {
+        P2PB2BClient.orderBook(pair_.pair).then(function(data) {
           try {
             let book = data.result;
             if (!book) {
@@ -367,6 +369,44 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
           };
         }).catch((err) => {
           log.warn(`API request getOrderBook(pair: ${pair}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
+          resolve(undefined);
+        });
+      });
+    },
+    getTradesHistory(pair, fromOrderId, limit) {
+
+      const pair_ = formatPairName(pair);
+      return new Promise((resolve, reject) => {
+        P2PB2BClient.getTradesHistory(pair_.pair, fromOrderId, limit).then(function(data) {
+          try {
+            let trades = data.result;
+            if (!trades) {
+              trades = [];
+            }
+
+            const result = [];
+            trades.forEach((trade) => {
+              result.push({
+                coin1Amount: +trade.amount, // amount in coin1
+                price: +trade.price, // trade price
+                coin2Amount: +trade.amount * +trade.price, // quote in coin2
+                date: Math.round(trade.time * 1000), // must be as utils.unixTimeStampMs(): 1641121688194 - 1 641 121 688 194
+                type: trade.type?.toLowerCase(), // 'buy' or 'sell'
+                id: trade.id?.toString(),
+              });
+            });
+
+            // We need ascending sort order
+            result.sort(function(a, b) {
+              return parseFloat(a.date) - parseFloat(b.date);
+            });
+            resolve(result);
+          } catch (e) {
+            resolve(false);
+            log.warn('Error while processing getTradesHistory() request: ' + e);
+          };
+        }).catch((err) => {
+          log.log(`API request getTradesHistory(pair: ${pair}) of ${utils.getModuleName(module.id)} module failed. ${err}.`);
           resolve(undefined);
         });
       });

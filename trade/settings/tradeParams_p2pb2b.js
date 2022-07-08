@@ -9,6 +9,7 @@ module.exports = {
   'mm_isOrderBookActive': true,
   'mm_orderBookHeight': 14,
   'mm_orderBookOrdersCount': 22,
+  'mm_orderBookMaxOrderPercent': 50,
   'mm_isLiquidityActive': false,
   'mm_liquiditySellAmount': 100,
   'mm_liquidityBuyQuoteAmount': 50,

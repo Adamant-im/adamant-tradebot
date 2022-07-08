@@ -6,7 +6,7 @@ const express = require('express');
 const app = express();
 const config = require('./modules/configReader');
 const log = require('./helpers/log');
-const port = config.api;
+const port = config.debug_api;
 const db = require('./modules/DB');
 
 if (port) {

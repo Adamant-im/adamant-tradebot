@@ -10,8 +10,11 @@ module.exports = {
   currencies: undefined,
   markets: {},
 
+  /**
+   * Fetches global crypto rates from InfoService
+   * And stores them in this.currencies
+   */
   async updateCryptoRates() {
-
     const url = config.infoservice + '/get';
     const rates = await axios.get(url, {})
         .then(function(response) {
@@ -24,9 +27,8 @@ module.exports = {
     if (rates) {
       this.currencies = rates;
     } else {
-      log.warn(`Unable to fetch crypto rates in updateCryptoRates() of ${utils.getModuleName(module.id)} module. Request was successfull, but got unexpected results: ` + rates);
+      log.warn(`Unable to fetch crypto rates in updateCryptoRates() of ${utils.getModuleName(module.id)} module. Request was successful, but got unexpected results: ` + rates);
     }
-
   },
 
   /**
@@ -60,11 +62,23 @@ module.exports = {
       * If true, deduct the exchanger's and blockchain fees
    * @return {Number|Number} or { NaN, NaN }
    */
-  convertCryptos(from, to, amount = 1, considerExchangerFee = false) {
+  convertCryptos(from, to, amount = 1, considerExchangerFee = false, specificRate) {
     try {
+      const ALLOWED_GLOBAL_RATE_DIFFERENCE_PERCENT = 20;
       from = from.toUpperCase();
       to = to.toUpperCase();
       let rate = this.getRate(from, to);
+      if (utils.isPositiveNumber(specificRate)) {
+        const rateDifferencePercent = utils.numbersDifferencePercent(rate, specificRate);
+        if (rateDifferencePercent > ALLOWED_GLOBAL_RATE_DIFFERENCE_PERCENT) {
+          log.warn(`Specific and calculated ${from}/${to} rates differs too much: ${specificRate.toFixed(8)} and ${rate.toFixed(8)} (${rateDifferencePercent.toFixed(2)}%). Refusing to convert.`);
+          return {
+            outAmount: NaN,
+            exchangePrice: NaN,
+          };
+        }
+        rate = specificRate;
+      }
       let networkFee = 0;
       if (considerExchangerFee) {
         rate *= 1 - config['exchange_fee_' + from] / 100;
@@ -91,7 +105,12 @@ module.exports = {
     return ['USD', 'RUB', 'EUR', 'CNY', 'JPY'].includes(coin);
   },
 
-  hasTicker(coin) { // if coin has ticker like COIN/OTHERCOIN or OTHERCOIN/COIN
+  /**
+   * Returns if coin has ticker like COIN/OTHERCOIN or OTHERCOIN/COIN in InfoService
+   * @param {String} coin Like 'ADM'
+   * @return {Boolean}
+   */
+  hasTicker(coin) {
     const pairs = Object.keys(this.currencies).toString();
     return pairs.includes(',' + coin + '/') || pairs.includes('/' + coin);
   },
@@ -103,4 +122,4 @@ module.exports.updateCryptoRates();
 
 setInterval(() => {
   module.exports.updateCryptoRates();
-}, constants.UPDATE_CRYPTO_RATES_INVERVAL);
+}, constants.UPDATE_CRYPTO_RATES_INTERVAL);

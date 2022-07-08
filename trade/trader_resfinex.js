@@ -7,8 +7,9 @@ const apiServer = 'https://api.resfinex.com';
 const exchangeName = 'Resfinex';
 
 module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
+  const RESFINEXClient = RESFINEX();
 
-  RESFINEX.setConfig(apiServer, apiKey, secretKey, pwd, log, publicOnly);
+  RESFINEXClient.setConfig(apiServer, apiKey, secretKey, pwd, log, publicOnly);
 
   // Fulfill markets on initialization
   let exchangeMarkets;
@@ -21,7 +22,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
 
     module.exports.gettingMarkets = true;
     return new Promise((resolve, reject) => {
-      RESFINEX.markets().then(function(data) {
+      RESFINEXClient.markets().then(function(data) {
         try {
           let markets = data.data.pairs;
           if (!markets) {
@@ -42,11 +43,11 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
               pairPlain: market.name,
               coin1: market.primary.toUpperCase(),
               coin2: market.secondary.toUpperCase(),
-              coin1Decimals: market.amountDecimal,
-              coin2Decimals: market.priceDecimal,
-              // Not necessary
-              minTrade: market.minBaseAmount, // in coin2
-              coin1MinAmount: coin1info ? coin1info.minTrading : undefined, // but most do have null
+              coin1Decimals: +market.amountDecimal,
+              coin2Decimals: +market.priceDecimal,
+              coin1MinAmount: +coin1info?.minTrading, // but most do have null
+              coin2MinAmount: +market.minBaseAmount,
+              minTrade: +market.minBaseAmount, // in coin2
             };
           });
 
@@ -80,12 +81,13 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
         getMarkets: true,
         placeMarketOrder: true,
         getDepositAddress: false,
+        createDepositAddressWithWebsiteOnly: false,
       };
     },
 
     getBalances(nonzero = true) {
       return new Promise((resolve, reject) => {
-        RESFINEX.getUserAssets().then(function(data) {
+        RESFINEXClient.getUserAssets().then(function(data) {
           try {
             let assets = data.data;
             if (!assets) {
@@ -117,7 +119,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
     getOpenOrders(pair) {
       pair_ = formatPairName(pair);
       return new Promise((resolve, reject) => {
-        RESFINEX.getUserNowEntrustSheet(pair_.coin1, pair_.coin2).then(function(data) {
+        RESFINEXClient.getUserNowEntrustSheet(pair_.coin1, pair_.coin2).then(function(data) {
           try {
             let openOrders = data.data;
             if (!openOrders) {
@@ -193,7 +195,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
         API returns "ok", but order persists
       */
       return new Promise((resolve, reject) => {
-        RESFINEX.cancelEntrustSheet(orderId).then(function(data) {
+        RESFINEXClient.cancelEntrustSheet(orderId).then(function(data) {
           try {
             if (data.status === 'ok') {
               log.log(`Cancelling order ${orderId}…`);
@@ -207,7 +209,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
             log.warn('Error while processing cancelOrder() request: ' + e);
           };
         }).catch((err) => {
-          log.log(`API request ${arguments.callee.name}(orderId: ${orderId}) of ${utils.getModuleName(module.id)} module failed. ${err}.`);
+          log.log(`API request cancelOrder(orderId: ${orderId}) of ${utils.getModuleName(module.id)} module failed. ${err}.`);
           resolve(undefined);
         });
       });
@@ -215,11 +217,11 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
     getRates(pair) {
       pair_ = formatPairName(pair);
       return new Promise((resolve, reject) => {
-        RESFINEX.ticker(pair_.pair).then(function(data) {
+        RESFINEXClient.ticker(pair_.pair).then(function(data) {
           data = data.data;
           data = data.filter((symbol) => symbol.pair === pair_.pair)[0];
           try {
-            RESFINEX.orderBook(pair_.pair, 1).then(function(data2) {
+            RESFINEXClient.orderBook(pair_.pair, 1).then(function(data2) {
               data2 = data2.data;
               try {
                 if (data2) {
@@ -285,7 +287,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
         output = `${orderType} ${coin1Amount} ${pair_.coin1.toUpperCase()} at ${price} ${pair_.coin2.toUpperCase()}.`;
 
         return new Promise((resolve, reject) => {
-          RESFINEX.addEntrustSheet(pair_.pair, coin1Amount, price, side, 'LIMIT').then(function(data) {
+          RESFINEXClient.addEntrustSheet(pair_.pair, coin1Amount, price, side, 'LIMIT').then(function(data) {
             try {
               const result = data;
               if (result.data && result.data.orderId) {
@@ -309,7 +311,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
               resolve(order);
             };
           }).catch((err) => {
-            log.log(`API request RESFINEX.addEntrustSheet-limit(pair: ${pair_.pair}, coin1Amount: ${coin1Amount}, price: ${price}, side: ${side}, 'LIMIT') of ${utils.getModuleName(module.id)} module failed. ${err}.`);
+            log.log(`API request RESFINEXClient.addEntrustSheet-limit(pair: ${pair_.pair}, coin1Amount: ${coin1Amount}, price: ${price}, side: ${side}, 'LIMIT') of ${utils.getModuleName(module.id)} module failed. ${err}.`);
             resolve(undefined);
           });
         });
@@ -340,7 +342,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
         }
 
         return new Promise((resolve, reject) => {
-          RESFINEX.addEntrustSheet(pair_.pair, coin1Amount, '', side, 'MARKET').then(function(data) {
+          RESFINEXClient.addEntrustSheet(pair_.pair, coin1Amount, '', side, 'MARKET').then(function(data) {
             try {
               const result = data;
               if (result.data && result.data.orderId) {
@@ -364,7 +366,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
               resolve(order);
             };
           }).catch((err) => {
-            log.log(`API request RESFINEX.addEntrustSheet-market(pair: ${pair_.pair}, coin1Amount: ${coin1Amount}, '', side: ${side}, 'MARKET') of ${utils.getModuleName(module.id)} module failed. ${err}.`);
+            log.log(`API request RESFINEXClient.addEntrustSheet-market(pair: ${pair_.pair}, coin1Amount: ${coin1Amount}, '', side: ${side}, 'MARKET') of ${utils.getModuleName(module.id)} module failed. ${err}.`);
             resolve(undefined);
           });
         });
@@ -374,7 +376,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
 
       const pair_ = formatPairName(pair);
       return new Promise((resolve, reject) => {
-        RESFINEX.orderBook(pair_.pair).then(function(data) {
+        RESFINEXClient.orderBook(pair_.pair).then(function(data) {
           try {
             let book = data.data;
             if (!book) {
@@ -413,6 +415,44 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
           };
         }).catch((err) => {
           log.log(`API request getOrderBook(pair: ${pair}) of ${utils.getModuleName(module.id)} module failed. ${err}.`);
+          resolve(undefined);
+        });
+      });
+    },
+    getTradesHistory(pair) {
+
+      const pair_ = formatPairName(pair);
+      return new Promise((resolve, reject) => {
+        RESFINEXClient.getTradesHistory(pair_.pair).then(function(data) {
+          try {
+            let trades = data.data;
+            if (!trades) {
+              trades = [];
+            }
+
+            const result = [];
+            trades.forEach((trade) => {
+              result.push({
+                coin1Amount: +trade.amount, // amount in coin1
+                price: +trade.price, // trade price
+                coin2Amount: +trade.amount * +trade.price, // quote in coin2
+                date: trade.timestamp, // must be as utils.unixTimeStampMs(): 1641121688194 - 1 641 121 688 194
+                type: '', // Resfinex doesn't return type ('buy' or 'sell')
+                id: '', // Resfinex doesn't order ID
+              });
+            });
+
+            // We need ascending sort order
+            result.sort(function(a, b) {
+              return parseFloat(a.date) - parseFloat(b.date);
+            });
+            resolve(result);
+          } catch (e) {
+            resolve(false);
+            log.warn('Error while processing getTradesHistory() request: ' + e);
+          };
+        }).catch((err) => {
+          log.log(`API request getTradesHistory(pair: ${pair}) of ${utils.getModuleName(module.id)} module failed. ${err}.`);
           resolve(undefined);
         });
       });

@@ -13,10 +13,20 @@ mongoClient.connect((error, client) => {
     process.exit(-1);
   }
   const db = client.db('tradebotdb');
+
   collections.db = db;
+
+  const incomingTxsCollection = db.collection('incomingtxs');
+  incomingTxsCollection.createIndex([['date', 1], ['senderId', 1]]);
+
+  const ordersCollection = db.collection('orders');
+  ordersCollection.createIndex([['isProcessed', 1], ['purpose', 1]]);
+  ordersCollection.createIndex([['pair', 1], ['exchange', 1]]);
+
+  collections.ordersDb = model(ordersCollection);
+  collections.incomingTxsDb = model(incomingTxsCollection);
   collections.systemDb = model(db.collection('systems'));
-  collections.incomingTxsDb = model(db.collection('incomingtxs'));
-  collections.ordersDb = model(db.collection('orders'));
+
   log.log(`${config.notifyName} successfully connected to 'tradebotdb' MongoDB.`);
 
 });

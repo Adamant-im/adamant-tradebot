@@ -1,30 +1,65 @@
 const config = require('../modules/configReader');
 const log = require('./log');
-const { SAT, EPOCH } = require('./const');
+const tradeParams = require('../trade/settings/tradeParams_' + config.exchange);
+const fs = require('fs');
+const { SAT, EPOCH, MINUTE } = require('./const');
 
 module.exports = {
+
+  saveConfig(isWebApi = false) {
+    const toSave = 'module.exports = ' + JSON.stringify(tradeParams, null, 2).replace(/"/g, '\'').replace(/\n\}/g, ',\n};\n');
+    fs.writeFileSync('./trade/settings/tradeParams_' + config.exchange + '.js', toSave);
+  },
+
+  /**
+   * Returns object with all of properties as a string for logging
+   * @return {String}
+   */
+  getFullObjectString(object) {
+    const util = require('util');
+    return util.inspect(object, { showHidden: false, depth: null, colors: true });
+  },
+
   /**
    * Returns current time in milliseconds since Unix Epoch
+   * The Unix epoch is 00:00:00 UTC on 1 January 1970 (an arbitrary date)
    * @return {number}
    */
-  unix() {
+  unixTimeStampMs() {
     return new Date().getTime();
   },
 
   /**
-   * Converts provided `time` to ADAMANT's epoch timestamp
+   * Converts provided `time` (ms) to ADAMANT's epoch timestamp (sec)
    * @param {number} time Timestamp to convert
    * @return {number}
    */
   epochTime(time) {
     if (!time) {
-      time = Date.now();
+      time = Date.now(); // current time in milliseconds since Unix Epoch
     }
     return Math.floor((time - EPOCH) / 1000);
   },
 
   /**
-   * Converts ADAMANT's epoch timestamp to a Unix timestamp
+   * Converts provided `time` (ms) to timeZone's timestamp (ms)
+   * @param {number} ms Timestamp to convert
+   * @param {number} timeZone Time zone to convert
+   * @return {number}
+   */
+  formatUnixtimeTimeZone(ms, timeZone) {
+    const now = new Date();
+    const elsewhere = new Date(now.toLocaleString('en-US', { timeZone }));
+    const here = new Date(now.toLocaleString());
+
+    const offset = (+here) - (+elsewhere);
+
+    return ms + offset;
+  },
+
+  /**
+   * Converts ADAMANT's epoch timestamp (sec) to a Unix timestamp (ms)
+   * The Unix epoch is 00:00:00 UTC on 1 January 1970 (an arbitrary date)
    * @param {number} epochTime Timestamp to convert
    * @return {number}
    */
@@ -178,6 +213,63 @@ module.exports = {
   },
 
   /**
+   * Parses number, including 500k, 10.3m or 5b
+   * @param {number} value Number to parse
+   * @return {Object} isNumber and number itself
+   */
+  parsePositiveSmartNumber(value) {
+    if (!value) {
+      return {
+        isNumber: false,
+      };
+    }
+    value = value.toString()?.toLowerCase();
+    const multiplierDigit = value.slice(-1);
+    let number;
+
+    if (['k', 'm', 'b'].includes(multiplierDigit)) {
+      number = +value.slice(0, -1);
+      if (!this.isPositiveNumber(number)) {
+        return {
+          isNumber: false,
+        };
+      }
+      let multiplier;
+      switch (multiplierDigit) {
+        case 'k':
+          multiplier = 1000;
+          break;
+        case 'm':
+          multiplier = 1000000;
+          break;
+        case 'm':
+          multiplier = 1000000000;
+          break;
+        default:
+          break;
+      }
+      number *= multiplier;
+      return {
+        isNumber: true,
+        fancyNumberString: value,
+        number,
+      };
+    } else {
+      number = +value;
+      if (!this.isPositiveNumber(number)) {
+        return {
+          isNumber: false,
+        };
+      }
+      return {
+        isNumber: true,
+        fancyNumberString: number,
+        number,
+      };
+    }
+  },
+
+  /**
    * Parses string value to JSON
    * @param {string} jsonString String to parse
    * @return {object} JSON object or false, if unable to parse
@@ -193,6 +285,38 @@ module.exports = {
   },
 
   /**
+   * Compares two objects
+   * @param {object} object1
+   * @param {object} object2
+   * @return {boolean} True, if objects are equal
+   */
+  isObjectsEqual(object1, object2) {
+    const props1 = Object.getOwnPropertyNames(object1);
+    const props2 = Object.getOwnPropertyNames(object2);
+    if (props1.length !== props2.length) {
+      return false;
+    }
+    for (let i = 0; i < props1.length; i++) {
+      const val1 = object1[props1[i]];
+      const val2 = object2[props1[i]];
+      const isObjects = this.isObject(val1) && this.isObject(val2);
+      if (isObjects && !this.isObjectsEqual(val1, val2) || !isObjects && val1 !== val2) {
+        return false;
+      }
+    }
+    return true;
+  },
+
+  /**
+   * Check if variable is an object
+   * @param {any} object
+   * @return {boolean}
+   */
+  isObject(object) {
+    return object !== null && typeof object === 'object';
+  },
+
+  /**
    * Compares two arrays
    * @param {array} array1
    * @param {array} array2
@@ -202,6 +326,43 @@ module.exports = {
     return array1.length === array2.length && array1.sort().every(function(value, index) {
       return value === array2.sort()[index];
     });
+  },
+
+  /**
+   * Clones an array. Not a deep clone, but offers to clone array of simple objects.
+   * @param {array} arr
+   * @return {array} A copy of array1
+   */
+  cloneArray(arr) {
+    if (!Array.isArray(arr)) return arr;
+    return arr.map((a) => {
+      return { ...a };
+    });
+  },
+
+  /**
+   * Clones an object. Not a deep clone, but offers to clone object of nulls, arrays and objects.
+   * @param {Object} obj
+   * @return {Object} A copy of object
+   */
+  cloneObject(obj) {
+    if (typeof obj !== 'object') return obj;
+    // return JSON.parse(JSON.stringify(obj));
+    const objectCopy = {};
+    let key;
+    for (key in obj) {
+      const toClone = obj[key];
+      if (toClone === null) {
+        objectCopy[key] = toClone;
+      } else if (Array.isArray(toClone)) {
+        objectCopy[key] = this.cloneArray(toClone);
+      } else if (typeof toClone === 'object') {
+        objectCopy[key] = this.cloneObject(toClone);
+      } else {
+        objectCopy[key] = toClone;
+      }
+    }
+    return objectCopy;
   },
 
   /**
@@ -215,6 +376,33 @@ module.exports = {
       return m;
     }, { });
     return Object.keys(map);
+  },
+
+  /**
+   * Returns array with unique objects
+   * @param {array} items Input array
+   * @param {array|string} propNames 'property' or ['property1', 'property2']
+   * @return {array}
+   */
+  getUniqueByProperties(items, propNames) {
+    const propNamesArray = Array.from(propNames);
+    const isPropValuesEqual = (subject, target, propNames) =>
+      propNames.every((propName) => subject[propName] === target[propName]);
+    return items.filter((item, index, array) =>
+      index === array.findIndex((foundItem) => isPropValuesEqual(foundItem, item, propNamesArray)),
+    );
+  },
+
+  /**
+   * Splits a string into chunks
+   * @param {string} str
+   * @param {number} length
+   * @return {array<string>} Array of strings
+   */
+  chunkString(str, length) {
+    // return str.match(new RegExp('.{1,' + length + '}', 'g'));
+    // If your string can contain newlines or carriage returns:
+    return str.match(new RegExp('(.|[\r\n]){1,' + length + '}', 'g'));
   },
 
   /**
@@ -306,9 +494,136 @@ module.exports = {
     return output;
   },
 
-  getOrderBookInfo(orderBook, customSpreadPercent, targetPrice) {
+  /**
+   * Calculates average value in array
+   * @param {Array of Number} arr Array of number
+   * @param {Number} maxLength Use only first maxLength items (optional)
+   * @return {Number} Average value
+   */
+  arrayAverage(arr, maxLength) {
+    if (!Array.isArray(arr) || arr.length === 0) return false;
+    if (!maxLength) maxLength = arr.length - 1;
+    const arrToCalc = arr.slice(0, maxLength);
+    const total = arrToCalc.reduce((acc, c) => acc + c, 0);
+    return total / arrToCalc.length;
+  },
 
+  /**
+   * Calculates Root mean square value in array
+   * @param {Array of Number} arr Array of number
+   * @param {Number} maxLength Use only first maxLength items (optional)
+   * @return {Number} RMS value
+   */
+  arrayRMS(arr, maxLength) {
+    if (!Array.isArray(arr) || arr.length === 0) return false;
+    if (!maxLength) maxLength = arr.length - 1;
+    const arrToCalc = arr.slice(0, maxLength);
+    const squares = arrToCalc.map((val) => (val*val));
+    const total = squares.reduce((acc, c) => acc + c, 0);
+    return Math.sqrt(total / squares.length);
+  },
+
+  /**
+   * Calculates median value in array
+   * @param {Array of Number} arr Array of number
+   * @param {Number} maxLength Use only first maxLength items (optional)
+   * @return {Number} Median value
+   */
+  arrayMedian(arr, maxLength) {
+    if (!Array.isArray(arr) || arr.length === 0) return false;
+    if (!maxLength) maxLength = arr.length - 1;
+    const arrToCalc = arr.slice(0, maxLength);
+    arrToCalc.sort(function(a, b) {
+      return a - b;
+    });
+    const lowMiddle = Math.floor( (arrToCalc.length - 1) / 2);
+    const highMiddle = Math.ceil( (arrToCalc.length - 1) / 2);
+    return (arrToCalc[lowMiddle] + arrToCalc[highMiddle]) / 2;
+  },
+
+  /**
+   * Calculates history trades metrics within the interval, like max and min price, price deviation
+   * @param {Array of object} lastTrades Last trades, received using traderapi.getTradesHistory()
+   * @param {Number} startDate Timestamp from to filter trades
+   * @return {Object} History trades metrics
+   */
+  getHistoryTradesInfo(lastTrades, startDate) {
     try {
+      const defaultInterval = MINUTE;
+      if (!this.isPositiveNumber(startDate)) {
+        startDate = Date.now() - defaultInterval;
+      }
+      lastTrades = lastTrades.filter((trade) => trade.date > startDate);
+      const tradesCount = lastTrades.length;
+      const intervalMs = Date.now() - startDate;
+      const minPrice = Math.min(...lastTrades.map((trade) => trade.price));
+      const maxPrice = Math.max(...lastTrades.map((trade) => trade.price));
+      const priceDelta = Math.abs(minPrice - maxPrice);
+      const priceDeltaPercent = this.numbersDifferencePercent(minPrice, maxPrice);
+      const coin1Volume = lastTrades.reduce((total, trade) => total + trade.coin1Amount, 0);
+      const coin2Volume = lastTrades.reduce((total, trade) => total + trade.coin2Amount, 0);
+      const tradesInfo = {
+        tradesCount,
+        intervalMs,
+        minPrice,
+        maxPrice,
+        priceDelta,
+        priceDeltaPercent,
+        coin1Volume,
+        coin2Volume,
+      };
+      return tradesInfo;
+    } catch (e) {
+      log.error(`Error in getHistoryTradesInfo() of ${this.getModuleName(module.id)} module: ${e}.`);
+      return false;
+    }
+  },
+
+  /**
+   * Aggregates (sum) array of objects by field
+   * @param {Array of Object} arr Array of objects to aggregate
+   * @param {String} field Field to aggregate by
+   * @return {Array of Object} Aggregated array
+   */
+  aggregateArrayByField(arr, field) {
+    try {
+      const dictionary = arr.reduce((dic, value) => {
+        if (!dic[value[field]]) {
+          dic[value[field]] = value;
+        } else {
+          const old = dic[value[field]];
+          Object.keys(old).forEach((key) => {
+            if (key !== field) {
+              if (typeof old[key] === 'number') {
+                old[key] += value[key];
+              } else {
+                old[key] = value[key];
+              }
+            }
+          });
+        }
+        return dic;
+      }, {});
+
+      return Object.values(dictionary);
+    } catch (e) {
+      log.error(`Error in aggregateArrayByField() of ${this.getModuleName(module.id)} module: ${e}.`);
+      return false;
+    }
+  },
+
+  /**
+   * Calculates order book metrics, like highestBid-lowestAsk, smartBid-smartAsk, spread, liquidity, amountTargetPrice
+   * @param {Array of Object} orderBookInput Bids[] and asks[], received via traderapi.getOrderBook(). To be cloned not to modify.
+   * @param {Number} customSpreadPercent If we'd like to calculate liquidity for custom spread, ±% from the average price
+   * @param {Number} targetPrice Calculate how much to buy or to sell to set a target price; Build Quote hunter table.
+   * @param {Number} placedAmount Calculate price change in case of *market* order placed with placedAmount, both sides
+   * @param {Array of Object} openOrders Open orders[], received via traderapi.getOpenOrders(). To filter third-party orders.
+   * @return {Object} Order book metrics
+   */
+  getOrderBookInfo(orderBookInput, customSpreadPercent, targetPrice, placedAmount, openOrders) {
+    try {
+      const orderBook = this.cloneObject(orderBookInput);
 
       if (!orderBook || !orderBook.asks[0] || !orderBook.bids[0]) {
         return false;
@@ -317,13 +632,27 @@ module.exports = {
       const highestBid = orderBook.bids[0].price;
       const lowestAsk = orderBook.asks[0].price;
 
-      let typeTargetPrice; let amountTargetPrice = 0; let targetPriceOrdersCount = 0; let amountTargetPriceQuote = 0;
+      const highestBidAggregatedAmount = orderBook.bids.reduce((total, order) => {
+        return order.price === highestBid ? total + order.amount : total;
+      }, 0);
+      const highestBidAggregatedQuote = highestBidAggregatedAmount * highestBid;
+
+      const lowestAskAggregatedAmount = orderBook.asks.reduce((total, order) => {
+        return order.price === lowestAsk ? total + order.amount : total;
+      }, 0);
+      const lowestAskAggregatedQuote = lowestAskAggregatedAmount * lowestAsk;
+
+      let typeTargetPrice;
+      let amountTargetPrice = 0; let targetPriceOrdersCount = 0; let amountTargetPriceQuote = 0;
+      let targetPriceExcluded;
+      let amountTargetPriceExcluded = 0; let targetPriceOrdersCountExcluded = 0; let amountTargetPriceQuoteExcluded = 0;
+
       if (targetPrice) {
         if (targetPrice > highestBid && targetPrice < lowestAsk) {
           typeTargetPrice = 'inSpread';
-        } else if (targetPrice < highestBid) {
+        } else if (targetPrice <= highestBid) {
           typeTargetPrice = 'sell';
-        } else if (targetPrice > lowestAsk) {
+        } else if (targetPrice >= lowestAsk) {
           typeTargetPrice = 'buy';
         }
       }
@@ -354,6 +683,8 @@ module.exports = {
       liquidity.percent5.spreadPercent = 5;
       liquidity.percent10 = {};
       liquidity.percent10.spreadPercent = 10;
+      liquidity.percent50 = {};
+      liquidity.percent50.spreadPercent = 50;
       liquidity.percentCustom = {};
       liquidity.percentCustom.spreadPercent = customSpreadPercent;
       liquidity.full = {};
@@ -375,6 +706,14 @@ module.exports = {
         // average price is the same for any spread
       }
 
+      const bidIntervals = [];
+      let previousBid;
+
+      let placedAmountCountBid = 0;
+      let placedAmountSumBid = 0;
+      let placedAmountPriceBid;
+      let placedAmountReachedBid = false;
+
       for (const bid of orderBook.bids) {
 
         for (const key in liquidity) {
@@ -387,13 +726,44 @@ module.exports = {
             liquidity[key].amountTotalQuote += bid.amount * bid.price;
           }
         }
+        if (typeTargetPrice === 'sell' && bid.price > targetPrice) {
+          amountTargetPriceExcluded += bid.amount;
+          amountTargetPriceQuoteExcluded += bid.amount * bid.price;
+          targetPriceOrdersCountExcluded += 1;
+          targetPriceExcluded = bid.price;
+        }
         if (typeTargetPrice === 'sell' && bid.price >= targetPrice) {
           amountTargetPrice += bid.amount;
           amountTargetPriceQuote += bid.amount * bid.price;
           targetPriceOrdersCount += 1;
         }
+        if (!placedAmountReachedBid) {
+          placedAmountPriceBid = bid.price;
+          if (placedAmountSumBid + bid.amount <= placedAmount) {
+            placedAmountCountBid += 1;
+            placedAmountSumBid += bid.amount;
+          } else {
+            placedAmountReachedBid = true;
+          }
+        }
+        if (previousBid && previousBid.price !== bid.price) {
+          bidIntervals.push({
+            previousPrice: previousBid.price,
+            priceInterval: previousBid.price - bid.price,
+            nextPrice: bid.price,
+          });
+        }
+        previousBid = bid;
 
       }
+
+      const askIntervals = [];
+      let previousAsk;
+
+      let placedAmountCountAsk = 0;
+      let placedAmountSumAsk = 0;
+      let placedAmountPriceAsk;
+      let placedAmountReachedAsk = false;
 
       for (const ask of orderBook.asks) {
 
@@ -407,22 +777,148 @@ module.exports = {
             liquidity[key].amountTotalQuote += ask.amount * ask.price;
           }
         }
+        if (typeTargetPrice === 'buy' && ask.price < targetPrice) {
+          amountTargetPriceExcluded += ask.amount;
+          amountTargetPriceQuoteExcluded += ask.amount * ask.price;
+          targetPriceOrdersCountExcluded += 1;
+          targetPriceExcluded = ask.price;
+        }
         if (typeTargetPrice === 'buy' && ask.price <= targetPrice) {
           amountTargetPrice += ask.amount;
           amountTargetPriceQuote += ask.amount * ask.price;
           targetPriceOrdersCount += 1;
         }
+        if (!placedAmountReachedAsk) {
+          placedAmountPriceAsk = ask.price;
+          if (placedAmountSumAsk + ask.amount <= placedAmount) {
+            placedAmountCountAsk += 1;
+            placedAmountSumAsk += ask.amount;
+          } else {
+            placedAmountReachedAsk = true;
+          }
+        }
+        if (previousAsk && previousAsk.price !== ask.price) {
+          askIntervals.push({
+            previousPrice: previousAsk.price,
+            priceInterval: ask.price - previousAsk.price,
+            nextPrice: ask.price,
+          });
+        }
+        previousAsk = ask;
 
       }
 
+      // Used in Price watcher to understand real buy and sell prices
       const smartBid = this.getSmartPrice(orderBook.bids, 'bids', liquidity);
       const smartAsk = this.getSmartPrice(orderBook.asks, 'asks', liquidity);
+
+      // Used in Cleaner to remove cheaters' orders
+      const cleanBid = this.getCleanPrice(orderBook.bids, 'bids', liquidity, smartBid);
+      const cleanAsk = this.getCleanPrice(orderBook.asks, 'asks', liquidity, smartAsk);
+
+      // Used in Ant-gap
+      const ORDERBOOK_HEIGHT = 20;
+      const avgBidInterval = this.arrayAverage(bidIntervals.map((bid) => bid.priceInterval), ORDERBOOK_HEIGHT);
+      const avgAskInterval = this.arrayAverage(askIntervals.map((ask) => ask.priceInterval), ORDERBOOK_HEIGHT);
+      const rmsBidInterval = this.arrayRMS(bidIntervals.map((bid) => bid.priceInterval), ORDERBOOK_HEIGHT);
+      const rmsAskInterval = this.arrayRMS(askIntervals.map((ask) => ask.priceInterval), ORDERBOOK_HEIGHT);
+      const medianBidInterval = this.arrayMedian(bidIntervals.map((bid) => bid.priceInterval), ORDERBOOK_HEIGHT);
+      const medianAskInterval = this.arrayMedian(askIntervals.map((ask) => ask.priceInterval), ORDERBOOK_HEIGHT);
+
+      // Build Quote hunter table
+      const qhTable = [];
+      let optimalQhBid;
+
+      if (openOrders && lowestAsk && highestBid) {
+        // First, Aggregate by price first
+        const orderBookBidsAggregated = this.aggregateArrayByField(orderBook.bids, 'price');
+        const openOrdersBids = openOrders?.filter((order) => order.side === 'buy');
+        const openOrdersBidsAggregated = this.aggregateArrayByField(openOrdersBids, 'price');
+
+        // Second, Deduct bids to filter third-party ones
+        for (let i = 0; i < orderBookBidsAggregated?.length; i++) {
+          for (let j = 0; j < openOrdersBidsAggregated?.length; j++) {
+            if (openOrdersBidsAggregated[j].price === orderBookBidsAggregated[i].price) {
+              orderBookBidsAggregated[i].amount -= openOrdersBidsAggregated[j].amountLeft;
+              openOrdersBidsAggregated[j].amountLeft = 0;
+            }
+          }
+        }
+
+        // Third, remove 0 amount bids
+        const orderBookBidsThirdParty = [];
+        for (const bid of orderBookBidsAggregated) {
+          if (bid.amount > 0) {
+            orderBookBidsThirdParty.push(bid);
+          }
+        }
+
+        // Forth, verify we have all of our bids in order book
+        for (const bid of openOrdersBidsAggregated) {
+          if (bid.amountLeft > 0) {
+            log.warn(`Bot's order to buy ${bid.amount} ${config.coin1} (${bid.amountLeft} ${config.coin1} left) at ${bid.price} ${config.coin2} is not found in the order book. It may be we've got a bit stale data.`);
+          }
+        }
+
+        // Fifth, calculate Quote hunter table
+        if (orderBookBidsThirdParty.length > 3) {
+          let index = 0;
+          let maxBidTakerKoef = 0;
+          for (const bid of orderBookBidsThirdParty) {
+            const bidPrice = bid.price;
+            if (bidPrice < targetPrice) {
+              break;
+            }
+            const bidAmount = bid.amount;
+            const bidAmountAccPrev = qhTable[qhTable.length - 1] ? qhTable[qhTable.length - 1].bidAmountAcc : 0;
+            const bidAmountAcc = bidAmount + bidAmountAccPrev;
+            const bidQuote = bidAmount * bidPrice;
+            const bidQuoteAccPrev = qhTable[qhTable.length - 1] ? qhTable[qhTable.length - 1].bidQuoteAcc : 0;
+            const bidQuoteAcc = bidQuote + bidQuoteAccPrev;
+            const bidPriceDumpPercent = this.numbersDifferencePercentDirect(
+                highestBid,
+                index === 0 ? orderBookBidsThirdParty[index + 1].price : bidPrice,
+            );
+            // const bidPriceRemainderPercent = 100 - bidPriceDumpPercent;
+            // const bidPriceRemainderPowed = Math.pow(bidPriceRemainderPercent/100, 10);
+            const bidPriceDumpPercentPowed = Math.pow(bidPriceDumpPercent, 2);
+            const bidTakerKoef = (index === 1 ? bidQuote : bidQuoteAcc) / bidPriceDumpPercentPowed;
+            qhTable.push({
+              index,
+              bidPrice,
+              bidAmount,
+              bidAmountAcc,
+              bidQuote,
+              bidQuoteAcc,
+              bidPriceDumpPercent,
+              // bidPriceRemainderPercent,
+              bidTakerKoef,
+            });
+            if (maxBidTakerKoef < bidTakerKoef) {
+              maxBidTakerKoef = bidTakerKoef;
+              optimalQhBid = qhTable[qhTable.length - 1];
+            }
+            index++;
+          }
+
+          // See this table to understand the magic
+          // console.log('Lowest ask:', lowestAsk, ', Price limit: ', targetPrice);
+          // console.table(qhTable);
+          // console.log('Optimal Quote hunter bid:', optimalQhBid);
+        }
+      }
 
       return {
         highestBid,
         lowestAsk,
+        highestBidAggregatedAmount,
+        highestBidAggregatedQuote,
+        lowestAskAggregatedAmount,
+        lowestAskAggregatedQuote,
         smartBid,
         smartAsk,
+        cleanBid,
+        cleanAsk,
         spread,
         spreadPercent,
         averagePrice,
@@ -434,15 +930,43 @@ module.exports = {
         amountTargetPrice,
         amountTargetPriceQuote,
         targetPriceOrdersCount,
+        amountTargetPriceExcluded,
+        amountTargetPriceQuoteExcluded,
+        targetPriceOrdersCountExcluded,
+        targetPriceExcluded,
+        bidIntervals,
+        askIntervals,
+        avgBidInterval,
+        avgAskInterval,
+        rmsBidInterval,
+        rmsAskInterval,
+        medianBidInterval,
+        medianAskInterval,
+        placedAmountCountBid,
+        placedAmountSumBid,
+        placedAmountPriceBid,
+        placedAmountReachedBid,
+        placedAmountCountAsk,
+        placedAmountSumAsk,
+        placedAmountPriceAsk,
+        placedAmountReachedAsk,
+        optimalQhBid,
       };
-
     } catch (e) {
-      log.warn(`Error in getOrderBookInfo() of ${this.getModuleName(module.id)} module: ${e}.`);
+      log.error(`Error in getOrderBookInfo() of ${this.getModuleName(module.id)} module: ${e}.`);
       return false;
     }
   },
 
-  getSmartPrice(items, type, liquidity) {
+  /**
+   * Calculates smart price for the order book
+   * @param {Array of object} items Bids or asks, received using traderapi.getOrderBook()
+   * @param {String} type Items are 'asks' or 'bids'?
+   * @param {Array of object} liquidity Liquidity info, calculated in getOrderBookInfo()
+   * @param {Number} koef How to understand we achieve smart price. The more koef, the farther smart price from spread
+   * @return {Number} Smart price
+   */
+  getSmartPrice(items, type, liquidity, koef = 0.02) {
 
     try {
 
@@ -451,12 +975,10 @@ module.exports = {
       let a = 0; let a_m1 = 0; let t = 0;
       let c = 0; let c_a = 0; let c_a_m1 = 0; let c_c_m1 = 0; let c_t = 0; let s = 0;
       let prev_c_c_m1 = 0; let prev_s = 0; let prev_c_t = 0;
+      const el_0 = items[0]; let c_t0 = 0;
 
-      const enough_c_t = 0.02;
+      const enough_c_t = koef;
       const table = [];
-
-
-      // console.log(liquidity['full']);
 
       for (let i = 0; i < items.length; i++) {
 
@@ -465,11 +987,11 @@ module.exports = {
         if (type === 'asks') {
           a = el.amount;
           a_m1 = el_m1 ? el_m1.amount : false;
-          t = liquidity['full'].amountAsks;
+          t = liquidity['percent50'].amountAsks;
         } else {
           a = el.amount * el.price;
           a_m1 = el_m1 ? el_m1.amount * el_m1.price : false;
-          t = liquidity['full'].amountBidsQuote;
+          t = liquidity['percent50'].amountBidsQuote;
         }
 
         prev_c_c_m1 = c_c_m1;
@@ -482,16 +1004,18 @@ module.exports = {
         c_a_m1 = a_m1 ? c / a_m1 : false;
         c_c_m1 = c_m1 === 0 ? false : c / c_m1;
         c_t = c / t;
+        if (i === 0) c_t0 = c_t;
         s = c_c_m1 * c_t;
 
         if (!smartPrice && s < prev_s && prev_c_t > enough_c_t) {
-          smartPrice = el_m1.price;
+          smartPrice = (c_t0 > enough_c_t) && (i === 2) ? el_0.price : el_m1.price;
         }
-        // console.log(ask.price.toFixed(4), ask.amount.toFixed(4), c.toFixed(2), c_a.toFixed(2),
-        //   c_a_m1 ? c_a_m1.toFixed(2) : false, c_c_m1 ? c_c_m1.toFixed(2) : false, c_t.toFixed(2));
 
-        if (i < 20) {
+        // This table is only for logging
+        if (!smartPrice) {
           table.push({
+            items: items.length,
+            total: +t.toFixed(2),
             price: el.price.toFixed(8),
             a: a.toFixed(8),
             c: +c.toFixed(8),
@@ -505,24 +1029,97 @@ module.exports = {
 
       }
 
+      // See this table to understand the magic
       // console.table(table);
-      // console.log(`smartPrice for ${type}: ${smartPrice}`);
+      // console.log(`smartPrice for ${type} and ${koef} koef: ${smartPrice.toFixed(8)}\n`);
+
       return smartPrice;
 
     } catch (e) {
-      log.warn(`Error in getSmartPrice() of ${this.getModuleName(module.id)} module: ${e}.`);
+      log.error(`Error in getSmartPrice() of ${this.getModuleName(module.id)} module: ${e}.`);
       return false;
     }
 
   },
 
-  getOrdersStats(orders) {
+  /**
+   * Calculates clean (non-cheater) price for the order book
+   * @param {Array of object} items Bids or asks, received using traderapi.getOrderBook()
+   * @param {String} type Items are 'asks' or 'bids'?
+   * @param {Array of object} liquidity Liquidity info, calculated in getOrderBookInfo()
+   * @param {Number} smartPrice Smart price for the order book
+   * @param {Number} koef How to understand we achieve clean price. The more koef, the farther smart price from spread
+   * @return {Number} Clean price. It depends on distance from smart price
+   */
+  getCleanPrice(items, type, liquidity, smartPrice, koef = 0.02) {
 
-    // order is an object of ordersDb
-    // type: type,
-    // price: price,
-    // coin1Amount: coin1Amount,
-    // coin2Amount: coin2Amount,
+    try {
+
+      let cleanPrice;
+      let a = 0; let t = 0; let c = 0; let c_t = 0;
+      let d = 0; let d2 = 0; let ct_d2 = 0;
+      const enough_ct_d2 = koef;
+      const table = [];
+
+      for (let i = 0; i < items.length; i++) {
+
+        const el = items[i];
+        if (type === 'asks') {
+          if (items[i].price > smartPrice) break;
+          a = el.amount;
+          t = liquidity['percent50'].amountAsks;
+        } else {
+          if (items[i].price < smartPrice) break;
+          a = el.amount * el.price;
+          t = liquidity['percent50'].amountBidsQuote;
+        }
+
+        d = this.numbersDifferencePercent(el.price, smartPrice) / 100;
+        d2 = d * d;
+        c += a;
+        c_t = c / t;
+        ct_d2 = c_t / d2;
+
+        if (!cleanPrice && (ct_d2 > enough_ct_d2 || ct_d2 === Infinity)) {
+          cleanPrice = el.price;
+        }
+
+        // This table is only for logging
+        if (!cleanPrice) {
+          table.push({
+            items: items.length,
+            total: +t.toFixed(2),
+            price: el.price.toFixed(8),
+            d: +d.toFixed(2),
+            d2: +d2.toFixed(4),
+            a: a.toFixed(8),
+            c: +c.toFixed(8),
+            c_t: +c_t.toFixed(5),
+            ct_d2: +ct_d2.toFixed(5),
+          });
+        }
+
+      }
+
+      // See this table to understand the magic
+      // console.table(table);
+      // console.log(`cleanPrice for ${type} and ${smartPrice.toFixed(8)} smart price is ${cleanPrice.toFixed(8)}\n`);
+
+      return cleanPrice;
+
+    } catch (e) {
+      log.error(`Error in getCleanPrice() of ${this.getModuleName(module.id)} module: ${e}.`);
+      return false;
+    }
+
+  },
+
+  /**
+   * Calculates order statistics used in liquidity provider
+   * @param {Array of object} orders Order is an object of ordersDb, including: type, price, coin1Amount, coin2Amount
+   * @return {Object} Stats on asks, bids, total
+   */
+  getOrdersStats(orders) {
 
     let bidsTotalAmount = 0; let asksTotalAmount = 0;
     let bidsTotalQuoteAmount = 0; let asksTotalQuoteAmount = 0;
@@ -561,20 +1158,60 @@ module.exports = {
     return +(Math.pow(10, -decimals).toFixed(decimals));
   },
 
+  /**
+   * Returns decimals for precision
+   * @param precision e.g. 0.00001
+   * @returns {number} returns 5
+   */
+  getDecimalsFromPrecision(precision) {
+    if (!precision) return;
+    return Math.round(Math.abs(Math.log10(+precision)));
+  },
+
+  /**
+   * Checks if order price is out of order book custom percent (as mm_liquiditySpreadPercent) spread
+   * @param order Object of ordersDb
+   * @param orderBookInfo Object of utils.getOrderBookInfo()
+   * @returns {Boolean}
+   */
   isOrderOutOfSpread(order, orderBookInfo) {
+    try {
+      const laxityPercent = 30;
+      const minPrice = orderBookInfo.liquidity.percentCustom.lowPrice -
+        orderBookInfo.liquidity.percentCustom.spread * laxityPercent / 100;
+      const maxPrice = orderBookInfo.liquidity.percentCustom.highPrice +
+        orderBookInfo.liquidity.percentCustom.spread * laxityPercent / 100;
 
-    // order is an object of ordersDb
-    // type: type,
-    // price: price,
+      return (order.price < minPrice) || (order.price > maxPrice);
+    } catch (e) {
+      log.error(`Error in isOrderOutOfSpread() of ${this.getModuleName(module.id)} module: ${e}.`);
+      return false;
+    }
+  },
 
-    const laxityPercent = 30;
-    const minPrice = orderBookInfo.liquidity.percentCustom.lowPrice -
-      orderBookInfo.liquidity.percentCustom.spread * laxityPercent / 100;
-    const maxPrice = orderBookInfo.liquidity.percentCustom.highPrice +
-      orderBookInfo.liquidity.percentCustom.spread * laxityPercent / 100;
+  /**
+   * Checks if order price is out of Price watcher range
+   * @param order Object of ordersDb
+   * @returns {Boolean}
+   */
+  isOrderOutOfPriceWatcherRange(order) {
+    try {
+      const pw = require('../trade/mm_price_watcher');
+      if (pw.getIsPriceActualAndEnabled()) {
+        const lowPrice = pw.getLowPrice();
+        const highPrice = pw.getHighPrice();
+        if (
+          (order.type === 'sell' && order.price < lowPrice) ||
+          (order.type === 'buy' && order.price > highPrice)
+        ) {
+          return true;
+        }
+      }
+    } catch (e) {
+      log.error(`Error in isOrderOutOfPriceWatcherRange() of ${this.getModuleName(module.id)} module: ${e}.`);
+    }
 
-    return (order.price < minPrice) || (order.price > maxPrice);
-
+    return false;
   },
 
   /**
@@ -594,8 +1231,14 @@ module.exports = {
     }
   },
 
+  /**
+   * Parses number or number range from string like 1.25–2.90
+   * It considers a separator can be hyphen, dash, minus, long dash
+   * All numbers should be positive and finite
+   * @param {String} str String to parse
+   * @return {Object} isRange, isValue, from, to
+   */
   parseRangeOrValue(str) {
-
     if (!str) {
       return {
         isRange: false,
@@ -613,8 +1256,9 @@ module.exports = {
     } else if (str.indexOf('−') > -1) { // minus
       [from, to] = str.split('−');
     } else {
+      // It's a number
       value = +str;
-      if (!value || value === Infinity) {
+      if (!this.isPositiveNumber(value)) {
         return {
           isRange: false,
           isValue: false,
@@ -631,7 +1275,7 @@ module.exports = {
     from = +from;
     to = +to;
 
-    if (!from || from === Infinity || !to || to === Infinity) {
+    if (!this.isPositiveNumber(from) || !this.isPositiveNumber(to)) {
       return {
         isRange: false,
         isValue: false,
@@ -644,10 +1288,15 @@ module.exports = {
       from,
       to,
     };
-
   },
 
-  difference(a, b) {
+  /**
+   * Searches difference between current and previous balances
+   * @param {Array of Object} a Current balances
+   * @param {Array of Object} b Previous balances
+   * @return {Array of Object} Difference
+   */
+  differenceInBalances(a, b) {
     if (!a || !b || !a[0] || !b[0]) return false;
     let obj2;
     const diff = [];
@@ -681,4 +1330,212 @@ module.exports = {
     return diff;
   },
 
+  /**
+   * Creates a difference string for current and previous balances
+   * @param {Array of Object} a Current balances
+   * @param {Array of Object} b Previous balances
+   * @return {String} Difference string
+   */
+  differenceInBalancesString(a, b, marketInfo) {
+    let output = '';
+    const diff = this.differenceInBalances(a, b);
+    if (diff) {
+      if (diff[0]) {
+        output += '\nChanges:\n';
+        let delta; let deltaUSD = 0; let deltaBTC = 0; let deltaCoin1 = 0; let deltaCoin2 = 0;
+        let sign; let signUSD = ''; let signBTC = ''; let signCoin1 = ''; let signCoin2 = '';
+        diff.forEach((crypto) => {
+          delta = Math.abs(crypto.now - crypto.prev);
+          sign = crypto.now > crypto.prev ? '+' : '−';
+          if (crypto.code === 'totalUSD') {
+            deltaUSD = delta;
+            signUSD = sign;
+            return;
+          }
+          if (crypto.code === 'totalBTC') {
+            deltaBTC = delta;
+            signBTC = sign;
+            return;
+          }
+          if (crypto.code === config.coin1) {
+            deltaCoin1 = delta;
+            signCoin1 = sign;
+          }
+          if (crypto.code === config.coin2) {
+            deltaCoin2 = delta;
+            signCoin2 = sign;
+          }
+          output += `_${crypto.code}_: ${sign}${this.formatNumber(+(delta).toFixed(8), true)}`;
+          output += '\n';
+        });
+        output += `Total holdings ${signUSD}${this.formatNumber(+deltaUSD.toFixed(2), true)} _USD_ or ${signBTC}${this.formatNumber(deltaBTC.toFixed(8), true)} _BTC_`;
+        if (deltaCoin1 && deltaCoin2 && (signCoin1 !== signCoin2)) {
+          const price = deltaCoin2 / deltaCoin1;
+          output += `\n[Can be wrong] ${signCoin1 === '+' ? 'I\'ve bought' : 'I\'ve sold'} ${this.formatNumber(+deltaCoin1.toFixed(marketInfo.coin1Decimals), true)} _${config.coin1}_ at ${this.formatNumber(price.toFixed(marketInfo.coin2Decimals), true)} _${config.coin2}_ price.`;
+        }
+      } else {
+        output += '\nNo changes.\n';
+      }
+    }
+    return output;
+  },
+
+  /**
+   * Sums balances by code for two accounts
+   * @param {Array of Object} arr1 Balances for 1 account
+   * @param {Array of Object} arr2 Balances for 2 account
+   * @return {Array of Object} arr1 + arr2
+   */
+  sumBalances(arr1, arr2) {
+    const arr3 = arr1.concat(arr2);
+    const sum = { free: [], freezed: [], total: [] };
+    arr3.forEach((crypto) => {
+      sum['free'][crypto.code] = (sum['free'][crypto.code] || 0) + crypto.free;
+      sum['freezed'][crypto.code] = (sum['freezed'][crypto.code] || 0) + crypto.freezed;
+      sum['total'][crypto.code] = (sum['total'][crypto.code] || 0) + crypto.total;
+    });
+    const result = [];
+    for (const code in sum['total']) {
+      result.push({ code: code, free: sum['free'][code], freezed: sum['freezed'][code], total: sum['total'][code] });
+    }
+    result.forEach((crypto) => {
+      if (isNaN(crypto.free)) delete crypto.free;
+      if (isNaN(crypto.freezed)) delete crypto.freezed;
+      if (isNaN(crypto.total)) delete crypto.total;
+    });
+    return result;
+  },
+
+  /**
+   * Mathematical difference in two values, same value if change 'a' and 'b'
+   * numbersDifferencePercent(5, 10) = 66.66666
+   * numbersDifferencePercent(10, 5) = 66.66666
+   * @param {Number} a Value 1
+   * @param {Number} b Value 2
+   * @return {Number} Difference in %
+   */
+  numbersDifferencePercent(a, b) {
+    if (!this.isNumber(a) || !this.isNumber(b)) return undefined;
+    return 100 * Math.abs( ( a - b ) / ( (a + b)/2 ) );
+  },
+
+  /**
+   * Mathematical difference in two values, from 'a' to 'b' direction, can be negative
+   * numbersDifferencePercentDirect(5, 10) = 100
+   * numbersDifferencePercentDirect(10, 5) = -50
+   * @param {Number} a Value 1
+   * @param {Number} b Value 2
+   * @return {Number} Difference in %
+   */
+  numbersDifferencePercentDirectNegative(a, b) {
+    if (!this.isNumber(a) || !this.isNumber(b)) return undefined;
+    return 100 * ( ( a - b ) / a );
+  },
+
+  /**
+   * Mathematical difference in two values, from 'a' to 'b' direction
+   * numbersDifferencePercentDirect(5, 10) = 100
+   * numbersDifferencePercentDirect(10, 5) = 50
+   * @param {Number} a Value 1
+   * @param {Number} b Value 2
+   * @return {Number} Difference in %
+   */
+  numbersDifferencePercentDirect(a, b) {
+    if (!this.isNumber(a) || !this.isNumber(b)) return undefined;
+    return 100 * Math.abs( ( a - b ) / a );
+  },
+
+  /**
+   * Returns how much ms is in time unit
+   * @param {String} timeUnit Like days, minutes
+   * @return {Number} Ms in time unit, or undefined
+   */
+  timeUnitMultiplier(timeUnit) {
+    timeUnit = timeUnit?.toUpperCase();
+    let timeUnitMultiplier;
+    switch (timeUnit) {
+      case 'MIN':
+      case 'MINS':
+      case 'MINUTE':
+      case 'MINUTES':
+        timeUnitMultiplier = 1000 * 60;
+        break;
+      case 'HR':
+      case 'HRS':
+      case 'HOUR':
+      case 'HOURS':
+        timeUnitMultiplier = 1000 * 60 * 60;
+        break;
+      case 'DAY':
+      case 'DAYS':
+        timeUnitMultiplier = 1000 * 60 * 60 * 24;
+        break;
+      case 'WEEK':
+      case 'WEEKS':
+        timeUnitMultiplier = 1000 * 60 * 60 * 24 * 7;
+        break;
+      case 'MONTH':
+      case 'MONTHS':
+        timeUnitMultiplier = 1000 * 60 * 60 * 24 * 30;
+        break;
+      default:
+        break;
+    }
+    return timeUnitMultiplier;
+  },
+
+  /**
+   * Inclines a noun
+   * @param {Number} number Number of objects
+   * @param {String} one If 1 object
+   * @param {String} some If many objects
+   * @return {String} F. e., 1 'day' or 2 'days'
+   */
+  incline(number, one, some) {
+    return number > 1 ? some: one;
+  },
+
+  /**
+   * Returns readable timestamp in days, hours, minutes
+   * @param {Number} timestamp
+   * @return {String} F. e., '1 day 5 hours'
+   */
+  timestampInDaysHoursMins(timestamp) {
+    let timeString = '';
+    let secs = Math.floor(timestamp/1000);
+    let mins = Math.floor(secs/60);
+    let hours = Math.floor(mins/60);
+    const days = Math.floor(hours/24);
+    hours = hours-(days*24);
+    mins = mins-(days*24*60)-(hours*60);
+    secs = secs-(days*24*60*60)-(hours*60*60)-(mins*60);
+    if (days > 0) {
+      timeString = timeString + days + ' ' + this.incline(days, 'day', 'days');
+    }
+    if ((days < 7) && (hours > 0)) {
+      timeString = timeString + ' ' + hours + ' ' + this.incline(hours, 'hour', 'hours');
+    }
+    if ((days === 0) && (mins > 0)) {
+      timeString = timeString + ' ' + mins + ' ' + this.incline(mins, 'min', 'mins');
+    }
+    timeString = timeString.trim();
+    if (timeString === '') {
+      timeString = '~0 mins';
+    }
+    return timeString;
+  },
+
+  /**
+   * Escape symbols for Telegram and transform double asterisks to single
+   * @param {string} text Message
+   * @returns {String} F.e.: '[start`]' -> '\[start\`]'
+   */
+  escapeMarkdownTelegram(text) {
+    const singleAsterisksText = text.replace(/\*\*/g, '*');
+    const symbols = '`['.split('');
+
+    return symbols.reduce((string, replacement) => {
+      return string.replace(new RegExp(`\\${replacement}`, 'g'), `\\${replacement}`);
+    }, singleAsterisksText);
+  },
 };

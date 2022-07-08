@@ -1,6 +1,7 @@
 const notify = require('../helpers/notify');
 const config = require('./configReader');
 const api = require('./api');
+const log = require('../helpers/log');
 
 module.exports = async (itx, tx) => {
 

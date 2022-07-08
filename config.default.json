@@ -1,0 +1,96 @@
+{
+    /** The bot's secret passphrase. Create separate ADM account for the bot.
+      Bot's ADM address will correspond this passPhrase.
+    **/
+    "passPhrase": "distance expect praise frequent..",
+
+    /** List of nodes to fetch transactions.
+      If one become unavailable, bot will choose live one.
+    **/
+    "node_ADM": [
+      "https://bid.adamant.im",
+      "http://localhost:36666",
+      "https://endless.adamant.im",
+      "https://clown.adamant.im",
+      "https://unusual.adamant.im",
+      "https://debate.adamant.im",
+      "http://185.231.245.26:36666",
+      "https://lake.adamant.im"
+    ],
+
+    /** Socket connection is recommended for better user experience **/
+    "socket": true,
+
+    /** Choose socket connection protocol, "ws" or "wss" depending on your server **/
+    "ws_type": "ws",
+
+    /** List of ADAMANT InfoServices for catching exchange rates **/
+    "infoservice": [
+      "https://info.adamant.im"
+    ],
+
+    /** ADAMANT accounts to accept commands from. Commands from other accounts will not be executed. **/
+    "admin_accounts": [
+      "U123.."
+    ],
+
+    /** Notify non-admins that they are not admins. If false, bot will be silent. **/
+    "notify_non_admins": false,
+
+    /** List of supported exchanges **/
+    "exchanges": [
+      "CoinDeal",
+      "Resfinex",
+      "P2PB2B"
+    ],
+
+    /** Exchange to work with. Case insensitive. **/
+    "exchange": "Resfinex",
+
+    /** Pair to trade **/
+    "pair": "ADM/USDT",
+
+    /** Interval in minutes to clear all of Unknown (which are not placed by the bot) opened orders.
+      Some exchanges has API issues with closing or matching orders.
+      Because of this, your account can accumulate open orders and lead to frozen balances.
+      In such a case you can run "/clear unk" command manually, or set this parameter for automatic clearing.
+      Note: this command cancels all of Unknown orders for the pair, including ones you placed on exchange's website.
+      0 means disabled.
+    **/
+    "clearAllOrdersInterval": 0,
+
+    /** Exchange's account API key for connection **/
+    "apikey": "YOUR-KEY..",
+
+    /** Exchange's account API secret for connection **/
+    "apisecret": "YOUR-SECRET..",
+
+    /** Exchange's account trade password. **/
+    "apipassword": "YOUR-TRADE-PASS",
+
+    /** How to reply user in-chat, if first unknown command received. **/
+    "welcome_string": "Hi! 😊 I'm a trade and market making bot. ℹ️ Learn more on https://marketmaking.app or type **/help**.",
+
+    /** Bot's name for notifications **/
+    "bot_name": "Lovely Trade Bot",
+
+    /** ADAMANT addresses for notifications and monitoring. Optional. **/
+    "adamant_notify": [""],
+
+    /** Slack keys for notifications and monitoring. Optional. **/
+    "slack": ["https://hooks.slack.com/services/.."],
+
+    /** If you don't want to receive "not enough balance" notifications, set this to "true" **/
+    "silent_mode": false,
+
+    /** The software will use verbosity according to log_level.
+      It can be none < error < warn < info < log.
+    **/
+    "log_level": "log",
+
+    /** Port for getting debug info.
+      Do not set for live bots, use only for debugging.
+      Allows to get DBs records like http://ip:port/db?tb=incomingTxsDb
+    **/
+    "debug_api": false
+}
