@@ -14,8 +14,10 @@
       "https://clown.adamant.im",
       "https://unusual.adamant.im",
       "https://debate.adamant.im",
-      "http://185.231.245.26:36666",
-      "https://lake.adamant.im"
+      "http://23.226.231.225:36666",
+      "http://78.47.205.206:36666",
+      "https://lake.adamant.im",
+      "https://sunshine.adamant.im"
     ],
 
     /** Socket connection is recommended for better user experience **/
