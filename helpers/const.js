@@ -10,5 +10,7 @@ module.exports = {
   PRECISION_DECIMALS: 8, // Accuracy for converting cryptos, 9.12345678 ETH
   PRINT_DECIMALS: 8, // For pretty print, 9.12345678 ETH
   MAX_ADM_MESSAGE_LENGTH: 10000,
+  EXECUTE_IN_ORDER_BOOK_MAX_PRICE_CHANGE_PERCENT: 0.15, // In-orderbook trading: don't change price by mm-order more, than 0.15%
+  LIQUIDITY_SS_MAX_SPREAD_PERCENT: 0.3, // Liquidity spread support orders: Maintain spread percent
   DEFAULT_ORDERBOOK_ORDERS_COUNT: 15,
 };

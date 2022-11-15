@@ -12,7 +12,6 @@ const notify = require('../helpers/notify');
 const tradeParams = require('./settings/tradeParams_' + config.exchange);
 const traderapi = require('./trader_' + config.exchange)(config.apikey, config.apisecret, config.apipassword, log);
 const db = require('../modules/DB');
-const orderCollector = require('./orderCollector');
 const orderUtils = require('./orderUtils');
 const exchangerUtils = require('../helpers/cryptos/exchanger');
 
@@ -23,7 +22,9 @@ const INTERVAL_MIN = 10 * 1000;
 const INTERVAL_MAX = 20 * 1000;
 const LIFETIME_MIN = 1000 * 60 * 7; // 7 minutes
 const LIFETIME_MAX = constants.HOUR * 7; // 7 hours
-const DEFAULT_MAX_ORDERS = 9; // each side
+const DEFAULT_MAX_ORDERS_ONE_SIDE = 9;
+
+const minMaxAmounts = {};
 
 let isPreviousIterationFinished = true;
 
@@ -52,8 +53,14 @@ module.exports = {
     }
   },
 
-  async updateLiquidity(noCache = false) {
+  /**
+   * Main part of Liquidity provider
+   */
+  async updateLiquidity() {
     try {
+      const coin1Decimals = orderUtils.parseMarket(config.pair).coin2Decimals;
+      const coin2Decimals = orderUtils.parseMarket(config.pair).coin2Decimals;
+
       const { ordersDb } = db;
       let liquidityOrders = await ordersDb.find({
         isProcessed: false,
@@ -66,32 +73,41 @@ module.exports = {
       const orderBookInfo = utils.getOrderBookInfo(orderBook, tradeParams.mm_liquiditySpreadPercent);
 
       if (!orderBookInfo) {
-        log.warn(`Liquidity: Order books are empty for ${config.pair}, or temporary API error. Unable to get spread while placing liq-order.`);
+        log.warn(`Liquidity: Order books are empty for ${config.pair}, or temporary API error. Unable to get spread while placing liq-orders.`);
         return;
       }
 
-      liquidityOrders = await orderUtils.updateOrders(liquidityOrders, config.pair, utils.getModuleName(module.id), noCache); // update orders which partially filled or not found
+      if (!setMinMaxAmounts(orderBookInfo)) {
+        log.warn(`Liquidity: Unable to calculate min-max amounts while placing liq-orders.`);
+        return;
+      }
+
+      liquidityOrders = await orderUtils.updateOrders(liquidityOrders, config.pair, utils.getModuleName(module.id)); // update orders which partially filled or not found
       liquidityOrders = await this.closeLiquidityOrders(liquidityOrders, orderBookInfo); // close orders which expired or out of spread
 
-      const liquidityStats = utils.getOrdersStats(liquidityOrders);
+      let liqInfoString; let liqSsInfoString;
 
-      let amountPlaced;
+      // 2. Place regular (depth) liq-orders
+      const liquidityDepthOrders = liquidityOrders.filter((order) => order.subPurpose !== 'ss');
+      const liquidityDepthStats = utils.getOrdersStats(liquidityDepthOrders);
       do {
-        amountPlaced = await this.placeLiquidityOrder(liquidityStats.bidsTotalQuoteAmount, 'buy', orderBookInfo);
+        amountPlaced = await this.placeLiquidityOrder(liquidityDepthStats.bidsTotalQuoteAmount, liquidityDepthStats.bidsCount, 'buy', orderBookInfo, 'depth');
         if (amountPlaced) {
-          liquidityStats.bidsTotalQuoteAmount += amountPlaced;
-          liquidityStats.bidsCount += 1;
+          liquidityDepthStats.bidsTotalQuoteAmount += amountPlaced;
+          liquidityDepthStats.bidsCount += 1;
         }
       } while (amountPlaced);
       do {
-        amountPlaced = await this.placeLiquidityOrder(liquidityStats.asksTotalAmount, 'sell', orderBookInfo);
+        amountPlaced = await this.placeLiquidityOrder(liquidityDepthStats.asksTotalAmount, liquidityDepthStats.asksCount, 'sell', orderBookInfo, 'depth');
         if (amountPlaced) {
-          liquidityStats.asksTotalAmount += amountPlaced;
-          liquidityStats.asksCount += 1;
+          liquidityDepthStats.asksTotalAmount += amountPlaced;
+          liquidityDepthStats.asksCount += 1;
         }
       } while (amountPlaced);
 
-      log.log(`Liquidity: Opened ${liquidityStats.bidsCount} bids-buy orders for ${liquidityStats.bidsTotalQuoteAmount.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} of ${tradeParams.mm_liquidityBuyQuoteAmount} ${config.coin2} and ${liquidityStats.asksCount} asks-sell orders with ${liquidityStats.asksTotalAmount.toFixed(orderUtils.parseMarket(config.pair).coin1Decimals)} of ${tradeParams.mm_liquiditySellAmount} ${config.coin1}.`);
+      liqInfoString = `Liquidity: Opened ${liquidityDepthStats.bidsCount} bids-buy depth orders for ${liquidityDepthStats.bidsTotalQuoteAmount.toFixed(coin2Decimals)} of ${tradeParams.mm_liquidityBuyQuoteAmount} ${config.coin2}`;
+      liqInfoString += ` and ${liquidityDepthStats.asksCount} asks-sell depth orders with ${liquidityDepthStats.asksTotalAmount.toFixed(coin1Decimals)} of ${tradeParams.mm_liquiditySellAmount} ${config.coin1}.`;
+      log.log(liqInfoString);
     } catch (e) {
       log.error(`Error in updateLiquidity() of ${utils.getModuleName(module.id)} module: ` + e);
     }
@@ -120,13 +136,14 @@ module.exports = {
           reasonToClose = `It's out of ${pw.getPwRangeString()}`;
           reasonObject.isOutOfPwRange = true;
         } else if (utils.isOrderOutOfSpread(order, orderBookInfo)) {
-          reasonToClose = `It's out of ±% spread.}`;
+          reasonToClose = `It's out of ±% spread.`;
           reasonObject.isOutOfSpread = true;
         }
 
+        const subPurposeString = order.subPurpose === 'ss' ? '(spread support)' : '(depth)';
         if (reasonToClose) {
           const cancelReq = await traderapi.cancelOrder(order._id, order.type, order.pair);
-          const orderInfoString = `liq-order with id=${order._id}, type=${order.type}, pair=${order.pair}, price=${order.price}, coin1Amount=${order.coin1Amount}, coin2Amount=${order.coin2Amount}`;
+          const orderInfoString = `liq-order ${subPurposeString} with id=${order._id}, type=${order.type}, pair=${order.pair}, price=${order.price}, coin1Amount=${order.coin1Amount}, coin2Amount=${order.coin2Amount}`;
 
           if (cancelReq !== undefined) {
             order.update({
@@ -158,13 +175,26 @@ module.exports = {
     return updatedLiquidityOrders;
   },
 
-  async placeLiquidityOrder(amountPlaced, orderType, orderBookInfo) {
+  /**
+   * Places a new Liquidity order (liq type)
+   * Sets an order price. Spread support orders are closer to mid of spread.
+   * Sets an order amount. Spread support orders are of small amounts.
+   * Checks for balances. If not enough balances, notify/log, and return false
+   * @param {Number} totalQtyPlaced Amount for buy-orders and Quote for sell-orders already placed for liq-orders in total
+   * @param {Number} totalOrdersPlaced Liq-order number in total (one side)
+   * @param {String} orderType Type of order, 'buy' or 'sell'
+   * @param {Object} orderBookInfo Order book info to calculate order price
+   * @param {String} subPurpose 'depth' for regular depth liq-orders, 'ss' for spread support liq-orders
+   * @return {Object} Result and reason in case of fault
+   */
+  async placeLiquidityOrder(totalQtyPlaced, totalOrdersPlaced, orderType, orderBookInfo, subPurpose) {
     try {
       const type = orderType;
+      const subPurposeString = subPurpose === 'ss' ? '(spread support)' : '(depth)';
 
-      const priceReq = await setPrice(type, orderBookInfo);
+      const priceReq = await setPrice(type, orderBookInfo, subPurpose);
       const price = priceReq.price;
-      if (!price) {
+      if (!price) { // Not expected
         if ((Date.now()-lastNotifyPriceTimestamp > constants.HOUR) && priceReq.message) {
           notify(priceReq.message, 'warn');
           lastNotifyPriceTimestamp = Date.now();
@@ -172,7 +202,7 @@ module.exports = {
         return;
       }
 
-      const coin1Amount = setAmount(type, price);
+      const coin1Amount = setAmount(type, subPurpose);
       const coin2Amount = coin1Amount * price;
       const lifeTime = setLifeTime();
 
@@ -181,19 +211,26 @@ module.exports = {
 
       orderParamsString = `type=${type}, pair=${config.pair}, price=${price}, coin1Amount=${coin1Amount}, coin2Amount=${coin2Amount}`;
       if (!type || !price || !coin1Amount || !coin2Amount) {
-        log.warn(`Liquidity: Unable to run liq-order with params: ${orderParamsString}.`);
+        log.warn(`Liquidity: Unable to run liq-order ${subPurposeString} with params: ${orderParamsString}.`);
         return;
       }
 
-      if (type === 'sell') {
-        if (coin1Amount > (tradeParams.mm_liquiditySellAmount - amountPlaced)) {
+      if (subPurpose === 'ss') {
+        // Don't exceed order number for spread support liq-orders
+        if (totalOrdersPlaced >= minMaxAmounts.ss[type].orders) {
           return false;
         }
-      }
-
-      if (type === 'buy') {
-        if (coin2Amount > (tradeParams.mm_liquidityBuyQuoteAmount - amountPlaced)) {
-          return false;
+      } else {
+        // Don't exceed liquidity amount/quote for depth liq-orders
+        if (type === 'sell') {
+          if (coin1Amount + totalQtyPlaced > tradeParams.mm_liquiditySellAmount) {
+            return false;
+          }
+        }
+        if (type === 'buy') {
+          if (coin2Amount + totalQtyPlaced > tradeParams.mm_liquidityBuyQuoteAmount) {
+            return false;
+          }
         }
       }
 
@@ -212,13 +249,14 @@ module.exports = {
       }
 
       const orderReq = await traderapi.placeOrder(type, config.pair, price, coin1Amount, 1, null);
-      if (orderReq && orderReq.orderid) {
+      if (orderReq && orderReq.orderId) {
         const { ordersDb } = db;
         const order = new ordersDb({
-          _id: orderReq.orderid,
+          _id: orderReq.orderId,
           date: utils.unixTimeStampMs(),
           dateTill: utils.unixTimeStampMs() + lifeTime,
           purpose: 'liq', // liq: liquidity & spread
+          subPurpose,
           type: type,
           // targetType: type,
           exchange: config.exchange,
@@ -236,24 +274,31 @@ module.exports = {
         }, true);
 
         output = `${type} ${coin1Amount.toFixed(orderUtils.parseMarket(config.pair).coin1Decimals)} ${config.coin1} for ${coin2Amount.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${config.coin2} at ${price.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${config.coin2}`;
-        log.info(`Liquidity: Successfully placed liq-order to ${output}.`);
+        log.info(`Liquidity: Successfully placed liq-order ${subPurposeString} to ${output}.`);
         if (type === 'sell') {
           return +coin1Amount;
         } else {
           return +coin2Amount;
         }
-
       } else {
-        log.warn(`Liquidity: Unable to execute liq-order with params: ${orderParamsString}. No order id returned.`);
+        log.warn(`Liquidity: Unable to execute liq-order ${subPurposeString} with params: ${orderParamsString}. No order id returned.`);
         return false;
       }
-
     } catch (e) {
       log.error(`Error in placeLiquidityOrder() of ${utils.getModuleName(module.id)} module: ` + e);
     }
   },
 };
 
+/**
+ * Checks if it's enough balances to place an order
+ * @param {String} coin1 If selling coin1
+ * @param {String} coin2 If buying coin2
+ * @param {Number} amount1 Coin1 amount for 'sell' orders
+ * @param {Number} amount2 Coin2 amount for 'buy' orders
+ * @param {String} type Type of order, 'buy' or 'sell'
+ * @return {Object<result, message>} Message is an error message to notify
+ */
 async function isEnoughCoins(coin1, coin2, amount1, amount2, type) {
   const balances = await traderapi.getBalances(false);
   let balance1free; let balance2free;
@@ -281,7 +326,6 @@ async function isEnoughCoins(coin1, coin2, amount1, amount2, type) {
         result: isBalanceEnough,
         message: output,
       };
-
     } catch (e) {
       log.warn(`Liquidity: Unable to process balances for placing liq-order: ` + e);
       return {
@@ -296,10 +340,26 @@ async function isEnoughCoins(coin1, coin2, amount1, amount2, type) {
   }
 }
 
-async function setPrice(type, orderBookInfo) {
+/**
+ * Calculates order price for specific order type and subPurpose
+ * The price is relative to mid of spread, which depends on mm_liquidityTrend
+ * Price watcher may correct a price
+ * @param {String} type Type of order, 'buy' or 'sell'
+ * @param {Object} orderBookInfo Includes average prices for different mm_liquidityTrend
+ * @param {String} subPurpose 'depth' for regular depth liq-orders, 'ss' for spread support liq-orders
+ * @return {Object<price, message>} Message is an error message to notify
+ */
+async function setPrice(type, orderBookInfo, subPurpose) {
   try {
     let output = '';
     let high; let low;
+
+    /**
+     * trendAveragePrice is a price between highestBid and lowestAsk (in spread)
+     * middleAveragePrice is randomly ±15% closer to middle of spread
+     * uptrendAveragePrice is randomly <15% closer to lowestAsk
+     * downtrendAveragePrice is randomly <15% closer to highestBid
+     */
 
     switch (tradeParams.mm_liquidityTrend) {
       case 'downtrend':
@@ -319,39 +379,49 @@ async function setPrice(type, orderBookInfo) {
     const coin2Decimals = pairObj.coin2Decimals;
     const precision = utils.getPrecision(coin2Decimals);
 
-    let price; let lowPrice; let highPrice;
+    let price; let pwLowPrice; let pwHighPrice;
 
     const pw = require('./mm_price_watcher');
     if (pw.getIsPriceActualAndEnabled()) {
-      lowPrice = pw.getLowPrice();
-      highPrice = pw.getHighPrice();
+      pwLowPrice = pw.getLowPrice();
+      pwHighPrice = pw.getHighPrice();
     }
 
     let priceBeforePwCorrection;
-    const liqKoef = tradeParams.mm_liquiditySpreadPercent/100 / 2;
+    let liqKoefMin; let liqKoefMax;
+    if (subPurpose === 'ss') {
+      liqKoefMin = 0;
+      liqKoefMax = constants.LIQUIDITY_SS_MAX_SPREAD_PERCENT/100;
+    } else {
+      liqKoefMin = tradeParams.mm_liquiditySpreadPercentMin/100 / 2 || 0;
+      liqKoefMax = tradeParams.mm_liquiditySpreadPercent/100 / 2;
+    }
+
+    // Keep spread enough for in-spread trading
+    const delta = ['spread', 'optimal'].includes(tradeParams.mm_Policy) ? precision * 3 : precision;
 
     if (type === 'sell') {
-      low = targetPrice;
-      high = targetPrice * (1 + liqKoef);
+      low = targetPrice * (1 + liqKoefMin);
+      high = targetPrice * (1 + liqKoefMax);
       price = utils.randomValue(low, high);
-      if (lowPrice && price < lowPrice) {
+      if (pwLowPrice && price < pwLowPrice) {
         priceBeforePwCorrection = price;
-        price = utils.randomValue(lowPrice, lowPrice * (1 + liqKoef));
+        price = utils.randomValue(pwLowPrice, pwLowPrice * (1 + liqKoefMax));
       }
-      if (price - precision < orderBookInfo.highestBid) {
-        price = orderBookInfo.highestBid + precision;
+      if (price - delta < orderBookInfo.highestBid) {
+        price = orderBookInfo.highestBid + delta;
       }
     } else {
-      high = targetPrice;
-      low = targetPrice * (1 - liqKoef);
+      high = targetPrice * (1 - liqKoefMin);
+      low = targetPrice * (1 - liqKoefMax);
       price = utils.randomValue(low, high);
-      if (highPrice && price > highPrice) {
+      if (pwHighPrice && price > pwHighPrice) {
         priceBeforePwCorrection = price;
-        price = highPrice;
-        price = utils.randomValue(highPrice * (1 - liqKoef), highPrice);
+        price = pwHighPrice;
+        price = utils.randomValue(pwHighPrice * (1 - liqKoefMax), pwHighPrice);
       }
-      if (price + precision > orderBookInfo.lowestAsk) {
-        price = orderBookInfo.lowestAsk - precision;
+      if (price + delta > orderBookInfo.lowestAsk) {
+        price = orderBookInfo.lowestAsk - delta;
       }
     }
 
@@ -368,32 +438,87 @@ async function setPrice(type, orderBookInfo) {
   }
 }
 
-function setAmount(type, price) {
+/**
+ * Returns random amount to place a liq-order for specific order type and subPurpose
+ * Min-max intervals are stored in global minMaxAmounts
+ * @param {String} type Type of order, 'buy' or 'sell'
+ * @param {String} subPurpose 'depth' for regular depth liq-orders, 'ss' for spread support liq-orders
+ * @return {Number} Amount to place an order
+ */
+function setAmount(type, subPurpose) {
   try {
-    if (!tradeParams || !tradeParams.mm_liquiditySellAmount || !tradeParams.mm_liquidityBuyQuoteAmount) {
-      log.warn(`Liquidity: Params mm_liquiditySellAmount or mm_liquidityBuyQuoteAmount are not set. Check ${config.exchangeName} config.`);
-      return false;
-    }
-
-    const maxOrderNumber = getMaxOrderNumber(type);
-    let min;
-    if (type === 'sell') {
-      min = tradeParams.mm_liquiditySellAmount / maxOrderNumber;
-    } else {
-      min = tradeParams.mm_liquidityBuyQuoteAmount / price / maxOrderNumber;
-    }
-    const max = min * 2;
-
-    const pairObj = orderUtils.parseMarket(config.pair);
-    log.log(`Liquidity: Setting maximum number of ${type}-orders to ${maxOrderNumber}. Order amount is from ${min.toFixed(pairObj.coin1Decimals)} ${pairObj.coin1} to ${max.toFixed(pairObj.coin1Decimals)} ${pairObj.coin1}.`);
-
-    return utils.randomValue(min, max);
+    return utils.randomValue(minMaxAmounts[subPurpose][type].min, minMaxAmounts[subPurpose][type].max);
   } catch (e) {
     log.error(`Error in setAmount() of ${utils.getModuleName(module.id)} module: ` + e);
   }
 }
 
-function getMaxOrderNumber(type) {
+/**
+ * Calculates min-max amounts for different order types and subPurposes
+ * And stores in global minMaxAmounts
+ * @param {Object} orderBookInfo Includes a price to convert from coin2 to coin1
+ * @return {Boolean} True if successfully stored
+ */
+function setMinMaxAmounts(orderBookInfo) {
+  try {
+    const pairObj = orderUtils.parseMarket(config.pair);
+    const coin1Decimals = pairObj.coin1Decimals;
+
+    if (!tradeParams || !tradeParams.mm_liquiditySellAmount || !tradeParams.mm_liquidityBuyQuoteAmount) {
+      log.warn(`Liquidity: Params mm_liquiditySellAmount or mm_liquidityBuyQuoteAmount are not set. Check ${config.exchangeName} config.`);
+      return false;
+    }
+
+    let minMaxAmountsString;
+
+    minMaxAmounts.depth = {
+      buy: {},
+      sell: {},
+    };
+    minMaxAmounts.depth.sell.orders = getMaxOrderNumberOneSide('sell', 'depth');
+    minMaxAmounts.depth.sell.max = tradeParams.mm_liquiditySellAmount / minMaxAmounts.depth.sell.orders;
+    minMaxAmounts.depth.sell.min = minMaxAmounts.depth.sell.max / 2;
+    minMaxAmounts.depth.buy.orders = getMaxOrderNumberOneSide('buy', 'depth');
+    minMaxAmounts.depth.buy.max = tradeParams.mm_liquidityBuyQuoteAmount /
+        orderBookInfo.highestBid / minMaxAmounts.depth.buy.orders;
+    minMaxAmounts.depth.buy.min = minMaxAmounts.depth.buy.max / 2;
+    minMaxAmountsString = `Liquidity: Setting maximum number of depth liq-orders to ${minMaxAmounts.depth.buy.orders} buys and ${minMaxAmounts.depth.sell.orders} sells.`;
+    minMaxAmountsString += ` Order amounts are ${minMaxAmounts.depth.buy.min.toFixed(coin1Decimals)}–${minMaxAmounts.depth.buy.max.toFixed(coin1Decimals)} ${pairObj.coin1} buys`;
+    minMaxAmountsString += ` and ${minMaxAmounts.depth.sell.min.toFixed(coin1Decimals)}–${minMaxAmounts.depth.sell.max.toFixed(coin1Decimals)} ${pairObj.coin1} sells.`;
+    log.log(minMaxAmountsString);
+
+    if (tradeParams.mm_liquiditySpreadSupport) {
+      minMaxAmounts.ss = {
+        buy: {},
+        sell: {},
+      };
+      const minOrderAmount = orderUtils.getMinOrderAmount();
+      minMaxAmounts.ss.sell.orders = getMaxOrderNumberOneSide('sell', 'ss');
+      minMaxAmounts.ss.sell.min = minOrderAmount.min;
+      minMaxAmounts.ss.sell.max = minOrderAmount.upperBound;
+      minMaxAmounts.ss.buy.orders = getMaxOrderNumberOneSide('buy', 'ss');
+      minMaxAmounts.ss.buy.min = minOrderAmount.min;
+      minMaxAmounts.ss.buy.max = minOrderAmount.upperBound;
+      minMaxAmountsString = `Liquidity: Setting maximum number of spread support liq-orders to ${minMaxAmounts.ss.buy.orders} buys and ${minMaxAmounts.ss.sell.orders} sells.`;
+      minMaxAmountsString += ` Order amounts are ${minMaxAmounts.ss.buy.min.toFixed(coin1Decimals)}–${minMaxAmounts.ss.buy.max.toFixed(coin1Decimals)} ${pairObj.coin1} for both buys and sells.`;
+      log.log(minMaxAmountsString);
+    }
+
+    return true;
+  } catch (e) {
+    log.error(`Error in setMinMaxAmounts() of ${utils.getModuleName(module.id)} module: ` + e);
+  }
+}
+
+/**
+ * Calculate maximum liq-order number for specific order type and subPurpose
+ * Depth orders number depends on total liquidity value,
+ * Additionally, spread support order number limited by constants
+ * @param {String} type Type of order, 'buy' or 'sell'
+ * @param {String} subPurpose 'depth' for regular depth liq-orders, 'ss' for spread support liq-orders
+ * @return {Number} Order number
+ */
+function getMaxOrderNumberOneSide(type, subPurpose) {
   try {
     let valueInUSD;
     if (type === 'sell') {
@@ -401,31 +526,50 @@ function getMaxOrderNumber(type) {
     } else {
       valueInUSD = exchangerUtils.convertCryptos(config.coin2, 'USD', tradeParams.mm_liquidityBuyQuoteAmount).outAmount;
     }
+
+    let n;
     if (valueInUSD <= 1) {
-      return 1;
+      n = 1;
     } else if (valueInUSD <= 10) {
-      return 2;
+      n = 2;
     } else if (valueInUSD <= 50) {
-      return 3;
+      n = 4;
     } else if (valueInUSD <= 100) {
-      return 4;
+      n = 6;
     } else if (valueInUSD <= 500) {
-      return 8;
+      n = 8;
     } else if (valueInUSD <= 1000) {
-      return 9;
+      n = 9;
     } else {
-      return Math.ceil(Math.sqrt(Math.sqrt(valueInUSD))) || DEFAULT_MAX_ORDERS;
+      n = Math.ceil(Math.sqrt(Math.sqrt(valueInUSD))) || DEFAULT_MAX_ORDERS_ONE_SIDE;
     }
+
+    const apiOrderNumberLimit = traderapi.features(config.pair).orderNumberLimit;
+    if (apiOrderNumberLimit <= 200) {
+      n = Math.ceil(n / 1.4);
+    } else if (apiOrderNumberLimit <= 100) {
+      n = Math.ceil(n / 1.8);
+    }
+
+    return n;
   } catch (e) {
     log.error(`Error in getMaxOrderNumber() of ${utils.getModuleName(module.id)} module: ` + e);
-    return DEFAULT_MAX_ORDERS;
+    return DEFAULT_MAX_ORDERS_ONE_SIDE;
   }
 }
 
+/**
+ * Set a random liq-order lifetime
+ * @return {Number} Pause in ms
+ */
 function setLifeTime() {
   return utils.randomValue(LIFETIME_MIN, LIFETIME_MAX, true);
 }
 
+/**
+ * Set a random pause in ms for next Liquidity iteration
+ * @return {Number} Pause in ms
+ */
 function setPause() {
   return utils.randomValue(INTERVAL_MIN, INTERVAL_MAX, true);
 }

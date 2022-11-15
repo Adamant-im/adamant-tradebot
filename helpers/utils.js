@@ -2,7 +2,9 @@ const config = require('../modules/configReader');
 const log = require('./log');
 const tradeParams = require('../trade/settings/tradeParams_' + config.exchange);
 const fs = require('fs');
-const { SAT, EPOCH, MINUTE } = require('./const');
+const { SAT, EPOCH, MINUTE, LIQUIDITY_SS_MAX_SPREAD_PERCENT } = require('./const');
+
+const AVERAGE_SPREAD_DEVIATION = 0.15;
 
 module.exports = {
 
@@ -39,6 +41,31 @@ module.exports = {
       time = Date.now(); // current time in milliseconds since Unix Epoch
     }
     return Math.floor((time - EPOCH) / 1000);
+  },
+
+  padTo2Digits(num) {
+    return num.toString().padStart(2, '0');
+  },
+
+  /**
+   * Converts date to yyyy-mm-dd hh:mm:ss format
+   * @param {Date} date
+   * @returns {string}
+   */
+  formatDate(date) {
+    return (
+      [
+        date.getFullYear(),
+        this.padTo2Digits(date.getMonth() + 1),
+        this.padTo2Digits(date.getDate()),
+      ].join('-') +
+      ' ' +
+      [
+        this.padTo2Digits(date.getHours()),
+        this.padTo2Digits(date.getMinutes()),
+        this.padTo2Digits(date.getSeconds()),
+      ].join(':')
+    );
   },
 
   /**
@@ -154,6 +181,19 @@ module.exports = {
    */
   isInteger(value) {
     if (typeof (value) !== 'number' || isNaN(value) || !Number.isSafeInteger(value)) {
+      return false;
+    } else {
+      return true;
+    }
+  },
+
+  /**
+   * Checks if number is integer and not less, than 1
+   * @param {number} value Number to validate
+   * @return {boolean}
+   */
+  isPositiveInteger(value) {
+    if (!this.isInteger(value) || value < 1) {
       return false;
     } else {
       return true;
@@ -314,6 +354,15 @@ module.exports = {
    */
   isObject(object) {
     return object !== null && typeof object === 'object';
+  },
+
+  /**
+   * Check if variable is an object and it's not empty
+   * @param {any} object
+   * @return {boolean}
+   */
+  isObjectNotEmpty(object) {
+    return this.isObject(object) && !this.isObjectsEqual(object, {});
   },
 
   /**
@@ -618,7 +667,7 @@ module.exports = {
    * @param {Number} customSpreadPercent If we'd like to calculate liquidity for custom spread, ±% from the average price
    * @param {Number} targetPrice Calculate how much to buy or to sell to set a target price; Build Quote hunter table.
    * @param {Number} placedAmount Calculate price change in case of *market* order placed with placedAmount, both sides
-   * @param {Array of Object} openOrders Open orders[], received via traderapi.getOpenOrders(). To filter third-party orders.
+   * @param {Array<Object>} openOrders Open orders[], received via traderapi.getOpenOrders(). To filter third-party orders.
    * @return {Object} Order book metrics
    */
   getOrderBookInfo(orderBookInput, customSpreadPercent, targetPrice, placedAmount, openOrders) {
@@ -661,22 +710,24 @@ module.exports = {
       const averagePrice = (lowestAsk + highestBid) / 2;
       const spreadPercent = spread / averagePrice * 100;
 
-      let downtrendAveragePrice = highestBid + this.randomValue(0, 0.15) * spread;
+      let downtrendAveragePrice = highestBid + this.randomValue(0, AVERAGE_SPREAD_DEVIATION) * spread;
       if (downtrendAveragePrice >= lowestAsk) {
         downtrendAveragePrice = highestBid;
       }
 
-      let uptrendAveragePrice = lowestAsk - this.randomValue(0, 0.15) * spread;
+      let uptrendAveragePrice = lowestAsk - this.randomValue(0, AVERAGE_SPREAD_DEVIATION) * spread;
       if (uptrendAveragePrice <= highestBid) {
         uptrendAveragePrice = lowestAsk;
       }
 
-      let middleAveragePrice = averagePrice - this.randomValue(-0.3, 0.3) * spread;
+      let middleAveragePrice = averagePrice - this.randomValue(-AVERAGE_SPREAD_DEVIATION, AVERAGE_SPREAD_DEVIATION) * spread;
       if (middleAveragePrice >= lowestAsk || middleAveragePrice <= highestBid) {
         middleAveragePrice = averagePrice;
       }
 
       const liquidity = [];
+      liquidity.percentSpreadSupport = {};
+      liquidity.percentSpreadSupport.spreadPercent = LIQUIDITY_SS_MAX_SPREAD_PERCENT;
       liquidity.percent2 = {};
       liquidity.percent2.spreadPercent = 2;
       liquidity.percent5 = {};
@@ -700,8 +751,8 @@ module.exports = {
         liquidity[key].totalCount = 0;
         liquidity[key].amountTotal = 0;
         liquidity[key].amountTotalQuote = 0;
-        liquidity[key].lowPrice = averagePrice - averagePrice * liquidity[key].spreadPercent/100;
-        liquidity[key].highPrice = averagePrice + averagePrice * liquidity[key].spreadPercent/100;
+        liquidity[key].lowPrice = averagePrice * (1 - liquidity[key].spreadPercent/100/2);
+        liquidity[key].highPrice = averagePrice * (1 + liquidity[key].spreadPercent/100/2);
         liquidity[key].spread = averagePrice * liquidity[key].spreadPercent / 100;
         // average price is the same for any spread
       }
@@ -1176,13 +1227,26 @@ module.exports = {
    */
   isOrderOutOfSpread(order, orderBookInfo) {
     try {
-      const laxityPercent = 30;
-      const minPrice = orderBookInfo.liquidity.percentCustom.lowPrice -
-        orderBookInfo.liquidity.percentCustom.spread * laxityPercent / 100;
-      const maxPrice = orderBookInfo.liquidity.percentCustom.highPrice +
-        orderBookInfo.liquidity.percentCustom.spread * laxityPercent / 100;
+      const liqInfo = order.subPurpose === 'ss' ? orderBookInfo.liquidity.percentSpreadSupport : orderBookInfo.liquidity.percentCustom;
+      const roughness = liqInfo.spread * AVERAGE_SPREAD_DEVIATION;
 
-      return (order.price < minPrice) || (order.price > maxPrice);
+      // First, check mm_liquiditySpreadPercent
+      const minPrice = liqInfo.lowPrice - roughness;
+      const maxPrice = liqInfo.highPrice + roughness;
+      if (order.price < minPrice || order.price > maxPrice) {
+        return true;
+      }
+
+      // Second, check mm_liquiditySpreadPercentMin: 'depth' orders should be not close to mid of spread
+      if (order.subPurpose !== 'ss' && tradeParams.mm_liquiditySpreadPercentMin) {
+        const innerLowPrice = orderBookInfo.averagePrice * (1 - tradeParams.mm_liquiditySpreadPercentMin/100/2) + roughness;
+        const innerHighPrice = orderBookInfo.averagePrice * (1 + tradeParams.mm_liquiditySpreadPercentMin/100/2) - roughness;
+        if (order.price > innerLowPrice && order.price < innerHighPrice) {
+          return true;
+        }
+      }
+
+      return false;
     } catch (e) {
       log.error(`Error in isOrderOutOfSpread() of ${this.getModuleName(module.id)} module: ${e}.`);
       return false;
@@ -1275,7 +1339,7 @@ module.exports = {
     from = +from;
     to = +to;
 
-    if (!this.isPositiveNumber(from) || !this.isPositiveNumber(to)) {
+    if (!this.isPositiveNumber(from) || !this.isPositiveNumber(to) || from > to) {
       return {
         isRange: false,
         isValue: false,
@@ -1537,5 +1601,15 @@ module.exports = {
     return symbols.reduce((string, replacement) => {
       return string.replace(new RegExp(`\\${replacement}`, 'g'), `\\${replacement}`);
     }, singleAsterisksText);
+  },
+
+  /**
+   * Get 30 day ago timestamp
+   * @returns {number}
+   */
+  getPrevMonthTimestamp() {
+    const date = new Date();
+    date.setMonth(date.getMonth() - 1);
+    return +(date.getTime() / 1000).toFixed(0) + 86400;
   },
 };

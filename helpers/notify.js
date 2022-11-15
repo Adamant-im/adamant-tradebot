@@ -2,17 +2,27 @@ const axios = require('axios');
 const config = require('../modules/configReader');
 const log = require('./log');
 const api = require('../modules/api');
+
 const {
-  adamant_notify,
-  slack,
+  adamant_notify = [],
+  adamant_notify_priority = [],
+  slack = [],
+  slack_priority = [],
 } = config;
 
-module.exports = (message, type, silent_mode = false) => {
+module.exports = (messageText, type, silent_mode = false, isPriority = false) => {
   try {
-    if (!silent_mode) {
-      log[type](removeMarkdown(message));
+    const prefix = isPriority ? '[Attention] ' : '';
+    const message = `${prefix}${messageText}`;
 
-      if (slack && slack.length) {
+    if (!silent_mode || isPriority) {
+      log[type](`/Logging notify message/ ${removeMarkdown(message)}`);
+
+      const slackKeys = isPriority ?
+        [...slack, ...slack_priority] :
+        slack;
+
+      if (slackKeys.length) {
         let color;
         switch (type) {
           case ('error'):
@@ -38,7 +48,7 @@ module.exports = (message, type, silent_mode = false) => {
           }],
         };
 
-        slack.forEach((slackApp) => {
+        slackKeys.forEach((slackApp) => {
           if (typeof slackApp === 'string' && slackApp.length > 34) {
             axios.post(slackApp, params)
                 .catch(function(error) {
@@ -48,8 +58,12 @@ module.exports = (message, type, silent_mode = false) => {
         });
       }
 
-      if (adamant_notify && adamant_notify.length) {
-        adamant_notify.forEach((admAddress) => {
+      const adamantAddresses = isPriority ?
+        [...adamant_notify, ...adamant_notify_priority] :
+        adamant_notify;
+
+      if (adamantAddresses.length) {
+        adamantAddresses.forEach((admAddress) => {
           if (typeof admAddress === 'string' && admAddress.length > 5 && admAddress.startsWith('U') && config.passPhrase && config.passPhrase.length > 30) {
             const mdMessage = makeBoldForMarkdown(message);
             api.sendMessage(config.passPhrase, admAddress, `${type}| ${mdMessage}`).then((response) => {
@@ -61,12 +75,12 @@ module.exports = (message, type, silent_mode = false) => {
         });
       }
 
+    } else {
+      log[type](`/No notification, Silent mode, Logging only/ ${removeMarkdown(message)}`);
     }
-
   } catch (e) {
     log.error('Notifier error: ' + e);
   }
-
 };
 
 function removeMarkdown(text) {

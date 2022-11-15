@@ -70,7 +70,15 @@ const fields = {
     type: Array,
     default: [],
   },
+  adamant_notify_priority: {
+    type: Array,
+    default: [],
+  },
   slack: {
+    type: Array,
+    default: [],
+  },
+  slack_priority: {
     type: Array,
     default: [],
   },
@@ -89,15 +97,32 @@ const fields = {
   debug_api: {
     type: Number,
   },
+  amount_to_confirm_usd: {
+    type: Number,
+    default: 1000,
+  },
 };
 
 try {
+  let configFile;
   if (isDev || process.env.JEST_WORKER_ID) {
-    config = JSON.parse(jsonminify(fs.readFileSync('./config.test', 'utf-8')));
+    if (fs.existsSync('./config.test.jsonc')) {
+      configFile = './config.test.jsonc';
+    } else if (fs.existsSync('./config.test.json')) {
+      configFile = './config.test.json';
+    } else {
+      configFile = './config.test';
+    }
   } else {
-    const configFile = fs.existsSync('./config.json') ? './config.json' : './config.default.json';
-    config = JSON.parse(jsonminify(fs.readFileSync(configFile, 'utf-8')));
+    if (fs.existsSync('./config.jsonc')) {
+      configFile = './config.jsonc';
+    } else if (fs.existsSync('./config.json')) {
+      configFile = './config.json';
+    } else {
+      configFile = './config.default.json';
+    }
   }
+  config = JSON.parse(jsonminify(fs.readFileSync(configFile, 'utf-8')));
 
   if (!config.node_ADM) {
     exit(`Bot's config is wrong. ADM nodes are not set. Cannot start the Bot.`);
@@ -127,17 +152,19 @@ try {
   config.coin2 = config.pair.split('/')[1].trim();
 
   Object.keys(fields).forEach((f) => {
-    if (!config[f] && fields[f].isRequired) {
-      exit(`Bot's ${address} config is wrong. Field _${f}_ is not valid. Cannot start Bot.`);
-    } else if (!config[f] && config[f] !== 0 && fields[f].default) {
-      config[f] = fields[f].default;
+    if (config[f] === undefined) {
+      if (fields[f].isRequired) {
+        exit(`Bot's ${address} config is wrong. Field _${f}_ is not valid. Cannot start Bot.`);
+      } else if (fields[f].default !== undefined) {
+        config[f] = fields[f].default;
+      }
     }
-    if (config[f] && fields[f].type !== config[f].__proto__.constructor) {
+    if (config[f] !== false && fields[f].type !== config[f].__proto__.constructor) {
       exit(`Bot's ${address} config is wrong. Field type _${f}_ is not valid, expected type is _${fields[f].type.name}_. Cannot start Bot.`);
     }
   });
 
-  console.info(`The bot ${address} successfully read a config-file${isDev ? ' (dev)' : ''}.`);
+  console.info(`The bot ${address} successfully read the config-file '${configFile}'${isDev ? ' (dev)' : ''}.`);
 
 } catch (e) {
   exit('Error reading config: ' + e);

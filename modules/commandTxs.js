@@ -31,11 +31,22 @@ module.exports = async (commandMsg, tx, itx) => {
 
     log.log(`Processing '${commandMsg}' command from ${from}…`);
 
-    const group = commandMsg
+    let group = commandMsg
         .trim()
         .replace(/ {2,}/g, ' ')
         .split(' ');
-    const commandName = group.shift().trim().toLowerCase().replace('\/', '');
+    let commandName = group.shift().trim().toLowerCase().replace('\/', '');
+
+    const alias = aliases[commandName];
+    if (alias) {
+      log.log(`Alias '${commandMsg}' converted to command '${alias(group)}'`);
+      group = alias(group)
+          .trim()
+          .replace(/ {2,}/g, ' ')
+          .split(' ');
+      commandName = group.shift().trim().toLowerCase().replace('\/', '');
+    }
+
     const command = commands[commandName];
 
     if (command) {
@@ -63,7 +74,21 @@ module.exports = async (commandMsg, tx, itx) => {
 };
 
 /**
- * Command to confirm previous command: '/enable pw' or '/make price'
+ * Set a command to be confirmed
+ * @param {String} command This command will be executed with /y
+ */
+async function setPendingConfirmation(command) {
+  try {
+    pendingConfirmation.command = command;
+    pendingConfirmation.timestamp = Date.now();
+    log.log(`Pending command to confirm: ${command}.`);
+  } catch (e) {
+    log.error(`Error in setPendingConfirmation() of ${utils.getModuleName(module.id)} module: ` + e);
+  }
+}
+
+/**
+ * Command to confirm pending command, set with setPendingConfirmation()
  * @param {Array of String} params Doesn't matter
  * @param {Object} tx Information about initiator
  * @return {Object} commandResult.msgSendBack to reply
@@ -109,8 +134,11 @@ function start(params) {
     };
   }
 
-  const policy = (params[1] || 'optimal').toLowerCase();
-  if (!['optimal', 'spread', 'orderbook'].includes(policy)) {
+  if (['-y', '-Y'].includes(params[1])) {
+    params[1] = '';
+  }
+  const newPolicy = (params[1] || tradeParams.mm_Policy || 'optimal').toLowerCase();
+  if (!['optimal', 'spread', 'orderbook'].includes(newPolicy)) {
     return {
       msgNotify: '',
       msgSendBack: `Wrong market making policy. It should be _spread_, _orderbook_, _optimal_. Example: */start mm spread*.`,
@@ -121,13 +149,17 @@ function start(params) {
   let msgNotify; let msgSendBack;
 
   if (type === 'mm') {
+    if (tradeParams.mm_isPriceMakerActive === true && tradeParams.mm_Policy === 'depth' && newPolicy !== 'depth') {
+      pw.restorePw(`User> Market making policy changed from depth to ${newPolicy}`);
+    }
+
     tradeParams.mm_isActive = true;
-    tradeParams.mm_Policy = policy;
+    tradeParams.mm_Policy = newPolicy;
 
     const notesStringMsg = ' Check enabled options with */params* command.';
 
-    msgNotify = `${config.notifyName} set to start market making with ${policy} policy for ${config.pair}.`;
-    msgSendBack = `Starting market making with ${policy} policy for ${config.pair} pair.${notesStringMsg}`;
+    msgNotify = `${config.notifyName} set to start market making with ${newPolicy} policy for ${config.pair}.`;
+    msgSendBack = `Starting market making with ${newPolicy} policy for ${config.pair} pair.${notesStringMsg}`;
 
     return {
       msgNotify,
@@ -171,7 +203,7 @@ function stop(params) {
 }
 
 async function enable(params, {}, isWebApi = false) {
-  let msgNotify; let msgSendBack; let infoString; const infoStringSendBack = ''; let optionsString;
+  let msgNotify; let msgSendBack; let infoString; let infoStringSendBack = ''; let optionsString;
 
   try {
     const type = params[0]?.toLowerCase();
@@ -190,7 +222,7 @@ async function enable(params, {}, isWebApi = false) {
 
       const pairObj = orderUtils.parseMarket(config.pair);
 
-      const orderBookOrdersCount = +params[1];
+      let orderBookOrdersCount = +params[1];
       if (params[1] && !utils.isPositiveNumber(orderBookOrdersCount)) {
         return {
           msgNotify: '',
@@ -267,7 +299,7 @@ async function enable(params, {}, isWebApi = false) {
       }
 
       const coin1Amount = +params[2];
-      if (!coin1Amount || coin1Amount === Infinity || coin1Amount <= 0) {
+      if (!utils.isPositiveOrZeroNumber(coin1Amount)) {
         return {
           msgNotify: '',
           msgSendBack: `Incorrect ${coin1} amount: ${coin1Amount}. Example: */enable liq 2% 100 ${config.coin1} 50 ${config.coin2} uptrend*.`,
@@ -276,7 +308,7 @@ async function enable(params, {}, isWebApi = false) {
       }
 
       const coin2Amount = +params[4];
-      if (!coin2Amount || coin2Amount === Infinity || coin2Amount <= 0) {
+      if (!utils.isPositiveOrZeroNumber(coin2Amount)) {
         return {
           msgNotify: '',
           msgSendBack: `Incorrect ${coin2} amount: ${coin2Amount}. Example: */enable liq 2% 100 ${config.coin1} 50 ${config.coin2} uptrend*.`,
@@ -539,10 +571,10 @@ async function enable(params, {}, isWebApi = false) {
           };
         }
 
-        if (tradeParams.mm_priceSupportLowPrice && tradeParams.mm_priceSupportLowPrice < pwLowPriceInCoin2) {
+        if (tradeParams.mm_priceSupportLowPrice > pwLowPriceInCoin2) {
           return {
             msgNotify: '',
-            msgSendBack: `Support price ${tradeParams.mm_priceSupportLowPrice.toFixed(coin2Decimals)} ${config.coin2} is less, than Price watcher's lower bound of ${pwLowPriceInCoin2.toFixed(coin2Decimals)} ${coin}${convertedString}. Update support price with */enable sp* command, or set suitable Price watcher's range.`,
+            msgSendBack: `Support price ${tradeParams.mm_priceSupportLowPrice.toFixed(coin2Decimals)} ${config.coin2} is greater, than Price watcher's lower bound of ${pwLowPriceInCoin2.toFixed(coin2Decimals)} ${coin}${convertedString}. Update support price with */enable sp* command, or set suitable Price watcher's range.`,
             notifyType: 'log',
           };
         }
@@ -570,6 +602,8 @@ async function enable(params, {}, isWebApi = false) {
         tradeParams.mm_priceWatcherDeviationPercent = pwDeviationPercent;
         tradeParams.mm_priceWatcherSource = pwSource;
         tradeParams.mm_priceWatcherSourcePolicy = pwSourcePolicy;
+
+        pw.savePw('User> Price watcher enabled with /enable pw');
       } else {
         let priceInfoString = '';
         pairObj = orderUtils.parseMarket(config.pair);
@@ -602,8 +636,8 @@ async function enable(params, {}, isWebApi = false) {
           priceInfoString += `Unable to get ${config.exchangeName} rates for ${pairObj.pair}.`;
         }
 
-        pendingConfirmation.command = `/enable ${params.join(' ')}`;
-        pendingConfirmation.timestamp = Date.now();
+        setPendingConfirmation(`/enable ${params.join(' ')}`);
+
         msgNotify = '';
         msgSendBack = `Are you sure to enable ${optionsString} for ${config.pair} pair ${infoString}? Confirm with **/y** command or ignore.\n\n${priceInfoString}`;
 
@@ -656,6 +690,8 @@ function disable(params) {
     optionsString = `Liquidity and spread maintenance`;
   } else if (type === 'pw') {
     tradeParams.mm_isPriceWatcherActive = false;
+    const pw = require('../trade/mm_price_watcher');
+    pw.savePw('User /disable pw command');
     optionsString = `Price watching`;
   }
 
@@ -912,6 +948,7 @@ async function clear(params) {
 }
 
 async function fill(params) {
+  const isConfirmed = params.find((param) => ['-y'].includes(param.toLowerCase())) !== undefined;
 
   let count; let amount; let low; let high; let amountName;
   params.forEach((param) => {
@@ -1045,6 +1082,34 @@ async function fill(params) {
     };
   }
 
+  let totalUSD;
+
+  if (amountName === 'quote') {
+    totalUSD = exchangerUtils.convertCryptos(pairObj.coin2, 'USD', amount).outAmount;
+  } else {
+    totalUSD = exchangerUtils.convertCryptos(pairObj.coin1, 'USD', amount).outAmount;
+  }
+
+  if (config.amount_to_confirm_usd && totalUSD && totalUSD >= config.amount_to_confirm_usd && !isConfirmed) {
+    setPendingConfirmation(`/fill ${params.join(' ')}`);
+
+    const totalUSDstring = utils.formatNumber(totalUSD.toFixed(0), true);
+
+    let confirmationMessage;
+    if (amountName === 'quote') {
+      confirmationMessage = `Are you sure to fill ${count} orders${onWhichAccount} to ${type} ${pairObj.coin1} worth ~${totalUSDstring} USD priced from ${low} to ${high} ${pairObj.coin2}?`;
+    } else {
+      confirmationMessage = `Are you sure to fill ${count} orders${onWhichAccount} to ${type} ${amount} ${pairObj.coin1} (worth ~${totalUSDstring} USD) priced from ${low} to ${high} ${pairObj.coin2}?`;
+    }
+    confirmationMessage += ` Confirm with **/y** command or ignore.`;
+
+    return {
+      msgNotify: '',
+      msgSendBack: confirmationMessage,
+      notifyType: 'log',
+    };
+  }
+
   // Make order list
   const orderList = [];
   const delta = high - low;
@@ -1107,7 +1172,9 @@ async function fill(params) {
 
   let notPlacedString = '';
   if (placedOrders > 0) {
-    if (notPlacedOrders) notPlacedString = ` ${notPlacedOrders} orders missed because of errors, check log file for details.`;
+    if (notPlacedOrders) {
+      notPlacedString = ` ${notPlacedOrders} orders missed because of errors, check log file for details.`;
+    }
     output = `${placedOrders} orders to ${type} ${utils.formatNumber(+total1.toFixed(pairObj.coin1Decimals), false)} ${pairObj.coin1} for ${utils.formatNumber(+total2.toFixed(pairObj.coin2Decimals), false)} ${pairObj.coin2}.${notPlacedString}`;
   } else {
     output = `No orders were placed. Check log file for details.`;
@@ -1121,24 +1188,20 @@ async function fill(params) {
     msgSendBack,
     notifyType: 'log',
   };
-
 }
 
 async function buy(params) {
-
   const result = getBuySellParams(params, 'buy');
   return await buy_sell(result, 'buy');
-
 }
 
 async function sell(params) {
-
   const result = getBuySellParams(params, 'sell');
   return await buy_sell(result, 'sell');
-
 }
 
 function getBuySellParams(params, type) {
+  const isConfirmed = params.find((param) => ['-y'].includes(param.toLowerCase())) !== undefined;
 
   // default: pair={config} BaseCurrency/QuoteCurrency, price=market
   // amount XOR quote
@@ -1215,10 +1278,8 @@ function getBuySellParams(params, type) {
     };
   }
 
-  // when Market order, buy should pass quote parameter, when sell — amount
-  const allowBuyAmountExchanges = ['resfinex', 'atomars'];
-
-  if (price === 'market' && !allowBuyAmountExchanges.includes(config.exchange)) {
+  // When Market order, buy should pass quote parameter, when sell — amount
+  if (price === 'market' && !traderapi.features()?.allowAmountForMarketBuy) {
     if ((type === 'buy' && !quote) || ((type === 'sell' && !amount))) {
       output = `When placing Market order, buy should follow with _quote_, sell with _amount_. Command works like this: */sell ADM/BTC amount=200 price=market*.`;
       return {
@@ -1229,8 +1290,8 @@ function getBuySellParams(params, type) {
     }
   }
 
-  const amountNecessaryExchanges = ['resfinex', 'atomars'];
-  if (price === 'market' && amountNecessaryExchanges.includes(config.exchange)) {
+  // When Market order, amount in coin1 is necessary for both buy and sell
+  if (price === 'market' && traderapi.features()?.amountForMarketOrderNecessary) {
     if (!amount) {
       output = `When placing Market order on ${config.exchangeName}, _amount_ is necessary. Command works like this: */sell ADM/BTC amount=200 price=market*.`;
       return {
@@ -1247,17 +1308,60 @@ function getBuySellParams(params, type) {
   }
   const pairObj = orderUtils.parseMarket(pair);
 
+  let totalUSD;
+
+  if (amount) {
+    totalUSD = exchangerUtils.convertCryptos(pairObj.coin1, 'USD', amount).outAmount;
+  } else {
+    totalUSD = exchangerUtils.convertCryptos(pairObj.coin2, 'USD', quote).outAmount;
+  }
+
+  if (config.amount_to_confirm_usd && totalUSD && totalUSD >= config.amount_to_confirm_usd && !isConfirmed) {
+    setPendingConfirmation(`/${type} ${params.join(' ')}`);
+
+    let msgSendBack = '';
+
+    const totalUSDstring = utils.formatNumber(totalUSD.toFixed(0), true);
+    const amountCalculated = amount ||
+      exchangerUtils.convertCryptos(pairObj.coin2, pairObj.coin1, quote).outAmount.toFixed(pairObj.coin1Decimals);
+
+    if (price === 'market') {
+      if (amount) {
+        msgSendBack += `Are you sure to ${type} ${amountCalculated} ${pairObj.coin1} (worth ~${totalUSDstring} USD) at market price?`;
+      } else {
+        msgSendBack += `Are you sure to ${type} ${pairObj.coin1} worth ~${totalUSDstring} USD at market price?`;
+      }
+    } else {
+      msgSendBack += `Are you sure to ${type} ${amountCalculated} ${pairObj.coin1} (worth ~${totalUSDstring} USD) at ${price} ${pairObj.coin2}?`;
+
+      const marketPrice = exchangerUtils.convertCryptos(pairObj.coin1, pairObj.coin2, 1).outAmount;
+      const priceDifference = utils.numbersDifferencePercentDirectNegative(marketPrice, price);
+
+      if (
+        (priceDifference < -30 && type === 'buy') ||
+        (priceDifference > 30 && type === 'sell')
+      ) {
+        msgSendBack += ` **Warning: ${type} price is ${Math.abs(priceDifference).toFixed(0)}% ${marketPrice > price ? 'less' : 'greater'} than market**.`;
+      }
+    }
+    msgSendBack += ` Confirm with **/y** command or ignore.`;
+
+    return {
+      msgSendBack,
+      msgNotify: '',
+      notifyType: 'log',
+    };
+  }
+
   return {
     amount,
     price,
     quote,
     pairObj,
   };
-
 }
 
 async function buy_sell(params, type) {
-
   if (params.msgSendBack) {
     return params; // Error info here
   }
@@ -1292,11 +1396,9 @@ async function buy_sell(params, type) {
     msgSendBack,
     notifyType: 'log',
   };
-
 }
 
 function params() {
-
   let output = `I am set to work with ${config.pair} pair on ${config.exchangeName}. Current trading settings:`;
   output += '\n\n' + JSON.stringify(tradeParams, null, 3);
 
@@ -1305,7 +1407,6 @@ function params() {
     msgSendBack: `${output}`,
     notifyType: 'log',
   };
-
 }
 
 function help({}, {}, commandFix) {
@@ -1323,88 +1424,84 @@ function help({}, {}, commandFix) {
     msgSendBack: `${output}`,
     notifyType: 'log',
   };
-
 }
 
 async function rates(params) {
-
   let output = '';
 
-  // if coin1 only, treat it as pair set in config
-  if (params[0] && params[0].toUpperCase().trim() === config.coin1) {
-    params[0] = config.pair;
-  }
-
-  let pair; let coin1; let coin2; let coin2Decimals;
-  const pairObj = orderUtils.parseMarket(params[0]);
-  if (pairObj) {
-    pair = pairObj.pair;
-    coin1 = pairObj.coin1;
-    coin2 = pairObj.coin2;
-    coin2Decimals = pairObj.coin2Decimals;
-  } else {
-    coin1 = params[0];
-  }
-
-  if (!coin1) {
-    output = 'Please specify coin ticker or specific market you are interested in. F. e., */rates ADM* or */rates ETH/BTC*.';
-    return {
-      msgNotify: ``,
-      msgSendBack: `${output}`,
-      notifyType: 'log',
-    };
-  }
-
-  coin1 = coin1.toUpperCase();
-
-  const res = Object
-      .keys(exchangerUtils.currencies)
-      .filter((t) => t.startsWith(coin1 + '/'))
-      .map((t) => {
-        const quoteCoin = t.replace(coin1 + '/', '');
-        const pair = `${coin1}/**${quoteCoin}**`;
-        const rate = utils.formatNumber(exchangerUtils.currencies[t].toFixed(constants.PRECISION_DECIMALS));
-        return `${pair}: ${rate}`;
-      })
-      .join(', ');
-
-  if (!res.length) {
-    if (!pair) {
-      output = `I can’t get rates for *${coin1} from Infoservice*. Try */rates ADM*.`;
-      return {
-        msgNotify: ``,
-        msgSendBack: `${output}`,
-        notifyType: 'log',
-      };
+  try {
+    // if no coin/pair is set, treat it as coin1 set in config
+    if (!params[0]) {
+      params[0] = config.coin1;
     }
-  } else {
-    output = `Global market rates for ${coin1}:\n${res}.`;
-  }
 
-  if (pair) {
-    const exchangeRates = await traderapi.getRates(pair);
-    if (output) {
-      output += '\n\n';
+    // if coin1 only, treat it as pair set in config
+    if (params[0]?.toUpperCase().trim() === config.coin1) {
+      params[0] = config.pair;
     }
-    if (exchangeRates) {
-      const delta = exchangeRates.ask-exchangeRates.bid;
-      const average = (exchangeRates.ask+exchangeRates.ask)/2;
-      const deltaPercent = delta/average * 100;
-      output += `${config.exchangeName} rates for ${pair} pair:\nBid: ${exchangeRates.bid.toFixed(coin2Decimals)}, ask: ${exchangeRates.ask.toFixed(coin2Decimals)}, spread: _${(delta).toFixed(coin2Decimals)}_ ${coin2} (${(deltaPercent).toFixed(2)}%).`;
+
+    let pair; let coin1; let coin2; let coin2Decimals;
+    const pairObj = orderUtils.parseMarket(params[0]);
+    if (pairObj) {
+      pair = pairObj.pair;
+      coin1 = pairObj.coin1;
+      coin2 = pairObj.coin2;
+      coin2Decimals = pairObj.coin2Decimals;
     } else {
-      output += `Unable to get ${config.exchangeName} rates for ${pair}.`;
+      coin1 = params[0]?.toUpperCase();
     }
+
+    const res = Object
+        .keys(exchangerUtils.currencies)
+        .filter((t) => t.startsWith(coin1 + '/'))
+        .map((t) => {
+          const quoteCoin = t.replace(coin1 + '/', '');
+          const pair = `${coin1}/**${quoteCoin}**`;
+          const rate = utils.formatNumber(exchangerUtils.currencies[t].toFixed(constants.PRECISION_DECIMALS));
+          return `${pair}: ${rate}`;
+        })
+        .join(', ');
+
+    if (!res.length) {
+      if (!pair) {
+        output = `I can’t get rates for *${coin1} from Infoservice*. Try */rates ADM*.`;
+        return {
+          msgNotify: ``,
+          msgSendBack: output,
+          notifyType: 'log',
+        };
+      }
+    } else {
+      output = `Global market rates for ${coin1}:\n${res}.`;
+    }
+
+    if (pair) {
+      const exchangeRates = await traderapi.getRates(pair);
+      if (output) {
+        output += '\n\n';
+      }
+      if (exchangeRates) {
+        const delta = exchangeRates.ask-exchangeRates.bid;
+        const average = (exchangeRates.ask+exchangeRates.ask)/2;
+        const deltaPercent = delta/average * 100;
+        output += `${config.exchangeName} rates for ${pair} pair:\nBid: ${exchangeRates.bid.toFixed(coin2Decimals)}, ask: ${exchangeRates.ask.toFixed(coin2Decimals)}, spread: _${(delta).toFixed(coin2Decimals)}_ ${coin2} (${(deltaPercent).toFixed(2)}%).`;
+      } else {
+        output += `Unable to get ${config.exchangeName} rates for ${pair}.`;
+      }
+    }
+  } catch (e) {
+    log.error(`Error in rates() of ${utils.getModuleName(module.id)} module: ` + e);
   }
 
   return {
     msgNotify: ``,
-    msgSendBack: `${output}`,
+    msgSendBack: output,
     notifyType: 'log',
   };
 
 }
 
-async function deposit(params) {
+async function deposit(params, tx = {}) {
   let output = '';
 
   try {
@@ -1661,7 +1758,7 @@ async function orders(params, tx = {}) {
  * @returns Notification messages
  */
 async function make(params, tx, isWebApi = false) {
-  // make price 1.1 — buy/sell to achieve target price of 1.1 COIN2
+  // make price 1.1 COIN2 now — buy/sell to achieve target price of 1.1 COIN2
   try {
 
     let msgNotify; let msgSendBack; let actionString; let priceString;
@@ -1952,16 +2049,17 @@ async function calc(params, tx, isWebApi = false) {
     msgSendBack: output,
     notifyType: 'log',
   };
-
 }
 
 /**
- * Creates a string for balances object
+ * Creates a string for balances object, and object containing totalBTC and totalUSD
  * Adds totalBTC and totalUSD to balances object
  * @param {Array of Object} balances Balances
+ * @param {String} caption Like '${config.exchangeName} balances:'
+ * @param {Array} params First parameter: account type, like main, trade, margin, or 'full'
  * @return {String, Object} String of balances info and balances object with totalBTC and totalUSD
  */
-function balancesString(balances, caption) {
+function balancesString(balances, caption, params) {
   let output = '';
   let totalBTC = 0; let totalUSD = 0;
   const unknownCryptos = [];
@@ -1972,7 +2070,8 @@ function balancesString(balances, caption) {
     output = caption;
     balances = balances.filter((crypto) => !['totalBTC', 'totalUSD'].includes(crypto.code));
     balances.forEach((crypto) => {
-      output += `${utils.formatNumber(+(crypto.total).toFixed(8), true)} _${crypto.code}_`;
+      const accountTypeString = params?.[0] ? `[${crypto.accountType}] ` : '';
+      output += `${accountTypeString}${utils.formatNumber(+(crypto.total).toFixed(8), true)} _${crypto.code}_`;
       if (crypto.total !== crypto.free) {
         output += ` (${utils.formatNumber(+crypto.free.toFixed(8), true)} available`;
         if (crypto.freezed > 0) {
@@ -1984,21 +2083,21 @@ function balancesString(balances, caption) {
 
       let value;
       const skipUnknownCryptos = ['BTXCRD'];
-      if (crypto.usd) {
+      if (utils.isPositiveOrZeroNumber(crypto.usd)) {
         totalUSD += crypto.usd;
       } else {
         value = exchangerUtils.convertCryptos(crypto.code, 'USD', crypto.total).outAmount;
-        if (value) {
+        if (utils.isPositiveOrZeroNumber(value)) {
           totalUSD += value;
         } else if (!skipUnknownCryptos.includes(crypto.code)) {
           unknownCryptos.push(crypto.code);
         }
       }
-      if (crypto.btc) {
+      if (utils.isPositiveOrZeroNumber(crypto.btc)) {
         totalBTC += crypto.btc;
       } else {
         value = exchangerUtils.convertCryptos(crypto.code, 'BTC', crypto.total).outAmount;
-        if (value) {
+        if (utils.isPositiveOrZeroNumber(value)) {
           totalBTC += value;
         }
       }
@@ -2018,14 +2117,23 @@ function balancesString(balances, caption) {
       code: 'totalBTC',
       total: totalBTC,
     });
-
   }
+
   return { output, balances };
 }
 
-async function getBalancesInfo(accountNo = 0, tx, isWebApi = false) {
-
+/**
+ * Create balance info string for an account, including balance difference from previous request
+ * @param {Number} accountNo 0 for first account, 1 for second one
+ * @param {Object} tx Income ADM transaction
+ * @param {Boolean} isWebApi If true, info messages will be different
+ * @param {Array} params First parameter: account type, like main, trade, margin, or 'full'.
+ *   Note: Balance difference only for 'trade' account
+ * @return {String}
+ */
+async function getBalancesInfo(accountNo = 0, tx, isWebApi = false, params) {
   let output = '';
+
   try {
 
     let balances =
@@ -2036,7 +2144,7 @@ async function getBalancesInfo(accountNo = 0, tx, isWebApi = false) {
     output = balancesObject.output;
     balances = balancesObject.balances;
 
-    if (!isWebApi) {
+    if (!isWebApi && !params?.[0]) {
       output += utils.differenceInBalancesString(
           balances,
           previousBalances[accountNo][tx.senderId],
@@ -2052,10 +2160,27 @@ async function getBalancesInfo(accountNo = 0, tx, isWebApi = false) {
   return output;
 }
 
-async function balances({}, tx, isWebApi = false) {
-
+/**
+ * Show account balance info
+ * @param {Array} params First parameter: account type, like main, trade, margin, or 'full'.
+ *   If undefined, will show balances for 'trade' account. If 'full', for all account types.
+ *   Exchange should support features().accountTypes
+ *   Note: Both account balances in case of two-keys trading will show only for 'trade'
+ * @param {Object} tx Income ADM transaction
+ * @param {Boolean} isWebApi If true, info messages will be different
+ * @return {String}
+ */
+async function balances(params, tx, isWebApi = false) {
   let output = '';
+
   try {
+    if (params?.[0]) {
+      if (traderapi.features().accountTypes) {
+        params[0] = params[0].toLowerCase();
+      } else {
+        params = {};
+      }
+    }
 
     const account0Balances = await getBalancesInfo(0, tx, isWebApi);
     const account1Balances = undefined;
@@ -2080,6 +2205,11 @@ function version() {
     notifyType: 'log',
   };
 }
+
+const aliases = {
+  rstopy: () => (`/remote stop mm all -y`),
+  rstart: () => (`/remote start mm all`),
+};
 
 const commands = {
   help,

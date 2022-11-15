@@ -40,8 +40,60 @@ log.log(`Module ${utils.getModuleName(module.id)} is loaded.`);
 
 module.exports = {
   /**
+   * Save Pw parameters to restore them later
+   * Used to restore Pw after Pm finished its job with 'depth' mm_Policy
+   * @param {String} reason Who saves parameters
+   * @returns {Void}
+   */
+  savePw(reason) {
+    tradeParams.saved_mm_isPriceWatcherActive = tradeParams.mm_isPriceWatcherActive;
+    tradeParams.saved_mm_priceWatcherLowPriceInSourceCoin = tradeParams.mm_priceWatcherLowPriceInSourceCoin;
+    tradeParams.saved_mm_priceWatcherMidPriceInSourceCoin = tradeParams.mm_priceWatcherMidPriceInSourceCoin;
+    tradeParams.saved_mm_priceWatcherHighPriceInSourceCoin = tradeParams.mm_priceWatcherHighPriceInSourceCoin;
+    tradeParams.saved_mm_priceWatcherDeviationPercent = tradeParams.mm_priceWatcherDeviationPercent;
+    tradeParams.saved_mm_priceWatcherSource = tradeParams.mm_priceWatcherSource;
+    tradeParams.saved_mm_priceWatcherSourcePolicy = tradeParams.mm_priceWatcherSourcePolicy;
+    tradeParams.saved_mm_priceWatcher_timestamp = Date.now();
+    tradeParams.saved_mm_priceWatcher_callerName = reason;
+    utils.saveConfig();
+    log.log(`Price watcher: Parameters saved. Reason: ${reason}. Mm policy is ${tradeParams.mm_Policy}.`);
+  },
+
+  /**
+   * Restore Pw parameters using last saved values
+   * Used to restore Pw after Pm finished its job with 'depth' mm_Policy
+   * @param {String} reason Who restores parameters
+   * @returns {Boolean} If parameters restored
+   */
+  restorePw(reason) {
+    if (tradeParams.saved_mm_priceWatcher_timestamp) {
+      tradeParams.mm_isPriceWatcherActive = tradeParams.saved_mm_isPriceWatcherActive;
+      tradeParams.mm_priceWatcherLowPriceInSourceCoin = tradeParams.saved_mm_priceWatcherLowPriceInSourceCoin;
+      tradeParams.mm_priceWatcherMidPriceInSourceCoin = tradeParams.saved_mm_priceWatcherMidPriceInSourceCoin;
+      tradeParams.mm_priceWatcherHighPriceInSourceCoin = tradeParams.saved_mm_priceWatcherHighPriceInSourceCoin;
+      tradeParams.mm_priceWatcherDeviationPercent = tradeParams.saved_mm_priceWatcherDeviationPercent;
+      tradeParams.mm_priceWatcherSource = tradeParams.saved_mm_priceWatcherSource;
+      tradeParams.mm_priceWatcherSourcePolicy = tradeParams.saved_mm_priceWatcherSourcePolicy;
+      tradeParams.restore_mm_priceWatcher_timestamp = Date.now();
+      tradeParams.restore_mm_priceWatcher_callerName = reason;
+      utils.saveConfig();
+      this.setIsPriceActual(false, reason);
+      const whenSaved = Date(tradeParams.saved_mm_priceWatcher_timestamp);
+      const timePassedMs = Date.now() - tradeParams.saved_mm_priceWatcher_timestamp;
+      const timePassed = utils.timestampInDaysHoursMins(timePassedMs);
+      let restoredString = `Price watcher: Restored parameters, saved by '${tradeParams.saved_mm_priceWatcher_callerName}'`;
+      restoredString += ` at ${whenSaved} (${timePassed} ago).`;
+      restoredString += ` Reason: ${reason}.`;
+      log.log(restoredString);
+      return true;
+    } else {
+      log.log(`Price watcher: Parameters were not saved earlier, and therefore were not restored. Called with a reason: ${reason}.`);
+    }
+  },
+
+  /**
    * Returns lower bound of Price watcher's range
-   * It's in coin2
+   * It's in coin2 independent of mm_priceWatcherSource
    * @returns {Number}
    */
   getLowPrice() {
@@ -50,11 +102,20 @@ module.exports = {
 
   /**
    * Returns upper bound of Price watcher's range
-   * It's in coin2
+   * It's in coin2 independent of mm_priceWatcherSource
    * @returns {Number}
    */
   getHighPrice() {
     return highPrice;
+  },
+
+  /**
+   * Returns if Pw/Sp is active
+   * Note: also check if Market-making is active and isPriceActual
+   * @returns {Boolean}
+   */
+  getIsPriceWatcherEnabled() {
+    return tradeParams.mm_isPriceWatcherActive || tradeParams.mm_priceSupportLowPrice;
   },
 
   /**
@@ -63,7 +124,7 @@ module.exports = {
    * @returns {Boolean}
    */
   getIsPriceActualAndEnabled() {
-    return isPriceActual && tradeParams.mm_isPriceWatcherActive;
+    return isPriceActual && this.getIsPriceWatcherEnabled();
   },
 
   /**
@@ -81,9 +142,15 @@ module.exports = {
 
   /**
    * Returns Pw's parameters for other modules
+   * Sample: `Price watcher is set ${pw.getPwInfoString()}.`
+   * Not ending with a dot
    * @returns {String} Log string
    */
   getPwInfoString() {
+    if (!tradeParams.mm_isPriceWatcherActive) {
+      return 'disabled';
+    }
+
     const coin2Decimals = orderUtils.parseMarket(config.pair).coin2Decimals;
     let pwInfoString;
     let sourceString;
@@ -107,6 +174,7 @@ module.exports = {
 
   /**
    * Returns log string for other modules
+   * Ending with a dot
    * @returns {String} Log string
    */
   getPwRangeString() {
@@ -173,7 +241,7 @@ module.exports = {
     if (
       interval &&
       tradeParams.mm_isActive &&
-      tradeParams.mm_isPriceWatcherActive
+      this.getIsPriceWatcherEnabled()
     ) {
       if (isPreviousIterationFinished) {
         isPreviousIterationFinished = false;
@@ -351,10 +419,10 @@ module.exports = {
       }
 
       const orderReq = await priceWatcherApi.placeOrder(type, config.pair, price, coin1Amount, 1, null);
-      if (orderReq && orderReq.orderid) {
+      if (orderReq && orderReq.orderId) {
         const { ordersDb } = db;
         const order = new ordersDb({
-          _id: orderReq.orderid,
+          _id: orderReq.orderId,
           date: utils.unixTimeStampMs(),
           dateTill: utils.unixTimeStampMs() + lifeTime,
           purpose: 'pw', // pw: price watcher order
@@ -444,7 +512,6 @@ async function isEnoughCoins(coin1, coin2, amount1, amount2, type, noCache = fal
 }
 
 async function setPriceRange() {
-
   try {
 
     const previousLowPrice = lowPrice;
@@ -611,10 +678,31 @@ function errorSettingPriceRange(errorMessage) {
   }
 }
 
+/**
+ * Sets order life time in ms
+ * When life time is expired, an order will be closed
+ * @returns {Number}
+*/
 function setLifeTime() {
   return utils.randomValue(LIFETIME_MIN, LIFETIME_MAX, true);
 }
 
+/**
+ * Set a random pause in ms for next Price watcher iteration
+ * Pause depends on if Pw targets same exchange or not
+ * @return {Number} Pause in ms
+ */
 function setPause() {
-  return utils.randomValue(INTERVAL_MIN, INTERVAL_MAX, true);
+  let pause; let pairInfoString;
+  if (module.exports.getIsSameExchangePw()) {
+    pause = utils.randomValue(INTERVAL_MIN_SAME_EXCHANGE, INTERVAL_MAX_SAME_EXCHANGE, true);
+    pairInfoString = ` (watching same exchange pair ${tradeParams.mm_priceWatcherSource})`;
+  } else {
+    pause = utils.randomValue(INTERVAL_MIN, INTERVAL_MAX, true);
+    pairInfoString = ` (watching not the same exchange pair)`;
+  }
+  if (tradeParams.mm_isActive && tradeParams.mm_isPriceWatcherActive) {
+    log.log(`Price watcher: Setting interval to ${pause}${pairInfoString}.`);
+  }
+  return pause;
 }

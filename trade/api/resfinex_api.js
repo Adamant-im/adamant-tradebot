@@ -57,16 +57,16 @@ module.exports = function() {
                     resolve(data);
                   }
                 } else {
-                  log.log(`Request to ${url} with data ${bodyString} failed. Unable to parse data: ${data}.`);
-                  reject(`Unable to parse data: ${data}`);
+                  log.log(`Request to ${url} with data ${bodyString} failed. Unable to parse data: ${JSON.stringify(data)}.`);
+                  reject(`Unable to parse data: ${JSON.stringify(data)}`);
                 }
               } catch (e) {
                 if (e instanceof SyntaxError) {
-                  log.log(`Request to ${url} with data ${bodyString} failed. Unable to parse data: ${data}. Exception: ${e}`);
-                  reject(`Unable to parse data: ${data}`);
+                  log.log(`Request to ${url} with data ${bodyString} failed. Unable to parse data: ${JSON.stringify(data)}. Exception: ${e}`);
+                  reject(`Unable to parse data: ${JSON.stringify(data)}`);
                 } else {
-                  log.warn(`Error while processing response of request to ${url} with data ${bodyString}: ${e}. Data object I've got: ${data}.`);
-                  reject(`Unable to process data: ${data}`);
+                  log.warn(`Error while processing response of request to ${url} with data ${bodyString}: ${e}. Data object I've got: ${JSON.stringify(data)}.`);
+                  reject(`Unable to process data: ${JSON.stringify(data)}`);
                 }
               }
             })
@@ -75,7 +75,7 @@ module.exports = function() {
               if (error.response && typeof error.response.data === 'object' && Object.keys(error.response.data).length !== 0) {
                 resolve(error.response.data);
               } else {
-                log.log(`Request to ${url} with data ${pars} failed. ${error}.`);
+                log.log(`Request to ${url} with data ${pars} failed. ${error}: ${JSON.stringify(error?.response?.data)}`);
                 reject(error);
               }
             }); // axios
@@ -120,16 +120,16 @@ module.exports = function() {
                     resolve(data);
                   }
                 } else {
-                  log.log(`Request to ${url} with data ${queryString} failed. Unable to parse data: ${data}.`);
+                  log.log(`Request to ${url} with data ${queryString} failed. Unable to parse data: ${JSON.stringify(data)}.`);
                   reject(`Unable to parse data: ${data}`);
                 }
               } catch (e) {
                 if (e instanceof SyntaxError) {
-                  log.log(`Request to ${url} with data ${queryString} failed. Unable to parse data: ${data}. Exception: ${e}`);
-                  reject(`Unable to parse data: ${data}`);
+                  log.log(`Request to ${url} with data ${queryString} failed. Unable to parse data: ${JSON.stringify(data)}. Exception: ${e}`);
+                  reject(`Unable to parse data: ${JSON.stringify(data)}`);
                 } else {
-                  log.warn(`Error while processing response of request to ${url} with data ${queryString}: ${e}. Data object I've got: ${data}.`);
-                  reject(`Unable to process data: ${data}`);
+                  log.warn(`Error while processing response of request to ${url} with data ${queryString}: ${e}. Data object I've got: ${JSON.stringify(data)}.`);
+                  reject(`Unable to process data: ${JSON.stringify(data)}`);
                 }
               };
             })
@@ -138,7 +138,7 @@ module.exports = function() {
               if (error.response && typeof error.response.data === 'object' && Object.keys(error.response.data).length !== 0) {
                 resolve(error.response.data);
               } else {
-                log.log(`Request to ${url} with data ${queryString} failed. ${error}.`);
+                log.log(`Request to ${url} with data ${queryString} failed. ${error}: ${JSON.stringify(error?.response?.data)}`);
                 reject(error);
               }
             }); // axios

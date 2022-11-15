@@ -17,8 +17,8 @@ const orderUtils = require('./orderUtils');
 let lastNotifyBalancesTimestamp = 0;
 let lastNotifyPriceTimestamp = 0;
 
-const INTERVAL_MIN = 2000;
-const INTERVAL_MAX = 3000;
+const INTERVAL_MIN = 1000;
+const INTERVAL_MAX = 2000;
 const LIFETIME_MIN = 1000;
 const LIFETIME_KOEF = 0.5;
 // const LIFETIME_MAX ~ 30 sec; — depends on mm_orderBookOrdersCount * LIFETIME_KOEF * 1000 * Math.cbrt(position))
@@ -209,10 +209,10 @@ module.exports = {
       }
 
       const orderReq = await traderapi.placeOrder(type, config.pair, price, coin1Amount, 1, null);
-      if (orderReq && orderReq.orderid) {
+      if (orderReq && orderReq.orderId) {
         const { ordersDb } = db;
         const order = new ordersDb({
-          _id: orderReq.orderid,
+          _id: orderReq.orderId,
           date: utils.unixTimeStampMs(),
           dateTill: utils.unixTimeStampMs() + lifeTime,
           purpose: 'ob', // ob: dynamic order book order
