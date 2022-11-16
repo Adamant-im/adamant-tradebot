@@ -166,7 +166,7 @@ module.exports = {
 
           } else {
             await order.save();
-            log.warn(`Market-making: Unable to execute taker cross-order for mm-order with params: id=${order1.orderid}, ${orderParamsString}. Action: executeInSpread. Check balances. Running order collector now.`);
+            log.warn(`Market-making: Unable to execute taker cross-order for mm-order with params: id=${order1.orderId}, ${orderParamsString}. Action: executeInSpread. Check balances. Running order collector now.`);
             await orderCollector.clearLocalOrders(['mm'], config.pair, undefined, undefined, undefined, 'Market-making');
           }
         } else { // if order1
