@@ -39,6 +39,10 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
         getDepositAddress: true,
         getDepositAddressLimit: 'Only created on website',
         createDepositAddressWithWebsiteOnly: true,
+        getFundHistory: false,
+        getFundHistoryImplemented: false,
+        allowAmountForMarketBuy: false,
+        amountForMarketOrderNecessary: false,
       };
     },
 
@@ -110,7 +114,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
                   break;
               }
               result.push({
-                orderid: order.id.toString(),
+                orderId: order.id?.toString(),
                 symbol: order.symbol,
                 price: +order.price,
                 side: order.side, // sell or buy
@@ -236,7 +240,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
               if (result && result.id) {
                 message = `Order placed to ${output} Order Id: ${result.id.toString()}.`;
                 log.info(message);
-                order.orderid = result.id.toString();
+                order.orderId = result.id.toString();
                 order.message = message;
                 resolve(order);
               } else {
@@ -245,14 +249,14 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
                   message += `: ${result.errors.errors.join(', ')}`;
                 }
                 log.warn(message);
-                order.orderid = false;
+                order.orderId = false;
                 order.message = message;
                 resolve(order);
               }
             } catch (e) {
               message = 'Error while processing placeOrder() request: ' + e;
               log.warn(message);
-              order.orderid = false;
+              order.orderId = false;
               order.message = message;
               resolve(order);
             };
@@ -271,7 +275,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
           } else {
             message = `Unable to place order to ${orderType} ${pair_.coin1.toUpperCase()} at Market Price on ${pair} market. Set ${pair_.coin1.toUpperCase()} amount.`;
             log.warn(message);
-            order.orderid = false;
+            order.orderId = false;
             order.message = message;
             return order;
           }
@@ -281,7 +285,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
           } else {
             message = `Unable to place order to ${orderType} ${pair_.coin1.toUpperCase()} for ${pair_.coin2.toUpperCase()} at Market Price on ${pair} market. Set ${pair_.coin2.toUpperCase()} amount.`;
             log.warn(message);
-            order.orderid = false;
+            order.orderId = false;
             order.message = message;
             return order;
           }
@@ -289,7 +293,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
 
         message = `Unable to place order to ${output} CoinDeal doesn't support Market orders yet.`;
         log.warn(message);
-        order.orderid = false;
+        order.orderId = false;
         order.message = message;
         return order;
 
@@ -363,7 +367,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
                 dateOri: trade.timestamp,
                 date: new Date(trade.timestamp + '+0000').getTime(), // must be as utils.unixTimeStampMs(): 1641121688194 - 1 641 121 688 194
                 type: trade.side?.toLowerCase(), // 'buy' or 'sell'
-                id: trade.id?.toString(),
+                tradeId: trade.id?.toString(),
                 // Additionally CoinDeal provides: clientOrderId, orderId, symbol, fee
               });
             });

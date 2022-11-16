@@ -102,7 +102,7 @@ module.exports = {
   },
 
   isFiat(coin) {
-    return ['USD', 'RUB', 'EUR', 'CNY', 'JPY'].includes(coin);
+    return ['USD', 'RUB', 'EUR', 'CNY', 'JPY', 'KRW'].includes(coin);
   },
 
   /**

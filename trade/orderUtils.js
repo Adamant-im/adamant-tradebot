@@ -5,6 +5,56 @@ const traderapi = require('./trader_' + config.exchange)(config.apikey, config.a
 const db = require('../modules/DB');
 
 module.exports = {
+  /**
+   * Returns cross-type order
+   * @param {String} type
+   * @return {String}
+   */
+  crossType(type) {
+    return type === 'buy' ? 'sell' : 'buy';
+  },
+
+  /**
+   * Returns minimum order amount in coin1, allowed on the exchange, and upper bound for minimal order
+   * Consider mm_minAmount and exchange's coin1MinAmount, coin2MinAmount in coin1
+   * With reliabilityKoef
+   * @return {Object<Number, Number>} Minimum order amount, and upper bound for minimal order
+   */
+  getMinOrderAmount() {
+    const reliabilityKoef = 1.1;
+    let minOrderAmount = tradeParams.mm_minAmount * reliabilityKoef;
+
+    const exchangerUtils = require('../helpers/cryptos/exchanger');
+    try {
+      const coin1MinAmount = traderapi.marketInfo(config.pair)?.coin1MinAmount * reliabilityKoef;
+      if (utils.isPositiveNumber(coin1MinAmount)) {
+        minOrderAmount = coin1MinAmount;
+      }
+
+      const coin2MinAmount = traderapi.marketInfo(config.pair)?.coin2MinAmount * reliabilityKoef;
+      if (utils.isPositiveNumber(coin2MinAmount)) {
+        const coin2MinAmountInCoin1 = exchangerUtils.convertCryptos(config.coin2, config.coin1, coin2MinAmount).outAmount || null;
+        if (utils.isPositiveNumber(coin2MinAmountInCoin1)) {
+          if (utils.isPositiveNumber(coin1MinAmount)) {
+            minOrderAmount = Math.max(coin1MinAmount, coin2MinAmountInCoin1);
+          } else {
+            minOrderAmount = coin2MinAmountInCoin1;
+          }
+        }
+      }
+    } catch (e) {
+      log.warn(`Error in getMinOrderAmount() of ${utils.getModuleName(module.id)} module: ${e}. Returning mm_minAmount.`);
+    }
+
+    let upperBound = Math.max(tradeParams.mm_minAmount, minOrderAmount) * 2;
+    const maxSmallOrderInCoin1 = exchangerUtils.convertCryptos('USD', config.coin1, MAX_SMALL_ORDER_USD).outAmount || upperBound;
+    upperBound = Math.min(upperBound, maxSmallOrderInCoin1);
+
+    return {
+      min: minOrderAmount,
+      upperBound,
+    };
+  },
 
   /**
    * Parses a market info for specific exchange: coin1, coin2, and decimals.
@@ -63,14 +113,27 @@ module.exports = {
     }
   },
 
-  async addGeneralOrder(orderType, pair, price, coin1Amount, limit, coin2Amount, pairObj, purpose = 'man', api) {
+  /**
+   * Places an order
+   * @param {String} orderType 'buy or 'sell'
+   * @param {String} pair Like 'ETH/USDT'
+   * @param {Number} price Order price in case of limit order
+   * @param {Number} coin1Amount
+   * @param {Number} limit 1 for limit, 0 for market
+   * @param {Number} coin2Amount
+   * @param {String} purpose Order purpose to store in db
+   * @param {Object} api Exchange API to use, can be a second trade account. If not set, the first account will be used.
+   * @return {Object} Order db record
+   */
+  async addGeneralOrder(orderType, pair, price, coin1Amount, limit, coin2Amount, pairObj, purpose = 'man', api = traderapi) {
     let orderReq;
 
     try {
-      let whichAccount = ''; let isSecondAccountOrder;
-      if (api) {
+      let whichAccount = ''; let whichAccountMsg = ''; let isSecondAccountOrder;
+      if (api.isSecondAccount) {
         isSecondAccountOrder = true;
         whichAccount = ' (using second account)';
+        whichAccountMsg = '(_Using the second account_) ';
       } else {
         isSecondAccountOrder = undefined;
         api = traderapi;
@@ -80,7 +143,7 @@ module.exports = {
       log.log(`orderUtils: Placing an order${whichAccount} of ${orderParamsString}.`);
 
       orderReq = await api.placeOrder(orderType, pair, price, coin1Amount, limit, coin2Amount, pairObj);
-      if (orderReq && orderReq.orderid) {
+      if (orderReq && orderReq.orderId) {
         const { ordersDb } = db;
 
         // Store coin1Amount and coin2Amount even in case of Market order (estimated)
@@ -109,7 +172,7 @@ module.exports = {
         }
 
         const order = new ordersDb({
-          _id: orderReq.orderid,
+          _id: orderReq.orderId,
           date: utils.unixTimeStampMs(),
           purpose: purpose,
           type: orderType,
@@ -127,7 +190,7 @@ module.exports = {
           isExecuted: false, // 'man' orders are not marked as executed
           isCancelled: false,
           isSecondAccountOrder,
-          message: orderReq.message,
+          message: whichAccountMsg + orderReq?.message,
         });
         await order.save();
 
@@ -142,7 +205,7 @@ module.exports = {
         const details = orderReq?.message ? ` [${utils.trimAny(orderReq?.message, ' .')}].` : ' { No details }.';
         log.warn(`orderUtils: Unable to execute ${purpose}-order${whichAccount} with params: ${orderParamsString}.${details}`);
         return {
-          message: orderReq?.message,
+          message: whichAccountMsg + orderReq?.message,
         };
       }
     } catch (e) {
@@ -158,16 +221,16 @@ module.exports = {
    * @param {String} pair Trade pair to check orders from exchange
    * @param {String} moduleName Name of module, which requests the method. For logging only.
    * @param {Boolean} noCache If true, get fresh data, not cached
-   * @param {Object} api If api is set, consider we check orders from second trade account
+   * @param {Object} api Exchange API to use, can be a second trade account. If not set, the first account will be used.
    * @return {Array of Object} Updated local orders database
   */
-  async updateOrders(dbOrders, pair, moduleName, noCache = false, api) {
+  async updateOrders(dbOrders, pair, moduleName, noCache = false, api = traderapi) {
     let updatedOrders = [];
 
     try {
       let onWhichAccount = '';
       let exchangeOrders;
-      if (api) {
+      if (api.isSecondAccount) {
         onWhichAccount = ' (on second account)';
         exchangeOrders = await api.getOpenOrders(pair);
       } else {
@@ -181,7 +244,7 @@ module.exports = {
           let isLifeOrder = false;
           let isOrderFound = false;
           for (const exchangeOrder of exchangeOrders) {
-            if (dbOrder._id?.toString() === exchangeOrder.orderid?.toString()) {
+            if (dbOrder._id?.toString() === exchangeOrder.orderId?.toString()) {
               isOrderFound = true;
               switch (exchangeOrder.status) {
                 // Possible values: new, part_filled, filled

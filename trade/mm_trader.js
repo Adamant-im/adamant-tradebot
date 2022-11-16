@@ -23,6 +23,11 @@ let lastNotifyPriceTimestamp = 0;
 
 let isPreviousIterationFinished = true;
 
+const EXECUTE_IN_ORDER_BOOK_PERCENT_WITH_LIQ_ENABLED_MIN = 0.6;
+const EXECUTE_IN_ORDER_BOOK_PERCENT_WITH_LIQ_ENABLED_MAX = 0.8;
+const EXECUTE_IN_ORDER_BOOK_PERCENT_WO_LIQ_ENABLED_MIN = 0.2;
+const EXECUTE_IN_ORDER_BOOK_PERCENT_WO_LIQ_ENABLED_MAX = 0.5;
+
 module.exports = {
   run() {
     this.iteration();
@@ -53,6 +58,16 @@ module.exports = {
 
   /**
   * Main part of Trader
+  * 1. Set an order type, buy or sell. Not a random function.
+  * 2. Set amount to trade from mm_minAmount to mm_maxAmount multiplied by volatilityKoef
+  * 3. Set trade price. Returns price, coin1Amount (corrected),
+  *    mmCurrentAction: 'executeInSpread', 'executeInOrderBook' or 'doNotExecute'
+  * 4. Check for balances
+  * 5. Place two orders to match itself in case of executeInSpread.
+  * 6. Place one order in case of executeInOrderBook
+  *    Maintain spread tiny in case of 'orderbook' mm_Policy: Place Spread maintainer order
+  *    Remove gaps in order book (extraordinary iteration with no cache)
+  *    Clears second account order, if any left
   */
   async executeMmOrder() {
     try {
@@ -71,9 +86,13 @@ module.exports = {
       let orderParamsString = '';
 
       if (!price) {
-        if ((Date.now()-lastNotifyPriceTimestamp > constants.HOUR) && priceReq.message) {
-          notify(`${config.notifyName}: ${priceReq.message}`, 'warn');
-          lastNotifyPriceTimestamp = Date.now();
+        if (priceReq.message) {
+          if ((Date.now()-lastNotifyPriceTimestamp > constants.HOUR)) {
+            notify(`${config.notifyName}: ${priceReq.message}`, 'warn');
+            lastNotifyPriceTimestamp = Date.now();
+          } else {
+            log.log(`Market-making: ${priceReq.message}`);
+          }
         }
         return;
       }
@@ -106,16 +125,16 @@ module.exports = {
       if (priceReq.mmCurrentAction === 'executeInSpread') {
 
         // First, (maker) we place crossType-order using first account
-        order1 = await traderapi.placeOrder(crossType(type), config.pair, price, coin1Amount, 1, null);
-        if (order1 && order1.orderid) {
+        order1 = await traderapi.placeOrder(orderUtils.crossType(type), config.pair, price, coin1Amount, 1, null);
+        if (order1 && order1.orderId) {
           const { ordersDb } = db;
           const order = new ordersDb({
-            _id: order1.orderid,
+            _id: order1.orderId,
             crossOrderId: null,
             date: utils.unixTimeStampMs(),
             purpose: 'mm', // Market making
             mmOrderAction: priceReq.mmCurrentAction, // executeInSpread or executeInOrderBook
-            type: crossType(type),
+            type: orderUtils.crossType(type),
             targetType: type,
             exchange: config.exchange,
             pair: config.pair,
@@ -135,19 +154,19 @@ module.exports = {
 
           // Last, (taker) we place type-order
           order2 = await takerApi.placeOrder(type, config.pair, price, coin1Amount, 1, null);
-          if (order2 && order2.orderid) {
+          if (order2 && order2.orderId) {
             output = `${type} ${coin1Amount.toFixed(coin1Decimals)} ${config.coin1} for ${coin2Amount.toFixed(coin2Decimals)} ${config.coin2} at ${price.toFixed(coin2Decimals)} ${config.coin2}`;
             log.info(`Market-making: Successfully executed mm-order to ${output}. Action: executeInSpread.`);
             order.update({
               isProcessed: true,
               isExecuted: true,
-              crossOrderId: order2.orderid,
+              crossOrderId: order2.orderId,
             });
             await order.save();
 
           } else {
             await order.save();
-            log.warn(`Market-making: Unable to execute taker cross-order for mm-order with params: id=${order1.orderid}, ${orderParamsString}. Action: executeInSpread. Check balances. Running order collector now.`);
+            log.warn(`Market-making: Unable to execute taker cross-order for mm-order with params: id=${order1.orderId}, ${orderParamsString}. Action: executeInSpread. Check balances. Running order collector now.`);
             await orderCollector.clearLocalOrders(['mm'], config.pair, undefined, undefined, undefined, 'Market-making');
           }
         } else { // if order1
@@ -158,10 +177,10 @@ module.exports = {
 
         // First and last, (taker) we place type-order
         order1 = await takerApi.placeOrder(type, config.pair, price, coin1Amount, 1, null);
-        if (order1 && order1.orderid) {
+        if (order1 && order1.orderId) {
           const { ordersDb } = db;
           const order = new ordersDb({
-            _id: order1.orderid,
+            _id: order1.orderId,
             crossOrderId: null,
             date: utils.unixTimeStampMs(),
             purpose: 'mm', // Market making
@@ -200,6 +219,10 @@ module.exports = {
 
 /**
  * Determines if to 'buy' or 'sell'
+ * Order type depends on:
+ * - If mm_isFundBalancerActive in case of two-keys trading. It helps to maintain both accounts with quote-coin.
+ * - If mm_Policy is orderbook. Run buy- or sell- orders in series.
+ * - Consider mm_buyPercent
  * @returns {String}
 */
 function setType() {
@@ -329,6 +352,15 @@ async function isEnoughCoins(coin1, coin2, amount1, amount2, type, mmCurrentActi
 
 /**
  * Calculates mm-order price
+ * It considers:
+ * - mm_Policy (optimal, spread, orderbook, depth)
+ * - Price watcher range, and prohibits to trade if out of range
+ * - Calculates bid_low and ask_high and spread
+ * - Choose mmCurrentAction: 'executeInSpread', 'executeInOrderBook' or 'doNotExecute' depending on spread and mm_Policy
+ * - To draw nice smooth chart, it receives traderapi.getTradesHistory() and calculates smooth price change interval
+ * - If mm_Policy === 'optimal' && executeInOrderBookAllowed === true,
+ *   then it chooses to trade in spread or in orderbook depending on mm_isLiquidityActive and spread size
+ * - When trading in spread and order book, order amount can be limited
  * @param {String} type 'buy' or 'sell'
  * @param {Number} coin1Amount Amount to trade. This function can update it.
  * @returns {Object<Number, Number, String>}
@@ -467,7 +499,6 @@ async function setPrice(type, coin1Amount) {
         }
 
       }
-
     } // if (mmCurrentAction !== 'doNotExecute')
 
     /**
@@ -494,66 +525,65 @@ async function setPrice(type, coin1Amount) {
     } // if (mmCurrentAction === 'doNotExecute')
 
     if (mmCurrentAction === 'executeInOrderBook') {
+      // Though we expect bid_low and ask_high to be not changed,
+      // Restore them according to order book
+      bid_low = orderBookInfo.highestBid;
+      ask_high = orderBookInfo.lowestAsk;
 
-      let amountInSpread; let amountInConfig; let amountMaxAllowed; let firstOrderAmount;
-      // fill not more, than liquidity amount * allowedAmountKoef
-      const allowedAmountKoef = tradeParams.mm_isLiquidityActive ? utils.randomValue(0.5, 0.8) : utils.randomValue(0.2, 0.5);
+      const startPrice = type === 'sell' ? bid_low : ask_high;
+
+      // First, limit coin1Amount by liquidity (if mm_isLiquidityActive) or first order book order
+      let amountInSpread; let amountInConfig; let amountMaxAllowed; let firstOrderAmount; let isAmountLimited = false;
+
+      const allowedAmountKoef = tradeParams.mm_isLiquidityActive ?
+        utils.randomValue(EXECUTE_IN_ORDER_BOOK_PERCENT_WITH_LIQ_ENABLED_MIN, EXECUTE_IN_ORDER_BOOK_PERCENT_WITH_LIQ_ENABLED_MAX) :
+        utils.randomValue(EXECUTE_IN_ORDER_BOOK_PERCENT_WO_LIQ_ENABLED_MIN, EXECUTE_IN_ORDER_BOOK_PERCENT_WO_LIQ_ENABLED_MAX);
+
       if (type === 'sell') {
         amountInSpread = orderBookInfo.liquidity.percentCustom.amountBids;
         amountInConfig = tradeParams.mm_liquidityBuyQuoteAmount / bid_low;
-        amountMaxAllowed = amountInSpread > amountInConfig ? amountInConfig : amountInSpread;
-        amountMaxAllowed *= allowedAmountKoef;
-
-        if (amountMaxAllowed && tradeParams.mm_isLiquidityActive) {
-          price = orderBookInfo.liquidity.percentCustom.lowPrice;
-          if (coin1Amount > amountMaxAllowed) {
-            isLimited = true;
-            coin1Amount = amountMaxAllowed;
-          } else {
-            coin1Amount = coin1Amount;
-          }
-        } else {
-          firstOrderAmount = orderBook.bids[0].amount * allowedAmountKoef;
-          price = bid_low;
-          if (coin1Amount > firstOrderAmount) {
-            isLimited = true;
-            coin1Amount = firstOrderAmount;
-          } else {
-            coin1Amount = coin1Amount;
-          }
-        }
-      }
-
-      if (type === 'buy') {
+        firstOrderAmount = orderBook.bids[0].amount * allowedAmountKoef;
+      } else {
         amountInSpread = orderBookInfo.liquidity.percentCustom.amountAsks;
         amountInConfig = tradeParams.mm_liquiditySellAmount;
-        amountMaxAllowed = amountInSpread > amountInConfig ? amountInConfig : amountInSpread;
-        amountMaxAllowed *= allowedAmountKoef;
+        firstOrderAmount = orderBook.asks[0].amount * allowedAmountKoef;
+      }
 
-        if (amountMaxAllowed && tradeParams.mm_isLiquidityActive) {
-          price = orderBookInfo.liquidity.percentCustom.highPrice;
-          if (coin1Amount > amountMaxAllowed) {
-            isLimited = true;
-            coin1Amount = amountMaxAllowed;
-          } else {
-            coin1Amount = coin1Amount;
-          }
-        } else {
-          firstOrderAmount = orderBook.asks[0].amount * allowedAmountKoef;
-          price = ask_high;
-          if (coin1Amount > firstOrderAmount) {
-            isLimited = true;
-            coin1Amount = firstOrderAmount;
-          } else {
-            coin1Amount = coin1Amount;
-          }
-        }
-      } // if (type === 'buy')
+      amountMaxAllowed = amountInSpread > amountInConfig ? amountInConfig : amountInSpread;
+      amountMaxAllowed *= allowedAmountKoef;
+
+      let amountLimit; let limitedByString;
+      if (amountMaxAllowed && tradeParams.mm_isLiquidityActive) {
+        amountLimit = amountMaxAllowed;
+        limitedByString = 'Liquidity volume';
+      } else {
+        amountLimit = firstOrderAmount;
+        limitedByString = 'First order amount';
+      }
+
+      const coin1AmountOriginal = coin1Amount;
+      if (coin1Amount > amountLimit) {
+        isAmountLimited = true;
+        coin1Amount = amountLimit;
+      }
+
+      let executeInOrderBookString = `Market-making: Calculating coin1Amount (${mmPolicy} trading policy) to ${type === 'buy' ? 'buy from' : 'sell in'} order book.`;
+      if (isAmountLimited) {
+        executeInOrderBookString += ` Order amount is reduced from ${coin1AmountOriginal.toFixed(coin1Decimals)} to ${coin1Amount.toFixed(coin1Decimals)} ${config.coin1} to fit ${limitedByString}.`;
+      } else {
+        executeInOrderBookString += ` Order amount ${coin1AmountOriginal.toFixed(coin1Decimals)} ${config.coin1} is not reduced.`;
+      }
+      log.log(executeInOrderBookString);
+
+      // Next and last, calculate price, so that not to change highestBid–lowestAsk more than maxPriceDeviation ~0.15%
+      const maxPriceDeviation = utils.randomValue(0, constants.EXECUTE_IN_ORDER_BOOK_MAX_PRICE_CHANGE_PERCENT);
+      price = type === 'sell' ? price = startPrice * (1 - maxPriceDeviation / 100) : startPrice * (1 + maxPriceDeviation / 100);
 
       return {
-        price,
-        coin1Amount,
-        mmCurrentAction,
+        startPrice, // bid_low when sell and ask_high when buy
+        price, // price to place order with
+        coin1Amount, // can be updated (lowered)
+        mmCurrentAction, // 'executeInOrderBook'
       };
     } // if (mmCurrentAction === 'executeInOrderBook')
 
@@ -604,8 +634,4 @@ function setPause() {
     return false;
   }
   return utils.randomValue(tradeParams.mm_minInterval, tradeParams.mm_maxInterval, true);
-}
-
-function crossType(type) {
-  return type === 'buy' ? 'sell' : 'buy';
 }

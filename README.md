@@ -64,14 +64,14 @@ npm i
 
 ## Pre-launch tuning
 
-The bot will use `config.json`, if available, or `config.default.json` otherwise.
+The bot will use `config.jsonc`, if available, or `config.default.jsonc` otherwise.
 
 ```
-cp config.default.json config.json
-nano config.json
+cp config.default.jsonc config.jsonc
+nano config.jsonc
 ```
 
-Parameters: see comments in `config.json`.
+Parameters: see comments in config file.
 
 ## Launching
 
@@ -103,6 +103,6 @@ git pull
 npm i
 ```
 
-Update `config.json` if `config.default.json` changed.
+Update `config.jsonc` if `config.default.jsonc` changed.
 
 Then `pm2 restart tradebot`.

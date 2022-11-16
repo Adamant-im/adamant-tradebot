@@ -82,6 +82,10 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
         placeMarketOrder: true,
         getDepositAddress: false,
         createDepositAddressWithWebsiteOnly: false,
+        getFundHistory: false,
+        getFundHistoryImplemented: false,
+        allowAmountForMarketBuy: true,
+        amountForMarketOrderNecessary: true,
       };
     },
 
@@ -160,7 +164,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
               }
 
               result.push({
-                orderid: order.orderId.toString(),
+                orderId: order.orderId.toString(),
                 symbol: order.pair,
                 price: +order.price,
                 side: order.side, // SELL or BUY
@@ -293,20 +297,21 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
               if (result.data && result.data.orderId) {
                 message = `Order placed to ${output} Order Id: ${result.data.orderId.toString()}.`;
                 log.info(message);
-                order.orderid = result.data.orderId.toString();
+                order.orderId = result.data.orderId.toString();
                 order.message = message;
                 resolve(order);
               } else {
-                message = `Unable to place order to ${output} Check parameters and balances.`;
+                const details = result?.msg ? ` Details: ${result?.code} ${utils.trimAny(result?.msg, ' .\n')}.` : ' { No details }.';
+                message = `Unable to place order to ${output}${details} Check parameters and balances.`;
                 log.warn(message);
-                order.orderid = false;
+                order.orderId = false;
                 order.message = message;
                 resolve(order);
               }
             } catch (e) {
               message = 'Error while processing placeOrder() request: ' + e;
               log.warn(message);
-              order.orderid = false;
+              order.orderId = false;
               order.message = message;
               resolve(order);
             };
@@ -325,7 +330,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
           } else {
             message = `Unable to place order to ${orderType} ${pair_.coin1.toUpperCase()} at Market Price on ${pair} market. Set ${pair_.coin1.toUpperCase()} amount.`;
             log.warn(message);
-            order.orderid = false;
+            order.orderId = false;
             order.message = message;
             return order;
           }
@@ -335,7 +340,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
           } else {
             message = `Unable to place order to ${orderType} ${pair_.coin1.toUpperCase()} at Market Price on ${pair} market. Set ${pair_.coin1.toUpperCase()} amount.`;
             log.warn(message);
-            order.orderid = false;
+            order.orderId = false;
             order.message = message;
             return order;
           }
@@ -348,20 +353,21 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
               if (result.data && result.data.orderId) {
                 message = `Order placed to ${output} Order Id: ${result.data.orderId.toString()}.`;
                 log.info(message);
-                order.orderid = result.data.orderId.toString();
+                order.orderId = result.data.orderId.toString();
                 order.message = message;
                 resolve(order);
               } else {
-                message = `Unable to place order to ${output} Check parameters and balances.`;
+                const details = result?.msg ? ` Details: ${result?.code} ${utils.trimAny(result?.msg, ' .\n')}.` : ' { No details }.';
+                message = `Unable to place order to ${output}${details} Check parameters and balances.`;
                 log.warn(message);
-                order.orderid = false;
+                order.orderId = false;
                 order.message = message;
                 resolve(order);
               }
             } catch (e) {
               message = 'Error while processing placeOrder() request: ' + e;
               log.warn(message);
-              order.orderid = false;
+              order.orderId = false;
               order.message = message;
               resolve(order);
             };
@@ -438,7 +444,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
                 coin2Amount: +trade.amount * +trade.price, // quote in coin2
                 date: trade.timestamp, // must be as utils.unixTimeStampMs(): 1641121688194 - 1 641 121 688 194
                 type: '', // Resfinex doesn't return type ('buy' or 'sell')
-                id: '', // Resfinex doesn't order ID
+                tradeId: '', // Resfinex doesn't provide trade ID
               });
             });
 

@@ -200,9 +200,9 @@ module.exports = {
         do {
           tries += 1;
           for (const order of openOrders) {
-            if (!clearedOrders.includes(order.orderid) && !dbOrderIds.includes(order.orderid)) {
-              const cancelReq = await traderapi.cancelOrder(order.orderid, order.side, order.symbol);
-              const orderInfoString = `unknown order with id=${order.orderid}, side=${order.side}, pair=${order.symbol}, price=${order.price}, coin1Amount=${order.amount}, status=${order.status}`;
+            if (!clearedOrders.includes(order.orderId) && !dbOrderIds.includes(order.orderId)) {
+              const cancelReq = await traderapi.cancelOrder(order.orderId, order.side, order.symbol);
+              const orderInfoString = `unknown order with id=${order.orderId}, side=${order.side}, pair=${order.symbol}, price=${order.price}, coin1Amount=${order.amount}, status=${order.status}`;
               if (cancelReq !== undefined) {
                 if (cancelReq) {
                   log.log(`Order collector: Successfully cancelled ${orderInfoString}.`);
@@ -210,7 +210,7 @@ module.exports = {
                 } else {
                   log.log(`Order collector: Unable to cancel ${orderInfoString}. Probably it doesn't exist anymore. Making it as closed.`);
                 }
-                clearedOrders.push(order.orderid);
+                clearedOrders.push(order.orderId);
                 clearedOrdersCountAll += 1;
                 // As this order is not in dbOrders, we don't update isProcessed, etc.
               } else {
