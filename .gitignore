@@ -4,6 +4,8 @@ logs/
 tests.js
 config.test
 config.json
+config.test.jsonc
+config.jsonc
 .DS_Store
 .idea/
 test_*.js
