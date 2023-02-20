@@ -1560,6 +1560,27 @@ module.exports = {
   },
 
   /**
+   * Inclines a number
+   * @param {Number} number Number to incline
+   * @return {String} 1-st, 2-d, 3-d, 4-th, 10-th, 20-th, 21-st, 22-d, 23-d, 30-th
+   */
+  inclineNumber(number) {
+    if (!this.isPositiveOrZeroInteger(number)) {
+      return number;
+    }
+
+    if (number === 0) {
+      return `zero-index`;
+    } else if (number % 10 === 1 && number !== 11) {
+      return `${number}st`;
+    } else if ([2, 3].includes(number % 10) && ![12, 13].includes(number)) {
+      return `${number}d`;
+    } else {
+      return `${number}th`;
+    }
+  },
+
+  /**
    * Returns readable timestamp in days, hours, minutes
    * @param {Number} timestamp
    * @return {String} F. e., '1 day 5 hours'

@@ -35,6 +35,14 @@ module.exports = (db) => {
         });
       });
     }
+    static deleteOne(a) {
+      return new Promise((resolve, reject) => {
+        delete a.db;
+        db.deleteOne(a).then((res) => {
+          resolve(res.deletedCount);
+        });
+      });
+    }
     static count(a) {
       return new Promise((resolve, reject) => {
         db.count(a).then((count) => {

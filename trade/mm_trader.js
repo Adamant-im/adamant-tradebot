@@ -29,6 +29,8 @@ const EXECUTE_IN_ORDER_BOOK_PERCENT_WO_LIQ_ENABLED_MIN = 0.2;
 const EXECUTE_IN_ORDER_BOOK_PERCENT_WO_LIQ_ENABLED_MAX = 0.5;
 
 module.exports = {
+  readableModuleName: 'Market-making',
+
   run() {
     this.iteration();
   },

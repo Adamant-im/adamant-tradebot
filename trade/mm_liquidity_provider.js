@@ -14,6 +14,7 @@ const traderapi = require('./trader_' + config.exchange)(config.apikey, config.a
 const db = require('../modules/DB');
 const orderUtils = require('./orderUtils');
 const exchangerUtils = require('../helpers/cryptos/exchanger');
+const orderCollector = require('./orderCollector');
 
 let lastNotifyBalancesTimestamp = 0;
 let lastNotifyPriceTimestamp = 0;
@@ -29,6 +30,8 @@ const minMaxAmounts = {};
 let isPreviousIterationFinished = true;
 
 module.exports = {
+  readableModuleName: 'Liquidity',
+
   run() {
     this.iteration();
   },
@@ -140,28 +143,11 @@ module.exports = {
           reasonObject.isOutOfSpread = true;
         }
 
-        const subPurposeString = order.subPurpose === 'ss' ? '(spread support)' : '(depth)';
         if (reasonToClose) {
-          const cancelReq = await traderapi.cancelOrder(order._id, order.type, order.pair);
-          const orderInfoString = `liq-order ${subPurposeString} with id=${order._id}, type=${order.type}, pair=${order.pair}, price=${order.price}, coin1Amount=${order.coin1Amount}, coin2Amount=${order.coin2Amount}`;
+          const cancellation = await orderCollector.clearOrderById(
+              order, order.pair, order.type, this.readableModuleName, reasonToClose, reasonObject, traderapi);
 
-          if (cancelReq !== undefined) {
-            order.update({
-              ...reasonObject,
-              isProcessed: true,
-              isClosed: true,
-            });
-
-            if (cancelReq) {
-              order.update({ isCancelled: true });
-              log.log(`Liquidity: Successfully cancelled ${orderInfoString}. ${reasonToClose}`);
-            } else {
-              log.log(`Liquidity: Unable to cancel ${orderInfoString}. ${reasonToClose} Probably it doesn't exist anymore. Marking it as closed.`);
-            }
-
-            await order.save();
-          } else {
-            log.log(`Liquidity: Request to close ${orderInfoString} failed. ${reasonToClose} Will try next time, keeping this order in the DB for now.`);
+          if (!cancellation.isCancelRequestProcessed) {
             updatedLiquidityOrders.push(order);
           }
         } else {
