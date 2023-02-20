@@ -1,10 +1,16 @@
+const constants = require('../helpers/const');
 const utils = require('../helpers/utils');
 const config = require('../modules/configReader');
 const log = require('../helpers/log');
 const traderapi = require('./trader_' + config.exchange)(config.apikey, config.apisecret, config.apipassword, log);
 const db = require('../modules/DB');
+const tradeParams = require('./settings/tradeParams_' + config.exchange);
+
+const MAX_SMALL_ORDER_USD = 10;
 
 module.exports = {
+  readableModuleName: 'orderUtils',
+
   /**
    * Returns cross-type order
    * @param {String} type
@@ -18,9 +24,10 @@ module.exports = {
    * Returns minimum order amount in coin1, allowed on the exchange, and upper bound for minimal order
    * Consider mm_minAmount and exchange's coin1MinAmount, coin2MinAmount in coin1
    * With reliabilityKoef
+   * @param {Number} price Calculate min amount for a specific price, if coin2MinAmount is set for the trade pair. Optional.
    * @return {Object<Number, Number>} Minimum order amount, and upper bound for minimal order
    */
-  getMinOrderAmount() {
+  getMinOrderAmount(price) {
     const reliabilityKoef = 1.1;
     let minOrderAmount = tradeParams.mm_minAmount * reliabilityKoef;
 
@@ -33,7 +40,14 @@ module.exports = {
 
       const coin2MinAmount = traderapi.marketInfo(config.pair)?.coin2MinAmount * reliabilityKoef;
       if (utils.isPositiveNumber(coin2MinAmount)) {
-        const coin2MinAmountInCoin1 = exchangerUtils.convertCryptos(config.coin2, config.coin1, coin2MinAmount).outAmount || null;
+        let coin2MinAmountInCoin1;
+
+        if (utils.isPositiveNumber(price)) {
+          coin2MinAmountInCoin1 = coin2MinAmount / price;
+        } else {
+          coin2MinAmountInCoin1 = exchangerUtils.convertCryptos(config.coin2, config.coin1, coin2MinAmount).outAmount || null;
+        }
+
         if (utils.isPositiveNumber(coin2MinAmountInCoin1)) {
           if (utils.isPositiveNumber(coin1MinAmount)) {
             minOrderAmount = Math.max(coin1MinAmount, coin2MinAmountInCoin1);
@@ -73,7 +87,9 @@ module.exports = {
 
       let exchangeApi;
       if (exchange) {
-        exchangeApi = require('./trader_' + exchange.toLowerCase())(null, null, null, log, true);
+        exchangeApi = require('./trader_' + exchange.toLowerCase())(
+            null, null, null, log, true, undefined, false,
+        );
       } else {
         exchange = config.exchangeName;
         exchangeApi = traderapi;
@@ -217,29 +233,34 @@ module.exports = {
    * Updates local bot's orders database dbOrders, independent of its purpose
    * It looks through all of current exchange orders in dbOrders
    * If found one, updates its status. If not found, closes it as not actual.
+   * Note: This method don't close ld-orders, as they may be saved, but not exist.
    * @param {Array of Object} dbOrders Local orders database
    * @param {String} pair Trade pair to check orders from exchange
    * @param {String} moduleName Name of module, which requests the method. For logging only.
    * @param {Boolean} noCache If true, get fresh data, not cached
    * @param {Object} api Exchange API to use, can be a second trade account. If not set, the first account will be used.
+   * @param {Boolean} hideNotOpened Hide ld-order in states as Not opened, Filled, Cancelled (default)
    * @return {Array of Object} Updated local orders database
   */
-  async updateOrders(dbOrders, pair, moduleName, noCache = false, api = traderapi) {
+  async updateOrders(dbOrders, pair, moduleName, noCache = false, api = traderapi, hideNotOpened = true) {
+    const paramString = `dbOrders: ${dbOrders}, pair: ${pair}, moduleName: ${moduleName}, noCache: ${noCache}, api: ${api}, hideNotOpened: ${hideNotOpened}`;
     let updatedOrders = [];
+    let ldFilledCount = 0;
+
+    let samePurpose;
+    [moduleName, samePurpose] = moduleName.split(':');
+    samePurpose = samePurpose || '';
 
     try {
-      let onWhichAccount = '';
-      let exchangeOrders;
-      if (api.isSecondAccount) {
-        onWhichAccount = ' (on second account)';
-        exchangeOrders = await api.getOpenOrders(pair);
-      } else {
-        api = traderapi;
-        exchangeOrders = await api.getOpenOrders(pair);
-      }
+      const onWhichAccount = api.isSecondAccount ? ' (on second account)' : '';
+      const exchangeOrders = await api.getOpenOrders(pair);
+
+      log.log(`orderUtils: Updating ${dbOrders.length} ${samePurpose}dbOrders on ${pair} for ${moduleName}, noCache: ${noCache}, hideNotOpened: ${hideNotOpened}… Received ${exchangeOrders?.length} orders from exchange.`);
 
       if (exchangeOrders) {
         for (const dbOrder of dbOrders) {
+
+          const orderInfoString = `${dbOrder.purpose}-order${onWhichAccount} with params: id=${dbOrder._id}, type=${dbOrder.type}, pair=${dbOrder.pair}, price=${dbOrder.price}, coin1Amount=${dbOrder.coin1Amount}, coin2Amount=${dbOrder.coin2Amount}`;
 
           let isLifeOrder = false;
           let isOrderFound = false;
@@ -255,29 +276,18 @@ module.exports = {
                 case 'part_filled':
                   isLifeOrder = true;
                   if (dbOrder.coin1Amount > exchangeOrder.amountLeft) {
-                    const prev_amount = dbOrder.coin1Amount;
+                    if (dbOrder.purpose === 'ld') {
+                      dbOrder.update({
+                        ladderState: 'Partly filled',
+                      });
+                    }
+
                     await dbOrder.update({
                       isExecuted: true,
                       coin1Amount: exchangeOrder.amountLeft,
                     }, true);
-                    log.log(`orderUtils: Updating ${dbOrder.purpose}-order${onWhichAccount} with params: id=${dbOrder._id}, type=${dbOrder.type}, pair=${dbOrder.pair}, price=${dbOrder.price}, coin1Amount=${prev_amount}, coin2Amount=${dbOrder.coin2Amount}: order is partly filled. Amount left: ${dbOrder.coin1Amount}.`);
+                    log.log(`orderUtils: Updating ${orderInfoString}: order is partly filled. Amount left: ${dbOrder.coin1Amount}.`);
                   }
-                  break;
-                case 'closed': // not expected
-                  await dbOrder.update({
-                    isProcessed: true,
-                    isClosed: true,
-                  }, true);
-                  isLifeOrder = false;
-                  log.log(`orderUtils: Updating (closing) ${dbOrder.purpose}-order${onWhichAccount} with params: id=${dbOrder._id}, type=${dbOrder.type}, pair=${dbOrder.pair}, price=${dbOrder.price}, coin1Amount=${dbOrder.coin1Amount}, coin2Amount=${dbOrder.coin2Amount}: order is closed.`);
-                  break;
-                case 'filled': // not expected
-                  await dbOrder.update({
-                    isProcessed: true,
-                    isExecuted: true,
-                  }, true);
-                  isLifeOrder = false;
-                  log.log(`orderUtils: Updating (closing) ${dbOrder.purpose}-order${onWhichAccount} with params: id=${dbOrder._id}, type=${dbOrder.type}, pair=${dbOrder.pair}, price=${dbOrder.price}, coin1Amount=${dbOrder.coin1Amount}, coin2Amount=${dbOrder.coin2Amount}: order is filled.`);
                   break;
                 default:
                   isLifeOrder = true;
@@ -291,28 +301,36 @@ module.exports = {
               updatedOrders.push(dbOrder);
             }
           } else {
-            const cancelReq = await api.cancelOrder(dbOrder._id, dbOrder.type, dbOrder.pair);
-            const orderInfoString = `${dbOrder.purpose}-order${onWhichAccount} with params: id=${dbOrder._id}, type=${dbOrder.type}, pair=${dbOrder.pair}, price=${dbOrder.price}, coin1Amount=${dbOrder.coin1Amount}, coin2Amount=${dbOrder.coin2Amount}`;
-            if (cancelReq !== undefined) {
-              if (cancelReq) {
+            if (dbOrder.purpose === 'ld') {
+              const previousState = dbOrder.ladderState;
+
+              if (constants.LADDER_OPENED_STATES.includes(previousState)) {
                 dbOrder.update({
-                  isProcessed: true,
-                  isCancelled: true,
-                  isClosed: true,
-                  isNotFound: true,
+                  ladderState: 'Filled',
                 });
-                log.log(`orderUtils: Successfully cancelled ${orderInfoString}. Unable to find it in the exchangeOrders.`);
+
+                ldFilledCount++;
+
+                log.log(`orderUtils: Changing state of ${orderInfoString} from ${previousState} to ${dbOrder.ladderState}. Ladder index: ${dbOrder.ladderIndex}. Unable to find it in the exchangeOrders, consider it's filled.`);
+                await dbOrder.save();
               } else {
-                dbOrder.update({
-                  isProcessed: true,
-                  isClosed: true,
-                  isNotFound: true,
-                });
-                log.log(`orderUtils: Unable to cancel ${orderInfoString}. Unable to find it in the exchangeOrders and probably it doesn't exist anymore. Making it as closed.`);
+                log.log(`orderUtils: Not found ${orderInfoString}, it's ok for a ladder order with state ${dbOrder.ladderState}${dbOrder.ladderNotPlacedReason ? ' (' + dbOrder.ladderNotPlacedReason + ')' : ''}. Ladder index: ${dbOrder.ladderIndex}.`);
               }
-              await dbOrder.save();
+
+              updatedOrders.push(dbOrder);
             } else {
-              log.log(`orderUtils: Request to update (close) not found ${orderInfoString} failed. Will try next time, keeping this order in the DB for now.`);
+              const reasonToClose = 'Unable to find it in the exchangeOrders';
+              const reasonObject = {
+                isNotFound: true,
+              };
+
+              const orderCollector = require('./orderCollector');
+              const cancellation = await orderCollector.clearOrderById(
+                  dbOrder, dbOrder.pair, dbOrder.type, this.readableModuleName, reasonToClose, reasonObject, api);
+
+              if (!cancellation.isCancelRequestProcessed) {
+                updatedOrders.push(dbOrder);
+              }
             }
           }
 
@@ -322,7 +340,30 @@ module.exports = {
         updatedOrders = dbOrders;
       }
     } catch (e) {
-      log.error(`Error in updateOrders() of ${utils.getModuleName(module.id)} module: ` + e);
+      log.error(`Error in updateOrders(${paramString}) of ${utils.getModuleName(module.id)} module: ` + e);
+    }
+
+    const orderCountAll = updatedOrders.length;
+    const updatedOrdersOpened = updatedOrders.filter((order) => order.purpose !== 'ld' || constants.LADDER_OPENED_STATES.includes(order.ladderState));
+    const orderCountOpened = updatedOrdersOpened.length;
+    const orderCountHidden = orderCountAll - orderCountOpened;
+
+    let openOrdersString = '';
+
+    if (hideNotOpened) {
+      if (orderCountHidden > 0) {
+        updatedOrders = updatedOrdersOpened;
+        openOrdersString = ` (${orderCountHidden} not placed ld-orders are hidden)`;
+      }
+    } else {
+      if (orderCountHidden > 0) {
+        openOrdersString = ` (including ${orderCountHidden} not placed ld-orders)`;
+      }
+    }
+
+    log.log(`orderUtils: ${samePurpose}dbOrders updated for ${moduleName} with ${updatedOrders.length} live orders${openOrdersString} on ${pair}.`);
+    if (ldFilledCount/tradeParams.mm_ladderCount > 0.7) {
+      log.warn(`orderUtils: ${ldFilledCount} orders considered as filled.`);
     }
 
     return updatedOrders;

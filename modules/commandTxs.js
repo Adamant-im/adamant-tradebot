@@ -1482,7 +1482,7 @@ async function rates(params) {
       }
       if (exchangeRates) {
         const delta = exchangeRates.ask-exchangeRates.bid;
-        const average = (exchangeRates.ask+exchangeRates.ask)/2;
+        const average = (exchangeRates.ask+exchangeRates.bid)/2;
         const deltaPercent = delta/average * 100;
         output += `${config.exchangeName} rates for ${pair} pair:\nBid: ${exchangeRates.bid.toFixed(coin2Decimals)}, ask: ${exchangeRates.ask.toFixed(coin2Decimals)}, spread: _${(delta).toFixed(coin2Decimals)}_ ${coin2} (${(deltaPercent).toFixed(2)}%).`;
       } else {
@@ -1646,6 +1646,13 @@ async function pair(params) {
   };
 }
 
+/**
+ * Get open orders details for accountNo
+ * @param {Number} accountNo 0 is for the first trade account, 1 is for the second
+ * @param {Object} tx Command Tx info
+ * @param {Object} params Includes optional trade pair
+ * @returns Order details for an account
+ */
 async function getOrdersInfo(accountNo = 0, tx = {}, pair) {
   let output = '';
   const pairObj = orderUtils.parseMarket(pair);
@@ -1724,14 +1731,20 @@ async function getOrdersInfo(accountNo = 0, tx = {}, pair) {
   previousOrders[accountNo][tx.senderId][pairObj.pair] = ordersByType;
 
   return output;
-
 }
 
+/**
+ * Get open orders details
+ * @param {Object} params Includes optional trade pair
+ * @param {Object} tx Command Tx info
+ * @returns Notification messages
+ */
 async function orders(params, tx = {}) {
   let pair = params[0];
   if (!pair) {
     pair = config.pair;
   }
+
   if (pair.indexOf('/') === -1) {
     return {
       msgNotify: ``,

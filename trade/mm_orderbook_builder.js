@@ -13,24 +13,39 @@ const tradeParams = require('./settings/tradeParams_' + config.exchange);
 const traderapi = require('./trader_' + config.exchange)(config.apikey, config.apisecret, config.apipassword, log);
 const db = require('../modules/DB');
 const orderUtils = require('./orderUtils');
+const orderCollector = require('./orderCollector');
 
 let lastNotifyBalancesTimestamp = 0;
 let lastNotifyPriceTimestamp = 0;
 
-const INTERVAL_MIN = 1000;
-const INTERVAL_MAX = 2000;
-const LIFETIME_MIN = 1000;
+const INTERVAL_MIN = 1500;
+const INTERVAL_MAX = 3000;
+
+
+// LIFETIME_MAX ~ 30 sec; — depends on mm_orderBookOrdersCount * LIFETIME_KOEF * 1000 * Math.cbrt(position))
+// Also depends on traderapi.features().orderNumberLimit
+const LIFETIME_MIN = 1500;
 const LIFETIME_KOEF = 0.5;
-// const LIFETIME_MAX ~ 30 sec; — depends on mm_orderBookOrdersCount * LIFETIME_KOEF * 1000 * Math.cbrt(position))
 
 let isPreviousIterationFinished = true;
 
 module.exports = {
+  readableModuleName: 'Order book builder',
+
   async test() {
     console.log('==========================');
+
+    // const { ordersDb } = db;
+    // const order = await ordersDb.findOne({
+    //   _id: 'orderId',
+    // });
+
+    // const TraderApi = require('../trade/trader_' + config.exchange);
+
+    // const traderapi3 = TraderApi(config.apikey2, config.apisecret2, config.apipassword2, log);
     // const traderapi2 = require('./trader_' + 'resfinex')(config.apikey, config.apisecret, config.apipassword, log);
 
-    // const ob = await traderapi.getOrderBook('ADM/USDT');
+    // const ob = await traderapi.getOrderBook('DOGE/USD');
     // console.log(ob);
 
     // const req = await traderapi.getTradesHistory('eth/usdt');
@@ -41,8 +56,15 @@ module.exports = {
     //   console.log(require('./orderUtils').parseMarket('ADM/USDT', 'resfinex'));
     // }, 3000);
 
-    // console.log(await traderapi.cancelOrder('53346669011', null, 'ADM/USDT'));
-    // console.log(await traderapi.cancelOrder('5d13f3e8-dcb3-4a6d-88c1-16cf6e8d8179'));
+    // const orderCollector = require('./orderCollector');
+    // const cancellation = await orderCollector.clearOrderById(
+    //     'order id', config.pair, undefined, 'Testing', 'Sample reason', undefined, traderapi);
+    // console.log(cancellation);
+
+    // console.log(await traderapi.cancelAllOrders('BNB/USDT'));
+    // console.log(await traderapi.cancelOrder('5d13f3e8-dcb3-4a6d-88c1-16cf6e8d8179', undefined, 'DOGE/USDT'));
+    // console.log(await traderapi.cancelOrder('ODM54B-5CJUX-RSUKCK', undefined, 'DOGE/USDT'));
+    // console.log(traderapi.features().orderNumberLimit);
   },
 
   run() {
@@ -79,7 +101,7 @@ module.exports = {
         exchange: config.exchange,
       });
 
-      orderBookOrders = await orderUtils.updateOrders(orderBookOrders, config.pair, utils.getModuleName(module.id)); // update orders which partially filled or not found
+      orderBookOrders = await orderUtils.updateOrders(orderBookOrders, config.pair, utils.getModuleName(module.id) + ':ob-'); // update orders which partially filled or not found
       orderBookOrders = await this.closeOrderBookOrders(orderBookOrders);
       log.log(`Orderbook builder: ${orderBookOrders.length} ob-orders opened.`);
 
@@ -99,7 +121,6 @@ module.exports = {
    * @return {Array of Object} Updated order list
    */
   async closeOrderBookOrders(orderBookOrders) {
-    let orderBookOrdersCount = orderBookOrders.length;
     const updatedObOrders = [];
 
     for (const order of orderBookOrders) {
@@ -115,27 +136,10 @@ module.exports = {
         }
 
         if (reasonToClose) {
-          const cancelReq = await traderapi.cancelOrder(order._id, order.type, order.pair);
-          const orderInfoString = `ob-order with id=${order._id}, type=${order.type}, pair=${order.pair}, price=${order.price}, coin1Amount=${order.coin1Amount}, coin2Amount=${order.coin2Amount}`;
+          const cancellation = await orderCollector.clearOrderById(
+              order, order.pair, order.type, this.readableModuleName, reasonToClose, reasonObject, traderapi);
 
-          if (cancelReq !== undefined) {
-            orderBookOrdersCount--;
-            order.update({
-              ...reasonObject,
-              isProcessed: true,
-              isClosed: true,
-            });
-
-            if (cancelReq) {
-              order.update({ isCancelled: true });
-              log.log(`Orderbook builder: Successfully cancelled ${orderInfoString}. ${reasonToClose} Open ob-orders: ~${orderBookOrdersCount}.`);
-            } else {
-              log.log(`Orderbook builder: Unable to cancel ${orderInfoString}. ${reasonToClose} Probably it doesn't exist anymore. Marking it as closed. Open ob-orders: ~${orderBookOrdersCount}.`);
-            }
-
-            await order.save();
-          } else {
-            log.log(`Orderbook builder: Request to close ${orderInfoString} failed. ${reasonToClose} Will try next time, keeping this order in the DB for now.`);
+          if (!cancellation.isCancelRequestProcessed) {
             updatedObOrders.push(order);
           }
         } else {
@@ -166,7 +170,7 @@ module.exports = {
         )),
       );
       if (!orderList || !orderList[0] || !orderList[1]) {
-        log.warn(`Orderbook builder: Filtered order count of type ${type} is less then 2 for ${config.pair}, or temporary API error. Unable to set a price while placing ob-order.`);
+        log.warn(`Orderbook builder: Filtered order count of type ${type} is less than 2 for ${config.pair}, or temporary API error. Unable to set a price while placing ob-order.`);
         return;
       }
 
@@ -434,7 +438,10 @@ function setPosition(orderCount) {
 */
 function setLifeTime(position) {
   const lifetimeMax = tradeParams.mm_orderBookOrdersCount * LIFETIME_KOEF * 1000;
-  const orderLifeTime = Math.round(utils.randomValue(LIFETIME_MIN, lifetimeMax, false) * Math.cbrt(position));
+  let orderLifeTime = Math.round(utils.randomValue(LIFETIME_MIN, lifetimeMax, false) * Math.cbrt(position));
+  if (utils.isPositiveInteger(traderapi.features().orderNumberLimit)) {
+    orderLifeTime *= traderapi.features().orderNumberLimit;
+  }
   return orderLifeTime;
 }
 

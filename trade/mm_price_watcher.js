@@ -13,6 +13,7 @@ const notify = require('../helpers/notify');
 const tradeParams = require('./settings/tradeParams_' + config.exchange);
 const traderapi = require('./trader_' + config.exchange)(config.apikey, config.apisecret, config.apipassword, log);
 const db = require('../modules/DB');
+const orderCollector = require('./orderCollector');
 const orderUtils = require('./orderUtils');
 
 const priceWatcherApi = traderapi;
@@ -39,6 +40,8 @@ let pwExchange; let pwExchangeApi;
 log.log(`Module ${utils.getModuleName(module.id)} is loaded.`);
 
 module.exports = {
+  readableModuleName: 'Price watcher',
+
   /**
    * Save Pw parameters to restore them later
    * Used to restore Pw after Pm finished its job with 'depth' mm_Policy
@@ -270,7 +273,7 @@ module.exports = {
         exchange: config.exchange,
       });
 
-      pwOrders = await orderUtils.updateOrders(pwOrders, config.pair, utils.getModuleName(module.id), false); // update orders which partially filled or not found
+      pwOrders = await orderUtils.updateOrders(pwOrders, config.pair, utils.getModuleName(module.id) + ':pw-', false); // update orders which partially filled or not found
       pwOrders = await this.closePriceWatcherOrders(pwOrders); // close orders which expired
 
       await setPriceRange();
@@ -335,37 +338,23 @@ module.exports = {
    * @returns {Array<Object>} updatedPwOrders
    */
   async closePriceWatcherOrders(pwOrders) {
-    const onWhichAccount = '';
     const updatedPwOrders = [];
 
     for (const order of pwOrders) {
       try {
+        let reasonToClose = ''; const reasonObject = {};
         if (order.dateTill < utils.unixTimeStampMs()) {
+          reasonToClose = `It's expired.`;
+          reasonObject.isExpired = true;
+        }
 
-          const cancelReq = await priceWatcherApi.cancelOrder(order._id, order.type, order.pair);
-          const orderInfoString = `pw-order${onWhichAccount} with id=${order._id}, type=${order.type}, pair=${order.pair}, price=${order.price}, coin1Amount=${order.coin1Amount}, coin2Amount=${order.coin2Amount}`;
-          if (cancelReq !== undefined) {
-            if (cancelReq) {
-              order.update({
-                isProcessed: true,
-                isCancelled: true,
-                isClosed: true,
-                isExpired: true,
-              });
-              log.log(`Price watcher: Successfully cancelled ${orderInfoString}. It is expired.`);
-            } else {
-              order.update({
-                isProcessed: true,
-                isClosed: true,
-                isExpired: true,
-              });
-              log.log(`Price watcher: Unable to cancel ${orderInfoString}. It is expired and probably it doesn't exist anymore. Making it as closed.`);
-            }
-            await order.save();
-          } else {
-            log.log(`Price watcher: Request to close expired ${orderInfoString} failed. Will try next time, keeping this order in the DB for now.`);
+        if (reasonToClose) {
+          const cancellation = await orderCollector.clearOrderById(
+              order, order.pair, order.type, this.readableModuleName, reasonToClose, reasonObject, priceWatcherApi);
+
+          if (!cancellation.isCancelRequestProcessed) {
+            updatedPwOrders.push(order);
           }
-
         } else {
           updatedPwOrders.push(order);
         }
@@ -608,7 +597,6 @@ async function setPriceRange() {
     }
 
     if (previousLowPrice && previousHighPrice) {
-
       const deltaLow = Math.abs(lowPrice - previousLowPrice);
       const deltaLowPercent = deltaLow / ( (lowPrice + previousLowPrice) / 2 ) * 100;
       const directionLow = lowPrice > previousLowPrice ? 'increased' : 'decreased';
@@ -631,16 +619,14 @@ async function setPriceRange() {
       if (deltaLowPercent > priceChangeWarningPercent || deltaHighPercent > priceChangeWarningPercent) {
         notify(`${config.notifyName}: Price watcher's new price range changed much—new values are from ${lowPrice.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${changedByStringLow} to ${highPrice.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${changedByStringHigh} ${config.coin2}.`, 'warn');
       } else {
-        log.log(`Price watcher set a new price range from ${lowPrice.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${changedByStringLow} to ${highPrice.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${changedByStringHigh} ${config.coin2}.`);
+        log.log(`Price watcher: Set a new price range from ${lowPrice.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${changedByStringLow} to ${highPrice.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${changedByStringHigh} ${config.coin2}.`);
       }
-
     } else {
-      log.log(`Price watcher set a price range from ${lowPrice.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} to ${highPrice.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${config.coin2}.`);
+      log.log(`Price watcher: Set a price range from ${lowPrice.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} to ${highPrice.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${config.coin2}.`);
 
     }
 
   } catch (e) {
-
     errorSettingPriceRange(`Error in setPriceRange() of ${utils.getModuleName(module.id)} module: ${e}.`);
     return false;
 
@@ -694,6 +680,7 @@ function setLifeTime() {
  */
 function setPause() {
   let pause; let pairInfoString;
+
   if (module.exports.getIsSameExchangePw()) {
     pause = utils.randomValue(INTERVAL_MIN_SAME_EXCHANGE, INTERVAL_MAX_SAME_EXCHANGE, true);
     pairInfoString = ` (watching same exchange pair ${tradeParams.mm_priceWatcherSource})`;
@@ -701,8 +688,10 @@ function setPause() {
     pause = utils.randomValue(INTERVAL_MIN, INTERVAL_MAX, true);
     pairInfoString = ` (watching not the same exchange pair)`;
   }
-  if (tradeParams.mm_isActive && tradeParams.mm_isPriceWatcherActive) {
+
+  if (tradeParams.mm_isActive && module.exports.getIsPriceWatcherEnabled()) {
     log.log(`Price watcher: Setting interval to ${pause}${pairInfoString}.`);
   }
+
   return pause;
 }
