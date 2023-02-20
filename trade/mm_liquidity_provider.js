@@ -85,7 +85,7 @@ module.exports = {
         return;
       }
 
-      liquidityOrders = await orderUtils.updateOrders(liquidityOrders, config.pair, utils.getModuleName(module.id)); // update orders which partially filled or not found
+      liquidityOrders = await orderUtils.updateOrders(liquidityOrders, config.pair, utils.getModuleName(module.id) + ':liq-'); // update orders which partially filled or not found
       liquidityOrders = await this.closeLiquidityOrders(liquidityOrders, orderBookInfo); // close orders which expired or out of spread
 
       let liqInfoString; let liqSsInfoString;

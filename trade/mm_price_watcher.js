@@ -273,7 +273,7 @@ module.exports = {
         exchange: config.exchange,
       });
 
-      pwOrders = await orderUtils.updateOrders(pwOrders, config.pair, utils.getModuleName(module.id), false); // update orders which partially filled or not found
+      pwOrders = await orderUtils.updateOrders(pwOrders, config.pair, utils.getModuleName(module.id) + ':pw-', false); // update orders which partially filled or not found
       pwOrders = await this.closePriceWatcherOrders(pwOrders); // close orders which expired
 
       await setPriceRange();

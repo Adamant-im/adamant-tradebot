@@ -101,7 +101,7 @@ module.exports = {
         exchange: config.exchange,
       });
 
-      orderBookOrders = await orderUtils.updateOrders(orderBookOrders, config.pair, utils.getModuleName(module.id)); // update orders which partially filled or not found
+      orderBookOrders = await orderUtils.updateOrders(orderBookOrders, config.pair, utils.getModuleName(module.id) + ':ob-'); // update orders which partially filled or not found
       orderBookOrders = await this.closeOrderBookOrders(orderBookOrders);
       log.log(`Orderbook builder: ${orderBookOrders.length} ob-orders opened.`);
 

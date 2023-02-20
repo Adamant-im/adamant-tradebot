@@ -247,11 +247,15 @@ module.exports = {
     let updatedOrders = [];
     let ldFilledCount = 0;
 
+    let samePurpose;
+    [moduleName, samePurpose] = moduleName.split(':');
+    samePurpose = samePurpose || '';
+
     try {
       const onWhichAccount = api.isSecondAccount ? ' (on second account)' : '';
       const exchangeOrders = await api.getOpenOrders(pair);
 
-      log.log(`orderUtils: Updating ${dbOrders.length} dbOrders on ${pair} for ${moduleName}, noCache: ${noCache}, hideNotOpened: ${hideNotOpened}… Received ${exchangeOrders?.length} orders from exchange.`);
+      log.log(`orderUtils: Updating ${dbOrders.length} ${samePurpose}dbOrders on ${pair} for ${moduleName}, noCache: ${noCache}, hideNotOpened: ${hideNotOpened}… Received ${exchangeOrders?.length} orders from exchange.`);
 
       if (exchangeOrders) {
         for (const dbOrder of dbOrders) {
@@ -357,7 +361,7 @@ module.exports = {
       }
     }
 
-    log.log(`orderUtils: dbOrders updated for ${moduleName} with ${updatedOrders.length} live orders${openOrdersString} on ${pair}.`);
+    log.log(`orderUtils: ${samePurpose}dbOrders updated for ${moduleName} with ${updatedOrders.length} live orders${openOrdersString} on ${pair}.`);
     if (ldFilledCount/tradeParams.mm_ladderCount > 0.7) {
       log.warn(`orderUtils: ${ldFilledCount} orders considered as filled.`);
     }
