@@ -35,23 +35,25 @@ module.exports = function() {
    * @param {String} url
    */
   const handleResponse = (responseOrError, resolve, reject, bodyString, queryString, url) => {
+    const httpCode = responseOrError?.status || responseOrError?.response?.status;
+    const httpMessage = responseOrError?.statusText || responseOrError?.response?.statusText;
+
+    const p2bData = responseOrError?.data || responseOrError?.response?.data;
+    const p2bStatus = p2bData?.success;
+    const p2bErrorCode = p2bData?.errorCode || p2bData?.status;
+    const p2bErrorMessage = utils.trimAny(p2bData?.message || p2bData?.errors?.message?.[0], '. ');
+    const p2bErrorInfo = p2bErrorCode ? `[${p2bErrorCode}] ${utils.trimAny(p2bErrorMessage, ' .')}` : `[No error code]`;
+
+    const errorMessage = httpCode ? `${httpCode} ${httpMessage}, ${p2bErrorInfo}` : String(responseOrError);
+    const reqParameters = queryString || bodyString || '{ No parameters }';
+
     try {
-      const httpCode = responseOrError?.status || responseOrError?.response?.status;
-      const httpMessage = responseOrError?.statusText || responseOrError?.response?.statusText;
-
-      const p2bData = responseOrError?.data || responseOrError?.response?.data;
-      const p2bStatus = p2bData?.success;
-      const p2bErrorCode = p2bData?.errorCode || p2bData?.status;
-      const p2bErrorMessage = utils.trimAny(p2bData?.message || p2bData?.errors?.message?.[0], '. ');
-      const p2bErrorInfo = p2bErrorCode ? `[${p2bErrorCode}] ${utils.trimAny(p2bErrorMessage, ' .')}` : `[No error code]`;
-
-      const errorMessage = httpCode ? `${httpCode} ${httpMessage}, ${p2bErrorInfo}` : String(responseOrError);
-      const reqParameters = queryString || bodyString || '{ No parameters }';
-
       if (p2bStatus) {
         resolve(p2bData);
       } else if (p2bErrorCode) {
-        p2bData.p2bErrorInfo = p2bErrorInfo;
+        if (p2bData) {
+          p2bData.p2bErrorInfo = p2bErrorInfo;
+        }
 
         if (notValidStatuses.includes(httpCode)) {
           log.log(`P2PB2B request to ${url} with data ${reqParameters} failed: ${errorMessage}. Rejecting…`);

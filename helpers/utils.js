@@ -1562,16 +1562,14 @@ module.exports = {
   /**
    * Inclines a number
    * @param {Number} number Number to incline
-   * @return {String} 1-st, 2-d, 3-d, 4-th, 10-th, 20-th, 21-st, 22-d, 23-d, 30-th
+   * @return {String} 0th, 1st, 2d, 3d, 4th, 10th, 20th, 21st, 22d, 23d, 30th
    */
   inclineNumber(number) {
     if (!this.isPositiveOrZeroInteger(number)) {
       return number;
     }
 
-    if (number === 0) {
-      return `zero-index`;
-    } else if (number % 10 === 1 && number !== 11) {
+    if (number % 10 === 1 && number !== 11) {
       return `${number}st`;
     } else if ([2, 3].includes(number % 10) && ![12, 13].includes(number)) {
       return `${number}d`;
