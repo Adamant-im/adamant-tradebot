@@ -336,11 +336,13 @@ module.exports = {
 
         } // for (const dbOrder of dbOrders)
       } else { // if exchangeOrders
-        log.warn(`orderUtils: Unable to get exchangeOrders${onWhichAccount} in updateOrders(), leaving dbOrders as is.`);
-        updatedOrders = dbOrders;
+        log.warn(`orderUtils: Unable to get exchangeOrders${onWhichAccount} in updateOrders(), leaving ${samePurpose}dbOrders as is.`);
+        return dbOrders;
       }
     } catch (e) {
-      log.error(`Error in updateOrders(${paramString}) of ${utils.getModuleName(module.id)} module: ` + e);
+      log.error(`Error in updateOrders(${paramString}) of ${utils.getModuleName(module.id)} module: ${e}`);
+      log.warn(`orderUtils: Because of error in updateOrders(), returning ${samePurpose}dbOrders before processing finished. It may be partly modified.`);
+      return dbOrders;
     }
 
     const orderCountAll = updatedOrders.length;

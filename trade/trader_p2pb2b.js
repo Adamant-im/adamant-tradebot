@@ -151,7 +151,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
 
       try {
         data = await P2PB2BClient.getOrders(pair_.pair, offset, limit);
-      } catch (e) {
+      } catch (err) {
         log.warn(`API request getOpenOrdersPage(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
         return undefined;
       }
