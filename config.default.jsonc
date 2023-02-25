@@ -43,7 +43,6 @@
 
   /** List of supported exchanges **/
   "exchanges": [
-    "CoinDeal",
     "Resfinex",
     "P2PB2B"
   ],
