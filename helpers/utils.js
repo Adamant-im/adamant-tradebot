@@ -3,14 +3,19 @@ const log = require('./log');
 const tradeParams = require('../trade/settings/tradeParams_' + config.exchange);
 const fs = require('fs');
 const { SAT, EPOCH, MINUTE, LIQUIDITY_SS_MAX_SPREAD_PERCENT } = require('./const');
+const equal = require('fast-deep-equal');
 
 const AVERAGE_SPREAD_DEVIATION = 0.15;
 
 module.exports = {
-
   saveConfig(isWebApi = false) {
-    const toSave = 'module.exports = ' + JSON.stringify(tradeParams, null, 2).replace(/"/g, '\'').replace(/\n\}/g, ',\n};\n');
-    fs.writeFileSync('./trade/settings/tradeParams_' + config.exchange + '.js', toSave);
+    let oldConfig;
+    eval(fs.readFileSync(config.fileWithPath).toString().replace('module.exports', 'oldConfig'));
+    if (!equal(tradeParams, oldConfig)) {
+      const toSave = 'module.exports = ' + JSON.stringify(tradeParams, null, 2).replace(/"/g, '\'').replace(/\n\}/g, ',\n};\n');
+      fs.writeFileSync(config.fileWithPath, toSave);
+      log.log(`Config is updated and saved: ${config.file}`);
+    }
   },
 
   /**
@@ -123,6 +128,25 @@ module.exports = {
       return sats;
 
     } catch (e) { }
+  },
+
+  /**
+   * Rounds up to precision
+   * roundUp(6, 10) -> 10
+   * roundUp(30, 10) -> 30
+   * roundUp(31, 10) -> 30
+   * roundUp(36, 10) -> 40
+   * roundUp(561, 100) -> 600
+   * roundUp(66, 5) -> 65
+   * roundUp(1, 10) -> 1
+   * roundUp(7, 10) -> 1
+   * @param {Number} value Value to round up
+   * @param {Number} precision 5, 10, 100, etc.
+   * @return {Number} Rounded value
+   */
+  roundUp(value, precision) {
+    if (!this.isNumber(value) || !this.isInteger(precision) || precision < 1 || value < precision) return value;
+    return Math.round(value / precision) * precision;
   },
 
   /**
@@ -1211,12 +1235,31 @@ module.exports = {
 
   /**
    * Returns decimals for precision
-   * @param precision e.g. 0.00001
+   * 0.00001 -> 5
+   * 1000 -> 0
+   * 1 -> 0
+   * 0 -> undefined
+   * @param {Number|String} precision e.g. 0.00001
    * @returns {number} returns 5
    */
   getDecimalsFromPrecision(precision) {
     if (!precision) return;
+    if (precision > 1) return 0;
     return Math.round(Math.abs(Math.log10(+precision)));
+  },
+
+  /**
+   * Returns decimals for precision for number greater than 1
+   * 0.00001 -> 5
+   * 1000 -> -3
+   * 1 -> 0
+   * 0 -> undefined
+   * @param {Number|String} precision e.g. 0.00001
+   * @returns {number} returns 5
+   */
+  getDecimalsFromPrecisionForBigNumbers(precision) {
+    if (!precision) return;
+    return Math.round(-Math.log10(+precision));
   },
 
   /**
@@ -1397,28 +1440,42 @@ module.exports = {
   /**
    * Creates a difference string for current and previous balances
    * @param {Array of Object} a Current balances
-   * @param {Array of Object} b Previous balances
+   * @param {Object<timestamp, balances>} b Previous balances with timestamp
    * @return {String} Difference string
    */
   differenceInBalancesString(a, b, marketInfo) {
     let output = '';
-    const diff = this.differenceInBalances(a, b);
+    const diff = this.differenceInBalances(a, b?.balances);
+    const timeDiffString = b?.timestamp ? ' in ' + this.timestampInDaysHoursMins(Date.now() - b.timestamp) : '';
     if (diff) {
       if (diff[0]) {
-        output += '\nChanges:\n';
-        let delta; let deltaUSD = 0; let deltaBTC = 0; let deltaCoin1 = 0; let deltaCoin2 = 0;
-        let sign; let signUSD = ''; let signBTC = ''; let signCoin1 = ''; let signCoin2 = '';
+        output += `\nChanges${timeDiffString}:\n`;
+
+        let delta; let deltaTotalUSD = 0; let deltaTotalBTC = 0;
+        let deltaCoin1 = 0; let deltaCoin2 = 0; let deltaTotalNonCoin1USD = 0; let deltaTotalNonCoin1BTC = 0;
+        let sign; let signTotalUSD = ''; let signTotalBTC = '';
+        let signCoin1 = ''; let signCoin2 = ''; let signTotalNonCoin1USD = ''; let signTotalNonCoin1BTC = '';
         diff.forEach((crypto) => {
           delta = Math.abs(crypto.now - crypto.prev);
           sign = crypto.now > crypto.prev ? '+' : '−';
           if (crypto.code === 'totalUSD') {
-            deltaUSD = delta;
-            signUSD = sign;
+            deltaTotalUSD = delta;
+            signTotalUSD = sign;
             return;
           }
           if (crypto.code === 'totalBTC') {
-            deltaBTC = delta;
-            signBTC = sign;
+            deltaTotalBTC = delta;
+            signTotalBTC = sign;
+            return;
+          }
+          if (crypto.code === 'totalNonCoin1USD') {
+            deltaTotalNonCoin1USD = delta;
+            signTotalNonCoin1USD = sign;
+            return;
+          }
+          if (crypto.code === 'totalNonCoin1BTC') {
+            deltaTotalNonCoin1BTC = delta;
+            signTotalNonCoin1BTC = sign;
             return;
           }
           if (crypto.code === config.coin1) {
@@ -1432,13 +1489,25 @@ module.exports = {
           output += `_${crypto.code}_: ${sign}${this.formatNumber(+(delta).toFixed(8), true)}`;
           output += '\n';
         });
-        output += `Total holdings ${signUSD}${this.formatNumber(+deltaUSD.toFixed(2), true)} _USD_ or ${signBTC}${this.formatNumber(deltaBTC.toFixed(8), true)} _BTC_`;
-        if (deltaCoin1 && deltaCoin2 && (signCoin1 !== signCoin2)) {
-          const price = deltaCoin2 / deltaCoin1;
+
+        if (Math.abs(deltaTotalUSD)> 0.01 || Math.abs(deltaTotalBTC > 0.00000009)) {
+          output += `Total holdings ${signTotalUSD}${this.formatNumber(+deltaTotalUSD.toFixed(2), true)} _USD_ or ${signTotalBTC}${this.formatNumber(deltaTotalBTC.toFixed(8), true)} _BTC_`;
+        } else {
+          output += `Total holdings ~ No changes`;
+        }
+
+        if (Math.abs(deltaTotalNonCoin1USD) > 0.01 || Math.abs(deltaTotalNonCoin1BTC) > 0.00000009) {
+          output += `\nTotal holdings (non-${config.coin1}) ${signTotalNonCoin1USD}${this.formatNumber(+deltaTotalNonCoin1USD.toFixed(2), true)} _USD_ or ${signTotalNonCoin1BTC}${this.formatNumber(deltaTotalNonCoin1BTC.toFixed(8), true)} _BTC_`;
+        } else {
+          output += `\nTotal holdings (non-${config.coin1}) ~ No changes`;
+        }
+
+        if (deltaCoin1 && deltaTotalNonCoin1USD && (signCoin1 !== signTotalNonCoin1USD)) {
+          const price = deltaTotalNonCoin1USD / deltaCoin1;
           output += `\n[Can be wrong] ${signCoin1 === '+' ? 'I\'ve bought' : 'I\'ve sold'} ${this.formatNumber(+deltaCoin1.toFixed(marketInfo.coin1Decimals), true)} _${config.coin1}_ at ${this.formatNumber(price.toFixed(marketInfo.coin2Decimals), true)} _${config.coin2}_ price.`;
         }
       } else {
-        output += '\nNo changes.\n';
+        output += `\nNo changes${timeDiffString}.\n`;
       }
     }
     return output;

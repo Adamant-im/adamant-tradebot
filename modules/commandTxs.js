@@ -1044,6 +1044,8 @@ async function fill(params) {
     };
   }
 
+  const onWhichAccount = traderapi.isSecondAccount ? ' on second account' : '';
+
   const balances = await traderapi.getBalances(false);
   let balance;
   let isBalanceEnough = true;
@@ -2075,13 +2077,14 @@ async function calc(params, tx, isWebApi = false) {
 function balancesString(balances, caption, params) {
   let output = '';
   let totalBTC = 0; let totalUSD = 0;
+  let totalNonCoin1BTC = 0; let totalNonCoin1USD = 0;
   const unknownCryptos = [];
 
   if (balances.length === 0) {
     output = `All empty.`;
   } else {
     output = caption;
-    balances = balances.filter((crypto) => !['totalBTC', 'totalUSD'].includes(crypto.code));
+    balances = balances.filter((crypto) => !['totalBTC', 'totalUSD', 'totalNonCoin1BTC', 'totalNonCoin1USD'].includes(crypto.code));
     balances.forEach((crypto) => {
       const accountTypeString = params?.[0] ? `[${crypto.accountType}] ` : '';
       output += `${accountTypeString}${utils.formatNumber(+(crypto.total).toFixed(8), true)} _${crypto.code}_`;
@@ -2098,25 +2101,30 @@ function balancesString(balances, caption, params) {
       const skipUnknownCryptos = ['BTXCRD'];
       if (utils.isPositiveOrZeroNumber(crypto.usd)) {
         totalUSD += crypto.usd;
+        if (crypto.code !== config.coin1) totalNonCoin1USD += crypto.usd;
       } else {
         value = exchangerUtils.convertCryptos(crypto.code, 'USD', crypto.total).outAmount;
         if (utils.isPositiveOrZeroNumber(value)) {
           totalUSD += value;
+          if (crypto.code !== config.coin1) totalNonCoin1USD += value;
         } else if (!skipUnknownCryptos.includes(crypto.code)) {
           unknownCryptos.push(crypto.code);
         }
       }
       if (utils.isPositiveOrZeroNumber(crypto.btc)) {
         totalBTC += crypto.btc;
+        if (crypto.code !== config.coin1) totalNonCoin1BTC += crypto.btc;
       } else {
         value = exchangerUtils.convertCryptos(crypto.code, 'BTC', crypto.total).outAmount;
         if (utils.isPositiveOrZeroNumber(value)) {
           totalBTC += value;
+          if (crypto.code !== config.coin1) totalNonCoin1BTC += value;
         }
       }
     });
 
     output += `Total holdings ~ ${utils.formatNumber(+totalUSD.toFixed(2), true)} _USD_ or ${utils.formatNumber(totalBTC.toFixed(8), true)} _BTC_`;
+    output += `\nTotal holdings (non-${config.coin1}) ~ ${utils.formatNumber(+totalNonCoin1USD.toFixed(2), true)} _USD_ or ${utils.formatNumber(totalNonCoin1BTC.toFixed(8), true)} _BTC_`;
     if (unknownCryptos.length) {
       output += `. Note: I didn't count unknown cryptos ${unknownCryptos.join(', ')}.`;
     }
@@ -2130,6 +2138,14 @@ function balancesString(balances, caption, params) {
       code: 'totalBTC',
       total: totalBTC,
     });
+    balances.push({
+      code: 'totalNonCoin1USD',
+      total: totalNonCoin1USD,
+    });
+    balances.push({
+      code: 'totalNonCoin1BTC',
+      total: totalNonCoin1BTC,
+    });
   }
 
   return { output, balances };
@@ -2138,33 +2154,34 @@ function balancesString(balances, caption, params) {
 /**
  * Create balance info string for an account, including balance difference from previous request
  * @param {Number} accountNo 0 for first account, 1 for second one
- * @param {Object} tx Income ADM transaction
+ * @param {Object} tx [deprecated] Income ADM transaction to get senderId
+ * @param {String} userId senderId or userId for web
  * @param {Boolean} isWebApi If true, info messages will be different
  * @param {Array} params First parameter: account type, like main, trade, margin, or 'full'.
  *   Note: Balance difference only for 'trade' account
  * @return {String}
  */
-async function getBalancesInfo(accountNo = 0, tx, isWebApi = false, params) {
+async function getBalancesInfo(accountNo = 0, tx, isWebApi = false, params, userId) {
   let output = '';
 
   try {
-
     let balances =
       await traderapi.getBalances();
 
-    const caption = `${config.exchangeName} balances:\n`;
-    const balancesObject = balancesString(balances, caption);
+    const accountTypeString = params?.[0] ? ` _${params?.[0]}_ account` : '';
+    const caption = `${config.exchangeName}${accountTypeString} balances:\n`;
+    const balancesObject = balancesString(balances, caption, params);
     output = balancesObject.output;
     balances = balancesObject.balances;
 
     if (!isWebApi && !params?.[0]) {
       output += utils.differenceInBalancesString(
           balances,
-          previousBalances[accountNo][tx.senderId],
+          previousBalances[accountNo][userId],
           orderUtils.parseMarket(config.pair),
       );
 
-      previousBalances[accountNo][tx.senderId] = balances;
+      previousBalances[accountNo][userId] = { timestamp: Date.now(), balances: balances };
     }
   } catch (e) {
     log.error(`Error in getBalancesInfo() of ${utils.getModuleName(module.id)} module: ` + e);
@@ -2179,11 +2196,12 @@ async function getBalancesInfo(accountNo = 0, tx, isWebApi = false, params) {
  *   If undefined, will show balances for 'trade' account. If 'full', for all account types.
  *   Exchange should support features().accountTypes
  *   Note: Both account balances in case of two-keys trading will show only for 'trade'
- * @param {Object} tx Income ADM transaction
+ * @param {Object} tx Income ADM transaction for in-chat command
+ * @param {Object} user User info for web
  * @param {Boolean} isWebApi If true, info messages will be different
  * @return {String}
  */
-async function balances(params, tx, isWebApi = false) {
+async function balances(params, tx, user, isWebApi = false) {
   let output = '';
 
   try {
@@ -2195,7 +2213,8 @@ async function balances(params, tx, isWebApi = false) {
       }
     }
 
-    const account0Balances = await getBalancesInfo(0, tx, isWebApi);
+    const userId = isWebApi ? user.login : tx.senderId;
+    const account0Balances = await getBalancesInfo(0, tx, isWebApi, params, userId);
     const account1Balances = undefined;
     output = account1Balances ? account0Balances + '\n\n' + account1Balances : account0Balances;
 
@@ -2208,7 +2227,6 @@ async function balances(params, tx, isWebApi = false) {
     msgSendBack: output,
     notifyType: 'log',
   };
-
 }
 
 function version() {

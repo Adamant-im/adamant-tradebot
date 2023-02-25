@@ -147,6 +147,8 @@ try {
   config.supported_exchanges = config.exchanges.join(', ');
   config.exchangeName = config.exchange;
   config.exchange = config.exchangeName.toLowerCase();
+  config.file = 'tradeParams_' + config.exchange + '.js';
+  config.fileWithPath = './trade/settings/' + config.file;
   config.pair = config.pair.toUpperCase();
   config.coin1 = config.pair.split('/')[0].trim();
   config.coin2 = config.pair.split('/')[1].trim();
