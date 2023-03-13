@@ -1,0 +1,517 @@
+const Azbit = require('./api/azbit_api');
+const utils = require('../helpers/utils');
+
+// API endpoints:
+// Base URL for requests is https://api.p2pb2b.com
+const apiServer = 'https://data.azbit.com';
+const exchangeName = 'Azbit';
+
+module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
+  const AzbitClient = Azbit();
+
+  AzbitClient.setConfig(apiServer, apiKey, secretKey, pwd, log, publicOnly);
+
+  // Fulfill markets on initialization
+  getMarkets();
+
+  function getMarkets(pair) {
+    const paramString = `pair: ${pair}`;
+
+    if (module.exports.gettingMarkets) return;
+    if (module.exports.exchangeMarkets) return module.exports.exchangeMarkets[pair];
+
+    module.exports.gettingMarkets = true;
+
+    return new Promise((resolve, reject) => {
+      AzbitClient.markets().then(function(data) {
+        try {
+          /*if (!data.success) {
+            throw new Error(`Request failed with data ${JSON.stringify(data)}.`);
+          }*/
+
+          //const markets = data.result;
+          const result = {};
+
+          data.forEach((market) => {
+            const marketName = market.code;
+            const pair = deformatPairName(marketName);
+
+            result[pair.pairReadable] = {
+              // stock — coin1, money — coin2
+              pairPlain: marketName,
+              pairReadable: pair.pairReadable,
+              coin1: pair.coin1,
+              coin2: pair.coin2,
+              coin1Decimals: market.digitsPrice,
+              coin2Decimals: market.digitsAmount,
+              minTrade: +market.minQuoteAmount,
+              // If the limit is 0, then this limit does not apply to this market
+              /*coin1Precision: utils.getPrecision(+market.precision?.stock),
+              coin2Precision: utils.getPrecision(+market.precision?.money),
+              coin1MinAmount: +market.limits.min_amount,
+              coin1MaxAmount: +market.limits.max_amount,
+              coin2MinAmount: +market.limits.min_total,
+              coin2MaxAmount: null,
+              coin2MinPrice: +market.limits.min_price,
+              coin2MaxPrice: +market.limits.max_price,
+              minTrade: +market.limits.min_total, // in coin2*/
+            };
+          });
+
+          if (Object.keys(result).length > 0) {
+            module.exports.exchangeMarkets = result;
+            log.log(`Received info about ${Object.keys(result).length} markets on ${exchangeName} exchange.`);
+          }
+
+          resolve(result);
+        } catch (e) {
+          log.warn(`Error while processing getMarkets(${paramString}) request: ${e}`);
+          resolve(undefined);
+        };
+      }).catch((err) => {
+        log.warn(`API request getMarkets(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
+        resolve(undefined);
+      }).finally(() => {
+        module.exports.gettingMarkets = false;
+      });
+    });
+  }
+
+  return {
+    get markets() {
+      return module.exports.exchangeMarkets;
+    },
+    marketInfo(pair) {
+      return getMarkets(pair);
+    },
+
+    features() {
+      return {
+        getMarkets: true,
+        placeMarketOrder: false,
+        getDepositAddress: false,
+        createDepositAddressWithWebsiteOnly: false,
+        getFundHistory: false,
+        getFundHistoryImplemented: false,
+        allowAmountForMarketBuy: false,
+        amountForMarketOrderNecessary: false,
+        openOrdersCacheSec: 180, // P2PB2B exchange say cache time is ~5 sec, but it's not true. Real cache time is unknown.
+      };
+    },
+
+    getBalances(nonzero = true) {
+      const paramString = `nonzero: ${nonzero}`;
+
+      return new Promise((resolve, reject) => {
+        AzbitClient.getBalances().then(function(data) {
+          try {
+            /*if (!data.success) {
+              throw new Error(`Request failed with data ${JSON.stringify(data)}.`);
+            }*/
+            console.log('data: ' + data.length);
+
+            let result = [];
+            const assets = data.balances;
+            assets.forEach(asset => {
+              let inOrder = data.balancesBlockedInOrder.find(obj => obj.currencyCode === asset['currencyCode']);
+              //console.log('inOrder: ' + inOrder);
+              result.push({
+                code: asset['currencyCode'].toUpperCase(),
+                free: asset['amount'],
+                freezed: inOrder['amount'],
+                total: asset['amount'] - inOrder['amount'],
+              });
+            });
+
+            if (nonzero) {
+              result = result.filter((crypto) => crypto.free || crypto.freezed);
+            }
+
+            resolve(result);
+          } catch (e) {
+            log.warn(`Error while processing getBalances(${paramString}) request: ${e}`);
+            resolve(undefined);
+          };
+        }).catch((err) => {
+          log.warn(`API request getBalances(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}\n err_stack: ${err.stack}`);
+          resolve(undefined);
+        });
+      });
+    },
+
+    /**
+     * Get one page of account open orders
+     * @param {String} pair
+     * @param {Number} offset
+     * @param {String} limit
+     * @returns {Promise<Array>}
+     */
+    async getOpenOrdersPage(pair, offset = 0, limit = 100) {
+      const paramString = `pair: ${pair}, offset: ${offset}, limit: ${limit}`;
+      const pair_ = formatPairName(pair);
+
+      let data;
+
+      try {
+        data = await AzbitClient.getOrders(pair_.pair, offset, limit);
+      } catch (err) {
+        log.warn(`API request getOpenOrdersPage(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
+        return undefined;
+      }
+
+      try {
+        const openOrders = data.result;
+        const result = [];
+
+        openOrders.forEach((order) => {
+          let orderStatus;
+          if (order.left === order.amount) {
+            orderStatus = 'new';
+          } else if (order.left === '0') {
+            orderStatus = 'filled';
+          } else {
+            orderStatus = 'part_filled';
+          }
+
+          result.push({
+            orderId: order.orderId.toString(),
+            symbol: order.market, // In P2PB2B format as ETH_USDT
+            price: +order.price,
+            side: order.side, // 'buy' or 'sell'
+            type: order.type, // 'limit' or 'market'
+            timestamp: Math.round(order.timestamp), // 1676576771.061857
+            amount: +order.amount,
+            amountExecuted: +order.dealStock,
+            amountLeft: +order.left,
+            status: orderStatus,
+            // Additionally: dealStock, takerFee, makerFee, dealFee
+          });
+        });
+
+        return result;
+      } catch (e) {
+        log.warn(`Error while processing getOpenOrdersPage(${paramString}) request results: ${JSON.stringify(data)}. ${e}`);
+        return undefined;
+      }
+    },
+
+    /**
+     * List of all account open orders
+     * @param {String} pair
+     * @returns {Promise<*[]|undefined>}
+     */
+    async getOpenOrders(pair) {
+      let allOrders = [];
+      let ordersInfo;
+      let offset = 0;
+      const limit = 100;
+
+      do {
+        ordersInfo = await this.getOpenOrdersPage(pair, offset, limit);
+        if (!ordersInfo) return undefined;
+        allOrders = allOrders.concat(ordersInfo);
+        offset += limit;
+      } while (ordersInfo.length === limit);
+
+      return allOrders;
+    },
+
+    /**
+     * Cancel an order
+     * @param {String} orderId
+     * @param {String} side Not used for P2PB2B
+     * @param {String} pair
+     * @returns {Promise<unknown>}
+     */
+    cancelOrder(orderId, side, pair) {
+      const paramString = `orderId: ${orderId}, side: ${side}, pair: ${pair}`;
+      const pair_ = formatPairName(pair);
+
+      return new Promise((resolve, reject) => {
+        AzbitClient.cancelOrder(orderId, pair_.pair).then(function(data) {
+          if (data?.success && data?.result?.orderId) {
+            log.log(`Cancelling order ${data.result.orderId} on ${pair_.pairReadable} pair…`);
+            resolve(true);
+          } else {
+            const errorMessage = data?.p2bErrorInfo || 'No details';
+            log.log(`Unable to cancel ${orderId} on ${pair_.pairReadable}: ${errorMessage}.`);
+            resolve(false);
+          }
+        }).catch((err) => {
+          log.warn(`API request cancelOrder(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
+          resolve(undefined);
+        });
+      });
+    },
+
+    getRates(pair) {
+      const paramString = `pair: ${pair}`;
+      const pair_ = formatPairName(pair);
+
+      return new Promise((resolve, reject) => {
+        AzbitClient.ticker(pair_.pair).then(function(data) {
+          try {
+            if (!data.success) {
+              throw new Error(`Request failed with data ${JSON.stringify(data)}.`);
+            }
+
+            ticker = data.result;
+
+            resolve({
+              ask: +ticker.ask,
+              bid: +ticker.bid,
+              volume: +ticker.volume,
+              volumeInCoin2: +ticker.deal,
+              high: +ticker.high,
+              low: +ticker.low,
+            });
+          } catch (e) {
+            log.warn(`Error while processing getRates(${paramString}) request: ${e}`);
+            resolve(undefined);
+          };
+        }).catch((err) => {
+          log.warn(`API request getRates(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
+          resolve(undefined);
+        });
+      });
+    },
+
+    placeOrder(orderType, pair, price, coin1Amount, limit = 1, coin2Amount) {
+      const paramString = `orderType: ${orderType}, pair: ${pair}, price: ${price}, coin1Amount: ${coin1Amount}, limit: ${limit}, coin2Amount: ${coin2Amount}`;
+
+      const marketInfo = this.marketInfo(pair);
+
+      let message;
+
+      if (!marketInfo) {
+        message = `Unable to place an order on ${exchangeName} exchange. I don't have info about market ${pair}.`;
+        log.warn(message);
+        return {
+          message,
+        };
+      }
+
+      // for Limit orders, calculate coin1Amount if only coin2Amount is provided
+      if (!coin1Amount && coin2Amount && price) {
+        coin1Amount = coin2Amount / price;
+      }
+
+      // for Limit orders, calculate coin2Amount if only coin1Amount is provided
+      if (!coin2Amount && coin1Amount && price) {
+        coin2Amount = coin1Amount * price;
+      }
+
+      if (coin1Amount) {
+        coin1Amount = +(+coin1Amount).toFixed(marketInfo.coin1Decimals);
+      }
+      if (coin2Amount) {
+        coin2Amount = +(+coin2Amount).toFixed(marketInfo.coin2Decimals);
+      }
+      if (price) {
+        price = +(+price).toFixed(marketInfo.coin2Decimals);
+      }
+
+      if (coin1Amount < marketInfo.coin1MinAmount) {
+        message = `Unable to place an order on ${exchangeName} exchange. Order amount ${coin1Amount} ${marketInfo.coin1} is less minimum ${marketInfo.coin1MinAmount} ${marketInfo.coin1} on ${marketInfo.pairReadable} pair.`;
+        log.warn(message);
+        return {
+          message,
+        };
+      }
+
+      if (coin2Amount < marketInfo.coin2MinAmount) {
+        message = `Unable to place an order on ${exchangeName} exchange. Order volume ${coin2Amount} ${marketInfo.coin2} is less minimum ${marketInfo.coin2MinAmount} ${marketInfo.coin2} on ${marketInfo.pairReadable} pair.`;
+        log.warn(message);
+        return {
+          message,
+        };
+      }
+
+      const order = {};
+      let output;
+
+      if (limit) { // Limit order
+        output = `${orderType} ${coin1Amount} ${marketInfo.coin1} at ${price} ${marketInfo.coin2}.`;
+
+        return new Promise((resolve, reject) => {
+          AzbitClient.addOrder(marketInfo.pairPlain, coin1Amount, price, orderType).then(function(data) {
+            try {
+              const result = data.result;
+
+              if (data.success && result?.orderId) {
+                message = `Order placed to ${output} Order Id: ${result.orderId}.`;
+                log.info(message);
+                order.orderId = result.orderId.toString();
+                order.message = message;
+                resolve(order);
+              } else {
+                message = `Unable to place order to ${output} Check parameters and balances. Details: ${data.p2bErrorInfo}.`;
+                log.warn(message);
+                order.orderId = false;
+                order.message = message;
+                resolve(order);
+              }
+            } catch (e) {
+              message = `Error while processing placeOrder(${paramString}) request: ${e}`;
+              log.warn(message);
+              order.orderId = false;
+              order.message = message;
+              resolve(order);
+            };
+          }).catch((err) => {
+            log.warn(`API request addOrder(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
+            resolve(undefined);
+          });
+        });
+
+      } else { // Market order
+        message = `Unable to place order to ${output} ${exchangeName} doesn't support Market orders.`;
+        log.warn(message);
+        order.orderId = false;
+        order.message = message;
+        return Promise.resolve(order);
+      }
+    }, // placeOrder()
+
+    getOrderBook(pair) {
+      const paramString = `pair: ${pair}`;
+      const pair_ = formatPairName(pair);
+
+      return new Promise((resolve, reject) => {
+        AzbitClient.orderBook(pair_.pair).then(function(data) {
+          try {
+            if (!data.success) {
+              throw new Error(`Request failed with data ${JSON.stringify(data)}.`);
+            }
+
+            const book = data.result;
+
+            const result = {
+              bids: [],
+              asks: [],
+            };
+
+            book.asks.forEach((crypto) => {
+              result.asks.push({
+                amount: +crypto[1],
+                price: +crypto[0],
+                count: 1,
+                type: 'ask-sell-right',
+              });
+            });
+            result.asks.sort(function(a, b) {
+              return parseFloat(a.price) - parseFloat(b.price);
+            });
+
+            book.bids.forEach((crypto) => {
+              result.bids.push({
+                amount: +crypto[1],
+                price: +crypto[0],
+                count: 1,
+                type: 'bid-buy-left',
+              });
+            });
+            result.bids.sort(function(a, b) {
+              return parseFloat(b.price) - parseFloat(a.price);
+            });
+
+            resolve(result);
+          } catch (e) {
+            log.warn(`Error while processing orderBook(${paramString}) request: ${e}`);
+            resolve(undefined);
+          };
+        }).catch((err) => {
+          log.warn(`API request getOrderBook(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
+          resolve(undefined);
+        });
+      });
+    },
+
+    getTradesHistory(pair, limit) {
+      const paramString = `pair: ${pair}, limit: ${limit}`;
+      const pair_ = formatPairName(pair);
+
+      return new Promise((resolve, reject) => {
+        AzbitClient.getTradesHistory(pair_.pair, limit).then(function(data) {
+          try {
+
+            const trades = data.result;
+
+            const result = [];
+
+            trades.forEach((trade) => {
+              result.push({
+                coin1Amount: +trade.amount, // amount in coin1
+                price: +trade.price, // trade price
+                coin2Amount: +trade.amount * +trade.price, // quote in coin2
+                date: Math.round(trade.time), // 1546505899.001003
+                type: trade.type, // 'buy' or 'sell'
+                tradeId: trade.id?.toString(),
+              });
+            });
+
+            // We need ascending sort order
+            result.sort(function(a, b) {
+              return parseFloat(a.date) - parseFloat(b.date);
+            });
+
+            resolve(result);
+          } catch (e) {
+            log.warn(`Error while processing getTradesHistory(${paramString}) request: ${e}`);
+            resolve(undefined);
+          };
+        }).catch((err) => {
+          log.log(`API request getTradesHistory(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}.`);
+          resolve(undefined);
+        });
+      });
+    },
+
+    getDepositAddress(coin) {
+      // Not available for P2PB2B
+    },
+  };
+};
+
+/**
+ * Returns pair in P2PB2B format like ETH_USDT
+ * @param pair Pair in any format
+ * @returns { Object }
+ */
+function formatPairName(pair) {
+  pair = pair?.toUpperCase();
+
+  if (pair.indexOf('-') > -1) {
+    pair = pair.replace('-', '_').toUpperCase();
+  } else {
+    pair = pair.replace('/', '_').toUpperCase();
+  }
+
+  const [coin1, coin2] = pair.split('_');
+
+  return {
+    pair,
+    pairReadable: `${coin1}/${coin2}`,
+    pairPlain: `${coin1}_${coin2}`,
+    coin1,
+    coin2,
+  };
+}
+
+/**
+ * Returns pair in classic format like ETH/USDT
+ * @param pair Pair in P2PB2B format ETH_USDT
+ * @returns { Object }
+ */
+function deformatPairName(pair) {
+  pair = pair?.toUpperCase();
+  const [coin1, coin2] = pair.split('_');
+
+  return {
+    pair: `${coin1}/${coin2}`,
+    pairReadable: `${coin1}/${coin2}`,
+    pairPlain: `${coin1}_${coin2}`,
+    coin1,
+    coin2,
+  };
+}

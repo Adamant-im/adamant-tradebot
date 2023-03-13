@@ -8,6 +8,7 @@ const equal = require('fast-deep-equal');
 const AVERAGE_SPREAD_DEVIATION = 0.15;
 
 module.exports = {
+
   saveConfig(isWebApi = false) {
     let oldConfig;
     eval(fs.readFileSync(config.fileWithPath).toString().replace('module.exports', 'oldConfig'));
