@@ -65,10 +65,10 @@
   "clearAllOrdersInterval": 0,
 
   /** Exchange's account API key for connection **/
-  "apikey": "78zhich2nXOImUb6dY9mi5YO30qb5UFHL0EKzA",
+  "apikey": "dMwnxoAlDxp9QzPw-j2FYhJMnU6bwrn2dAghZg",
 
   /** Exchange's account API secret for connection **/
-  "apisecret": "9vGwCahL2rR3Wbzxod4L3f6T5wdHINWFNcubNqQyIlJyFAWdrG1fMy5iSECEB-r3CuT4aA",
+  "apisecret": "zpwmLK8dlhdFwBVMUsyf2esH93pWbHayFawJBImpno5rX3O7IXUQ0xLUHUCovYzg7UXTNQ",
 
   /** Exchange's account trade password **/
   "apipassword": "YOUR-TRADE-PASS",

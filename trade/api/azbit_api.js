@@ -15,7 +15,6 @@ module.exports = function() {
   };
   let log = {};
 
-  // https://github.com/P2pb2b-team/p2pb2b-api-docs/blob/master/errors.md
   const notValidStatuses = [
     401, // ~Invalid auth, payload, nonce
     429, // Too many requests
@@ -39,10 +38,13 @@ module.exports = function() {
     const httpMessage = responseOrError?.statusText;
     const azbitData = responseOrError?.data;
 
-    //console.log('responseOrError: ' + JSON.stringify(responseOrError));
-    console.log('ResponseOrError.status: ' + responseOrError.status);
-    console.log('ResponseOrError.code: ' + responseOrError?.response?.code);
-    //console.log('azbitData: ' + JSON.stringify(azbitData));
+    /*
+      Axios Response struct:
+      status, statusText, headers, config, request, data
+     */
+
+    console.log('responseOrError: ' + JSON.stringify(Object.keys(responseOrError)));
+    console.log('[ResponseOrError] status: ' + responseOrError.status + ' statusText: ' + httpMessage);
     const azbitErrorMessage = utils.trimAny(azbitData?.message || azbitData?.errors?.message?.[0], '. ');
     const azbitErrorInfo = `${utils.trimAny(azbitErrorMessage, ' .')}`;
 
@@ -50,21 +52,15 @@ module.exports = function() {
     const reqParameters = queryString || bodyString || '{ No parameters }';
 
     try {
-      if (azbitData) {
-        if (httpCode === 200 && httpMessage === 'OK')
-          resolve(azbitData);
-        else
-          if (notValidStatuses.includes(httpCode)) {
-            log.log(`Azbit request to ${url} with data ${reqParameters} failed: ${errorMessage}. Rejecting…`);
-            reject(azbitData);
-          } else {
-            log.log(`Azbit processed a request to ${url} with data ${reqParameters}, but with error: ${errorMessage}. Resolving…`);
-            resolve(azbitData);
-          }
-      }
-      else {
-        log.warn(`Request to ${url} with data ${reqParameters} failed: ${errorMessage}. Rejecting…`);
-        reject(errorMessage);
+      if (httpCode === 200 && httpMessage === 'OK') {
+        resolve(azbitData);
+      } else
+      if (notValidStatuses.includes(httpCode)) {
+        log.log(`Azbit request to ${url} with data ${reqParameters} failed: ${errorMessage}. Rejecting…`);
+        reject(azbitData);
+      } else {
+        log.log(`Azbit processed a request to ${url} with data ${reqParameters}, but with error: ${errorMessage}. Resolving…`);
+        resolve(azbitData);
       }
     } catch (e) {
       log.warn(`Error while processing response of request to ${url} with data ${reqParameters}: ${e}. Data object I've got: ${JSON.stringify(azbitData)}.`);
@@ -73,7 +69,7 @@ module.exports = function() {
   };
 
   function getQueryStringFromData(data) {
-    let params = [];
+    const params = [];
     for (const key in data) {
       const v = data[key];
       params.push(key + '=' + v);
@@ -99,18 +95,18 @@ module.exports = function() {
       const httpOptions = {
         url: url,
         method: 'get',
-        timeout: 10000,
+        timeout: 30000,
         headers: DEFAULT_HEADERS,
       };
 
       console.log('queryString: ' + queryString + 'typeof: ' + typeof queryString);
       axios(httpOptions)
-        .then((response) => handleResponse(response, resolve, reject, undefined, queryString, urlBase))
-        .catch((error) => handleResponse(error, resolve, reject, undefined, queryString, urlBase));
+          .then((response) => handleResponse(response, resolve, reject, undefined, queryString, urlBase))
+          .catch((error) => handleResponse(error, resolve, reject, undefined, queryString, urlBase));
     });
   }
 
-  function protectedRequest(path, method='GET', data) {
+  function protectedRequest(path, data, method='get') {
     let url = `${WEB_BASE}${path}`;
     const urlBase = url;
 
@@ -118,25 +114,26 @@ module.exports = function() {
     let bodyString;
 
     try {
-
-      /*data = {
-        ...data,
-        request: `${WEB_BASE_PREFIX}${path}`,
-        nonce: Date.now(),
-      };*/
+      console.log('method: ' + JSON.stringify(method) + ' data.length: ' + Object.keys(data).length);
       if (method.toLowerCase() === 'get') {
         bodyString = '';
         url = makeUrlFromData(url, data);
-      }
-      else {
-        bodyString = getBody(data);
+      } else {
+        if (Object.keys(data).length > 0) {
+          bodyString = getBody(data);
+        }
+        else {
+          bodyString = '';
+        }
       }
 
       console.log('url: ' + JSON.stringify(url) + '  bodyString: ' + bodyString);
+      const signature = getSignature(url, bodyString)
+      console.log('signature: ' + signature.toString());
       headers = {
         ...DEFAULT_HEADERS,
         'API-PublicKey': config.apiKey,
-        'API-Signature': getSignature(url, bodyString),
+        'API-Signature': signature.toString().trim(),
       };
     } catch (err) {
       log.log(`Processing of request to ${url} with data ${bodyString} failed. ${err}.`);
@@ -145,17 +142,18 @@ module.exports = function() {
 
     return new Promise((resolve, reject) => {
       let httpOptions = {
+        method: method,
         url: url,
         timeout: 30000,
         headers: headers,
       };
-      if (method.toLowerCase() !== 'get') {
-        httpOptions = Object.assign(httpOptions, data, {method: method});
+      if (method.toLowerCase() !== 'get' && Object.keys(data).length > 0) {
+        httpOptions = Object.assign(httpOptions, { data: data });
       }
 
       axios(httpOptions)
-        .then((response) => handleResponse(response, resolve, reject, bodyString, undefined, urlBase))
-        .catch((error) => handleResponse(error, resolve, reject, bodyString, undefined, urlBase));
+          .then((response) => handleResponse(response, resolve, reject, bodyString, undefined, urlBase))
+          .catch((error) => handleResponse(error, resolve, reject, bodyString, undefined, urlBase));
     });
   }
 
@@ -163,14 +161,9 @@ module.exports = function() {
     return JSON.stringify(data);
   };
 
-  const getPayload = (body) => {
-    return new Buffer.from(body).toString('base64');
-  };
-
   const getSignature = (url, payload) => {
     console.log('signature data: ' + config.apiKey + url + payload);
     return crypto.createHmac('sha256', config.secret_key).update(config.apiKey + url + payload).digest('hex');
-    //return crypto.createHmac('sha512', config.secret_key).update(payload).digest('hex');
   };
 
   const EXCHANGE_API = {
@@ -197,59 +190,60 @@ module.exports = function() {
      */
     getBalances: function() {
       const data = {};
-      return protectedRequest('/wallets/balances', 'get', data);
+      return protectedRequest('/wallets/balances', data, 'get');
     },
 
     /**
      * Query account active orders
-     * @param {String} pair In P2PB2B format as ETH_USDT
-     * @param {Number} limit min 1, default 50, max 100
-     * @param {Number} offset min 0, default 0, max 10000
+     * @param {String} pair In Azbit format as ETH_USDT
+     * @param {String} status ["all", "active", "cancelled"]
      * @return {Object}
-     * https://github.com/P2B-team/p2b-api-docs/blob/master/api-doc.md#order-list
+     *
      */
-    getOrders: function(pair, offset = 0, limit = 100) {
+    getOrders: function(pair, status='active') {
       const data = {};
       if (pair) data.currencyPairCode = pair;
-      data.status = "active";
-      if (offset) data.offset = offset;
-      if (limit) data.limit = limit;
-
+      data.status = status;
       return protectedRequest('/user/orders', data);
     },
 
     /**
-     * Places a Limit order. P2PB2B doesn't support market orders.
-     * @param {String} market In P2PB2B format as ETH_USDT
-     * @param {String} amount Order amount
-     * @param {String} price Order price
+     * Places a order
+     * @param {String} market In Azbit format as ETH_USDT
+     * @param {Number} amount Order amount
+     * @param {Number} price Order price
      * @param {String} side 'buy' or 'sell'
-     * https://github.com/P2B-team/p2b-api-docs/blob/master/api-doc.md#create-order
      */
     addOrder: function(market, amount, price, side) {
       const data = {
-        market,
-        amount: String(amount),
-        price: String(price),
-        side,
+        side: side,
+        currencyPairCode: market,
+        amount: amount,
+        price: price,
       };
 
-      return protectedRequest('/order/new', data);
+      return protectedRequest('/orders', data, 'post');
     },
 
     /**
      * Cancel an order
      * @param {String} orderId
-     * @param {String} market
      * @return {Object}
      */
-    cancelOrder: function(orderId, market) {
-      const data = {
-        orderId,
-        market,
-      };
+    cancelOrder: function(orderId) {
+      const data = {};
+      return protectedRequest(`/orders/${orderId}`, data, 'delete');
+    },
 
-      return protectedRequest('/order/cancel', data);
+    /**
+     * Cancel all orders for currency pair
+     * @param {String} pair
+     * @returns {Promise<never>|Promise<unknown>}
+     */
+
+    cancelAllOrders: function(pair) {
+      const data = {};
+      return protectedRequest(`/orders?currencyPairCode=${pair}`, data, 'delete');
     },
 
     /**
@@ -258,27 +252,22 @@ module.exports = function() {
      * @return {Object}
      */
     ticker: function(market) {
-      const data = {
-        market,
-      };
-
-      return publicRequest('/public/ticker', data);
+      const data = {};
+      data.currencyPairCode = market;
+      return publicRequest('/tickers', data);
     },
 
     /**
      * Get market depth
-     * https://github.com/P2pb2b-team/p2pb2b-api-docs/blob/master/api-doc.md#depth-result
      * @param pair
-     * @param {Number} limit min 1, default 50, max 100
-     * @param {Number} interval One of 0, 0.00000001, 0.0000001, 0.000001, 0.00001, 0.0001, 0.001, 0.01, 0.1, 1. Default 0.
      * @return {Object}
      */
-    orderBook: function(pair, limit = 100, interval = 0) {
+    orderBook: function(pair) {
       const data = {};
-      data.market = pair;
-      if (limit) data.limit = limit;
-      if (interval) data.interval = interval;
-      return publicRequest('/public/depth/result', data);
+      data.currencyPairCode = pair;
+      // if (limit) data.limit = limit;
+      // if (interval) data.interval = interval;
+      return publicRequest('/orderbook', data);
     },
 
     /**
@@ -287,15 +276,45 @@ module.exports = function() {
      * @param market Trading pair, like BTC_USDT
      * @param pageSize
      * @return {Object} Last trades
-     * https://github.com/P2B-team/p2b-api-docs/blob/master/api-doc.md#history
      */
     getTradesHistory: function(market, pageSize = 500) {
       const data = {
-        market,
         pageSize,
       };
+      data.currencyPairCode = market;
 
       return publicRequest(`/deals`, data);
+    },
+
+    /**
+     * Get all crypto currencies
+     * @returns {Promise<unknown>}
+     */
+
+    getCurrencies() {
+      const data = {};
+      return publicRequest('/currencies', data);
+    },
+
+    /**
+     * Get user deposit address
+     * @param coin
+     * @returns {Promise<never>|Promise<unknown>}
+     */
+
+    getDepositAddress: function(coin) {
+      const data = {};
+      return protectedRequest(`/deposit-address/${coin}`);
+    },
+
+    /**
+     * Get fees
+     * @returns {Promise<unknown>}
+     */
+
+    getFees: function() {
+      const data = {};
+      return publicRequest('/currencies/commissions');
     },
 
     /**
