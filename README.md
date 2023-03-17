@@ -2,6 +2,16 @@ ADAMANT Trading & Market making bot is a software that allows to run trades on c
 
 This is a free version. For premium features, see [marketmaking.app/services](https://marketmaking.app/services/).
 
+# Changes for Azbit API:
+
+1) Rewritten methods in /trade/api/azbit_api.js
+2) Rewritten methods in /trade/trader_azbit.js
+3) Settings in /trade/settings/tradeParams_azbit.js - no changes
+4) Tests for trader_azbit in /trade/tests/api_test.js
+5) Tests for azbit_api.js (Endpoints + swagger) in /trade/tests/server.js:
+  node ./trade/tests/server.js (5000 port)
+  swagger docs: http://localhost:5000/api-doc
+
 # Market making
 
 In Market making mode, the bot places orders and executes them by itself, making a trade volume, maintaining spread and liquidity; builds live-like dynamic order books and watches a token price. Market making helps:

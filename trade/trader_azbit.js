@@ -441,12 +441,12 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
       });
     },
 
-    getTradesHistory(pair, limit) {
+    async getTradesHistoryPage(pair, page, limit = 500) {
       const paramString = `pair: ${pair}, limit: ${limit}`;
       const pair_ = formatPairName(pair);
 
       return new Promise((resolve, reject) => {
-        AzbitClient.getTradesHistory(pair_.pair, limit).then(function(data) {
+        AzbitClient.getTradesHistory(pair_.pair, page, limit).then(function(data) {
           try {
             const trades = data;
             const result = [];
@@ -486,6 +486,23 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
         });
       });
     },
+
+    async getTradesHistory() {
+      let allTrades = [];
+      let ordersInfo;
+      let page = 1;
+      const limit = 5000;
+
+      do {
+        ordersInfo = await this.getTradesHistoryPage(pair, page);
+        if (ordersInfo)
+        {
+          allTrades = allTrades.concat(ordersInfo);
+        }
+        page += 1;
+      } while (ordersInfo.length === limit);
+    },
+
 
     getCurrencies() {
       const paramString = ``;

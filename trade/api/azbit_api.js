@@ -34,17 +34,18 @@ module.exports = function() {
    * @param {String} url
    */
   const handleResponse = (responseOrError, resolve, reject, bodyString, queryString, url) => {
-    const httpCode = responseOrError?.status;
-    const httpMessage = responseOrError?.statusText;
-    const azbitData = responseOrError?.data;
+    const httpCode = responseOrError?.response?.status || responseOrError?.status;
+    const httpMessage = responseOrError?.response?.statusText || responseOrError?.statusText;
+    const azbitData = responseOrError?.response?.data || responseOrError?.data;
 
     /*
       Axios Response struct:
       status, statusText, headers, config, request, data
      */
 
-    console.log('responseOrError: ' + JSON.stringify(Object.keys(responseOrError)));
-    console.log('[ResponseOrError] status: ' + responseOrError.status + ' statusText: ' + httpMessage);
+    console.log('responseOrError keys : ' + JSON.stringify(Object.keys(responseOrError)));
+    // console.log('responseOrError.response: ' + JSON.stringify(Object.keys(responseOrError?.response)));
+    console.log('[ResponseOrError] status: ' + responseOrError.status + ' statusText: ' + httpMessage + ' response: ' + JSON.stringify(azbitData));
     const azbitErrorMessage = utils.trimAny(azbitData?.message || azbitData?.errors?.message?.[0], '. ');
     const azbitErrorInfo = `${utils.trimAny(azbitErrorMessage, ' .')}`;
 
@@ -95,7 +96,7 @@ module.exports = function() {
       const httpOptions = {
         url: url,
         method: 'get',
-        timeout: 30000,
+        timeout: 10000,
         headers: DEFAULT_HEADERS,
       };
 
@@ -144,7 +145,7 @@ module.exports = function() {
       let httpOptions = {
         method: method,
         url: url,
-        timeout: 30000,
+        timeout: 10000,
         headers: headers,
       };
       if (method.toLowerCase() !== 'get' && Object.keys(data).length > 0) {
@@ -248,12 +249,12 @@ module.exports = function() {
 
     /**
      * Get trade details for a ticker (market rates)
-     * @param {String} market
+     * @param {String} pair
      * @return {Object}
      */
-    ticker: function(market) {
+    ticker: function(pair) {
       const data = {};
-      data.currencyPairCode = market;
+      data.currencyPairCode = pair;
       return publicRequest('/tickers', data);
     },
 
@@ -272,23 +273,23 @@ module.exports = function() {
 
     /**
      * Get trades history
-     * Results are cached for ~5s
-     * @param market Trading pair, like BTC_USDT
+     * @param pair Trading pair, like BTC_USDT
+     * @param page
      * @param pageSize
      * @return {Object} Last trades
      */
-    getTradesHistory: function(market, pageSize = 500) {
+    getTradesHistory: function(pair, page, pageSize = 500) {
       const data = {
-        pageSize,
+        pageNumber: page,
+        pageSize: pageSize,
+        currencyPairCode: pair,
       };
-      data.currencyPairCode = market;
-
       return publicRequest(`/deals`, data);
     },
 
     /**
      * Get all crypto currencies
-     * @returns {Promise<unknown>}
+     * @returns {Object}
      */
 
     getCurrencies() {
@@ -299,29 +300,29 @@ module.exports = function() {
     /**
      * Get user deposit address
      * @param coin
-     * @returns {Promise<never>|Promise<unknown>}
+     * @returns {Object}
      */
 
     getDepositAddress: function(coin) {
       const data = {};
-      return protectedRequest(`/deposit-address/${coin}`);
+      return protectedRequest(`/deposit-address/${coin}`, data);
     },
 
     /**
-     * Get fees
-     * @returns {Promise<unknown>}
+     * Get currency pairs commissions
+     * @returns {Object}
      */
 
     getFees: function() {
       const data = {};
-      return publicRequest('/currencies/commissions');
+      return publicRequest('/currencies/commissions', data);
     },
 
     /**
      * Get info on all markets
      * @return string
      */
-    markets: function() {
+    markets: async function() {
       const data = {};
       return publicRequest('/currencies/pairs', data);
     },

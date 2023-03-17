@@ -1,0 +1,1024 @@
+{
+  "openapi": "3.0.1",
+  "info": {
+    "title": "Azbit API",
+    "description": "This API is connector for Azbit exchange. \\\nFor protected methods use should set up API-Key and API-Secret\n",
+    "contact": {
+      "email": "breakthevoid@gmail.com"
+    },
+    "license": {
+      "name": "Apache 2.0",
+      "url": "http://www.apache.org/licenses/LICENSE-2.0.html"
+    },
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "https://virtserver.swaggerhub.com/BREAKTHEVOID_1/AzbitAPI/1.0.0",
+      "description": "SwaggerHub API Auto Mocking"
+    },
+    {
+      "url": "http://localhost:5000/api",
+      "description": "Test Server"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Wallets",
+      "description": "Operations on user wallet"
+    },
+    {
+      "name": "Currencies",
+      "description": "Operations on currencies"
+    },
+    {
+      "name": "Orders",
+      "description": "Operations with orders"
+    },
+    {
+      "name": "Deals",
+      "description": "Operations with deals"
+    },
+    {
+      "name": "Marketdata",
+      "description": "Operations with market stats"
+    }
+  ],
+  "paths": {
+    "/balances": {
+      "get": {
+        "tags": [
+          "Wallets"
+        ],
+        "summary": "Get user balances for all currencies",
+        "description": "Protected method\n",
+        "operationId": "getBalances",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Balances"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "bad input parameter"
+          }
+        }
+      }
+    },
+    "/deposit-address/{coin}": {
+      "get": {
+        "tags": [
+          "Wallets"
+        ],
+        "summary": "Get information for deposit",
+        "description": "Method: protected\n",
+        "operationId": "getDepositInfo",
+        "parameters": [
+          {
+            "name": "coin",
+            "in": "path",
+            "description": "Currency code",
+            "required": true,
+            "style": "simple",
+            "explode": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DepositAddress"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "bad input parameter"
+          }
+        }
+      }
+    },
+    "/markets": {
+      "get": {
+        "tags": [
+          "Currencies"
+        ],
+        "summary": "Get currencies pairs settings",
+        "description": "Method: public\n",
+        "operationId": "getMarket",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CurrencyPairSetting"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "bad input parameter"
+          }
+        }
+      }
+    },
+    "/currencies": {
+      "get": {
+        "tags": [
+          "Currencies"
+        ],
+        "summary": "List of currencies codes",
+        "description": "Method: public\n",
+        "operationId": "getCurrencies",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "bad input parameter"
+          }
+        }
+      }
+    },
+    "/fees": {
+      "get": {
+        "tags": [
+          "Currencies"
+        ],
+        "summary": "Get currencies pairs commissions",
+        "description": "Method: public\n",
+        "operationId": "getFees",
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Commission"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "bad input parameter"
+          }
+        }
+      }
+    },
+    "/orders": {
+      "get": {
+        "tags": [
+          "Orders"
+        ],
+        "summary": "Get orders of user",
+        "description": "Method: protected\n",
+        "operationId": "getUserOrders",
+        "parameters": [
+          {
+            "name": "pair",
+            "in": "query",
+            "description": "currency pair code",
+            "required": false,
+            "style": "form",
+            "explode": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "description": "\"all\"/\"active\"/\"canceled\"",
+            "required": false,
+            "style": "form",
+            "explode": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PlacedOrder"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "bad input parameter"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Orders"
+        ],
+        "summary": "Create buy or sell Limit order",
+        "description": "Method: protected\n",
+        "operationId": "PlaceOrder",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NewOrder"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Order GUID string. Example: \"e2cd407c-28c8-4768-bd73-cd7357fbccde\"\n"
+          },
+          "400": {
+            "description": "bad input parameter"
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Orders"
+        ],
+        "summary": "Delete all user orders on currency pair",
+        "description": "Method: protected\n",
+        "operationId": "DeleteAllOrders",
+        "parameters": [
+          {
+            "name": "pair",
+            "in": "query",
+            "required": false,
+            "style": "form",
+            "explode": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/orders/{orderId}": {
+      "delete": {
+        "tags": [
+          "Orders"
+        ],
+        "summary": "Delete selected order",
+        "description": "Method: protected\n",
+        "operationId": "DeleteOrder",
+        "parameters": [
+          {
+            "name": "orderId",
+            "in": "path",
+            "required": true,
+            "style": "simple",
+            "explode": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/orderbook": {
+      "get": {
+        "tags": [
+          "Orders"
+        ],
+        "summary": "Get stack of orders (40 bids + 40 asks)",
+        "description": "Method: public\n",
+        "operationId": "getOrderBook",
+        "parameters": [
+          {
+            "name": "pair",
+            "in": "query",
+            "description": "currency pair code",
+            "required": false,
+            "style": "form",
+            "explode": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/OrderbookLevel"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "bad input parameter"
+          }
+        }
+      }
+    },
+    "/deals": {
+      "get": {
+        "tags": [
+          "Deals"
+        ],
+        "summary": "Get history of trades for currency pair",
+        "description": "Method: public\n",
+        "operationId": "getTradesHistory",
+        "parameters": [
+          {
+            "name": "pair",
+            "in": "query",
+            "description": "currency pair code",
+            "required": false,
+            "style": "form",
+            "explode": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "style": "form",
+            "explode": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DealHistory"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "bad input parameter"
+          }
+        }
+      }
+    },
+    "/tickers": {
+      "get": {
+        "tags": [
+          "Marketdata"
+        ],
+        "summary": "Get trade details for a ticker (markets rates)",
+        "description": "Method: public\n",
+        "operationId": "getTickers",
+        "parameters": [
+          {
+            "name": "pair",
+            "in": "query",
+            "description": "currency pair code",
+            "required": false,
+            "style": "form",
+            "explode": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Success",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Ticker"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "bad input parameter"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Balances": {
+        "type": "object",
+        "properties": {
+          "balances": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/Balance"
+            }
+          },
+          "balancesBlockedInOrder": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/Balance"
+            }
+          },
+          "balancesInCurrencyOfferingsVesting": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/Balance"
+            }
+          },
+          "withdrawalLimits": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/WithdrawalLimitApi"
+            }
+          },
+          "currencies": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/CurrencyDto"
+            }
+          },
+          "totalBtc": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "totalUsdt": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "totalInternalToken": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "totalInOrderBtc": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "totalInOrderUsdt": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "totalInOrderInternalToken": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "cantRefill": {
+            "type": "boolean"
+          },
+          "cantWithdraw": {
+            "type": "boolean"
+          },
+          "digitsBtc": {
+            "type": "integer",
+            "format": "int32",
+            "readOnly": true
+          },
+          "digitsUsdt": {
+            "type": "integer",
+            "format": "int32",
+            "readOnly": true
+          },
+          "digitsInternalToken": {
+            "type": "integer",
+            "format": "int32",
+            "readOnly": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "Balance": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "number",
+            "format": "double"
+          },
+          "amountBtc": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "amountUsdt": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "amountInternalToken": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "currencyCode": {
+            "type": "string",
+            "nullable": true
+          },
+          "currencyName": {
+            "type": "string",
+            "nullable": true
+          },
+          "digits": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "currencyIsFiat": {
+            "type": "boolean"
+          }
+        },
+        "additionalProperties": false
+      },
+      "WithdrawalLimitApi": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "currencyCode": {
+            "type": "string",
+            "nullable": true
+          },
+          "minAmount": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "additionalProperties": false
+      },
+      "ChainEnum": {
+        "type": "integer",
+        "format": "int32",
+        "enum": [
+          10,
+          20,
+          30,
+          40,
+          50,
+          60,
+          70,
+          80,
+          90,
+          100,
+          110,
+          120,
+          130,
+          140,
+          150,
+          160,
+          170,
+          180,
+          190,
+          200,
+          210,
+          220,
+          230,
+          240,
+          250,
+          260,
+          270,
+          280,
+          290,
+          300,
+          310,
+          320,
+          330,
+          340
+        ]
+      },
+      "CurrencyChainDto": {
+        "type": "object",
+        "properties": {
+          "chainId": {
+            "$ref": "#/components/schemas/ChainEnum"
+          },
+          "isNativeToken": {
+            "type": "boolean"
+          },
+          "contractAddress": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "CurrencyDto": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "nullable": true
+          },
+          "value": {
+            "type": "string",
+            "nullable": true
+          },
+          "isHalted": {
+            "type": "boolean"
+          },
+          "isFiat": {
+            "type": "boolean"
+          },
+          "digits": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "allowDeposits": {
+            "type": "boolean"
+          },
+          "allowWithdrawals": {
+            "type": "boolean"
+          },
+          "networkConfirmations": {
+            "type": "string",
+            "nullable": true
+          },
+          "website": {
+            "type": "string",
+            "nullable": true
+          },
+          "whitePaper": {
+            "type": "string",
+            "nullable": true
+          },
+          "about": {
+            "type": "string",
+            "nullable": true
+          },
+          "issuingTime": {
+            "type": "string",
+            "nullable": true
+          },
+          "issuingPrice": {
+            "type": "string",
+            "nullable": true
+          },
+          "totalSupply": {
+            "type": "string",
+            "nullable": true
+          },
+          "currencyChains": {
+            "type": "array",
+            "nullable": true,
+            "items": {
+              "$ref": "#/components/schemas/CurrencyChainDto"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "Ticker": {
+        "type": "object",
+        "properties": {
+          "timestamp": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "currencyPairCode": {
+            "type": "string",
+            "nullable": true
+          },
+          "price": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "price24hAgo": {
+            "type": "number",
+            "format": "double",
+            "nullable": true
+          },
+          "priceChangePercentage24h": {
+            "type": "number",
+            "format": "double"
+          },
+          "volume24h": {
+            "type": "number",
+            "format": "double"
+          },
+          "bidPrice": {
+            "type": "number",
+            "format": "double"
+          },
+          "askPrice": {
+            "type": "number",
+            "format": "double"
+          }
+        },
+        "additionalProperties": false
+      },
+      "OrderbookLevel": {
+        "type": "object",
+        "properties": {
+          "isBid": {
+            "type": "boolean"
+          },
+          "price": {
+            "type": "number",
+            "format": "double"
+          },
+          "amount": {
+            "type": "number",
+            "format": "double"
+          },
+          "currencyTo": {
+            "type": "number",
+            "format": "double",
+            "deprecated": true
+          },
+          "quoteAmount": {
+            "type": "number",
+            "format": "double"
+          },
+          "currencyFrom": {
+            "type": "number",
+            "format": "double",
+            "deprecated": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "DealHistory": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "dealDateUtc": {
+            "type": "string",
+            "nullable": true
+          },
+          "currencyPairCode": {
+            "type": "string",
+            "nullable": true
+          },
+          "volume": {
+            "type": "number",
+            "format": "double"
+          },
+          "price": {
+            "type": "number",
+            "format": "double"
+          },
+          "isBuy": {
+            "type": "boolean"
+          },
+          "isUserBuyer": {
+            "type": "boolean",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "CurrencyPairSetting": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "CurrencyPairCode",
+            "nullable": true
+          },
+          "digitsPrice": {
+            "type": "integer",
+            "description": "How many decimal digits should price have after rounding",
+            "format": "int32"
+          },
+          "digitsAmount": {
+            "type": "integer",
+            "description": "How many decimal digits should Order/Deal amount have after rounding",
+            "format": "int32"
+          },
+          "minQuoteAmount": {
+            "type": "number",
+            "description": "Order amount min limit in quote currency",
+            "format": "double",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "DepositAddress": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string",
+            "description": "Wallet address",
+            "nullable": false
+          },
+          "addressPublicKey": {
+            "type": "string",
+            "description": "",
+            "nullable": true
+          },
+          "addressMemo": {
+            "type": "string",
+            "description": "",
+            "nullable": true
+          },
+          "commissionPercent": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "commissionMinimum": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "minAmount": {
+            "type": "number",
+            "format": "double"
+          },
+          "chain": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "Commission": {
+        "type": "object",
+        "properties": {
+          "commissionId": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "currencyCode": {
+            "type": "string",
+            "nullable": true
+          },
+          "percent": {
+            "type": "number",
+            "format": "double"
+          },
+          "minimum": {
+            "type": "number",
+            "format": "double"
+          },
+          "commissionCurrencyCode": {
+            "type": "string",
+            "nullable": true
+          },
+          "commissionTypeCode": {
+            "type": "string",
+            "nullable": true
+          },
+          "chain": {
+            "$ref": "#/components/schemas/ChainEnum"
+          },
+          "commissionType": {
+            "$ref": "#/components/schemas/CommissionType"
+          }
+        },
+        "additionalProperties": false
+      },
+      "CommissionType": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "string",
+            "nullable": true
+          },
+          "value": {
+            "type": "string",
+            "nullable": true
+          },
+          "valueKey": {
+            "type": "string",
+            "nullable": true
+          }
+        },
+        "additionalProperties": false
+      },
+      "PlacedOrder": {
+        "required": [
+          "orderId",
+          "price",
+          "side",
+          "status",
+          "symbol",
+          "timestamp"
+        ],
+        "type": "object",
+        "properties": {
+          "orderId": {
+            "type": "string",
+            "example": "68f99ba2-e5bf-4ec9-825a-22d5d3a56d34"
+          },
+          "symbol": {
+            "type": "string",
+            "example": "DOGE_USDT"
+          },
+          "price": {
+            "type": "number",
+            "example": 0.05
+          },
+          "side": {
+            "type": "string",
+            "example": "buy"
+          },
+          "timestamp": {
+            "type": "integer",
+            "example": 1678826556711
+          },
+          "status": {
+            "type": "string",
+            "example": "Created"
+          }
+        }
+      },
+      "NewOrder": {
+        "required": [
+          "amount",
+          "currencyPairCode",
+          "price",
+          "side"
+        ],
+        "type": "object",
+        "properties": {
+          "side": {
+            "type": "string",
+            "example": "buy"
+          },
+          "currencyPairCode": {
+            "type": "string",
+            "example": "DOGE_USDT"
+          },
+          "amount": {
+            "type": "number",
+            "example": 0.05
+          },
+          "price": {
+            "type": "number",
+            "example": 45000
+          }
+        }
+      }
+    }
+  }
+}
