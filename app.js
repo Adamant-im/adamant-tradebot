@@ -27,7 +27,7 @@ function init() {
       require('./trade/mm_liquidity_provider').run();
       require('./trade/mm_price_watcher').run();
       require('./trade/tests/api_test').run()
-      // require('./trade/mm_orderbook_builder').test();
+      //require('./trade/mm_orderbook_builder').test();
       notify(`*${config.notifyName} started* for address _${config.address}_ (ver. ${config.version}).`, 'info');
     }
   } catch (e) {

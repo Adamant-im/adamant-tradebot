@@ -7,12 +7,37 @@ const apiServer = 'https://data.azbit.com';
 const exchangeName = 'Azbit';
 
 module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
-  const AzbitClient = Azbit();
 
-  AzbitClient.setConfig(apiServer, apiKey, secretKey, pwd, log, publicOnly);
+  const AzbitClient = setConfig();
 
-  // Fulfill markets on initialization
+  // Fulfill markets and currencies on initialization
   getMarkets();
+  getCurrencies();
+
+  /**
+   * Module initialization
+   * @returns {Object} - API Client
+   */
+  function setConfig() {
+    const AzbitClient = Azbit();
+    AzbitClient.setConfig(apiServer, apiKey, secretKey, pwd, log, publicOnly);
+    return AzbitClient;
+  }
+
+  /**
+   * Get exchange currencies pairs config
+   * @param {String} pair
+   * @returns {Object} [{pairPlain: String, pairReadable: String, currencyFromId: String,
+   *                    currencyFrom: {code: String, value: String, isHalted: Boolean, isFiat: Boolean, digits: Integer,
+   *                    allowDeposits: Boolean, allowWithdrawals: Boolean, networkConfirmations: String, website: String,
+   *                    whitePaper: String, about: String, issuingTime: Date, issuingPrice: String, totalSupply: String,
+   *                    currencyChains: [{chainId: Integer, isNativeToken: Boolean, contractAddress: String}]},
+   *                    currencyToId: String,
+   *                    currencyTo: {code: String, value: String, isHalted: Boolean, isFiat: Boolean, digits: Integer,
+   *                    allowDeposits: Boolean, allowWithdrawals: Boolean, networkConfirmations: String, website: String,
+   *                    whitePaper: String, about: String, issuingTime: Date, issuingPrice: String, totalSupply: String,
+   *                    currencyChains: [{chainId: Integer, isNativeToken: Boolean, contractAddress: String}]}]
+   */
 
   function getMarkets(pair) {
     const paramString = `pair: ${pair}`;
@@ -23,49 +48,55 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
     module.exports.gettingMarkets = true;
 
     return new Promise((resolve, reject) => {
-      AzbitClient.markets().then(function(data) {
+      /*
+        Response from AzbitClient:
+        code, digitsPrice, digitsAmount, minQouteAmount
+      */
+      AzbitClient.markets().then(async function(data) {
         try {
 
-          // console.log('markets() data: ' + data);
-          // const markets = data.result;
           const result = {};
+          AzbitClient.getBalances().then(async function(balances) {
+            const currencies = balances.currencies;
+            // log.log('currencies: ' + JSON.stringify(currencies));
+            data.forEach((market) => {
+              const marketName = market.code;
+              const pair = deformatPairName(marketName);
+              result[pair.pairReadable] = {
+                // stock — coin1, money — coin2
+                pairPlain: pair.pairPlain,
+                pairReadable: pair.pairReadable,
+                currencyFromId: pair.coin1,
+                currencyFrom: currencies.find((o) => o.code === pair.coin1),
+                currencyToId: pair.coin2,
+                currencyTo: currencies.find((o) => o.code === pair.coin2),
+                coin1Decimals: market.digitsPrice,
+                coin2Decimals: market.digitsAmount,
+                minTrade: +market.minQuoteAmount,
+                // If the limit is 0, then this limit does not apply to this market
+                /* coin1Precision: utils.getPrecision(+market.precision?.stock),
+                coin2Precision: utils.getPrecision(+market.precision?.money),
+                coin1MinAmount: +market.limits.min_amount,
+                coin1MaxAmount: +market.limits.max_amount,
+                coin2MinAmount: +market.limits.min_total,
+                coin2MaxAmount: null,
+                coin2MinPrice: +market.limits.min_price,
+                coin2MaxPrice: +market.limits.max_price,
+                minTrade: +market.limits.min_total, // in coin2*/
+              };
+            });
 
-          data.forEach((market) => {
-            // console.log('market: ' + JSON.stringify(market));
-            const marketName = market.code;
-            const pair = deformatPairName(marketName);
-            // console.log('pair: ' + pair.pairReadable);
-            result[pair.pairReadable] = {
-              // stock — coin1, money — coin2
-              pairPlain: marketName,
-              pairReadable: pair.pairReadable,
-              coin1: pair.coin1,
-              coin2: pair.coin2,
-              coin1Decimals: market.digitsPrice,
-              coin2Decimals: market.digitsAmount,
-              minTrade: +market.minQuoteAmount,
-              // If the limit is 0, then this limit does not apply to this market
-              /* coin1Precision: utils.getPrecision(+market.precision?.stock),
-              coin2Precision: utils.getPrecision(+market.precision?.money),
-              coin1MinAmount: +market.limits.min_amount,
-              coin1MaxAmount: +market.limits.max_amount,
-              coin2MinAmount: +market.limits.min_total,
-              coin2MaxAmount: null,
-              coin2MinPrice: +market.limits.min_price,
-              coin2MaxPrice: +market.limits.max_price,
-              minTrade: +market.limits.min_total, // in coin2*/
-            };
             // console.log('result[]: ' + JSON.stringify(result[pair.pairReadable]));
+            if (Object.keys(result).length > 0) {
+              module.exports.exchangeMarkets = result;
+              log.log(`Received info about ${Object.keys(result).length} markets on ${exchangeName} exchange.`);
+            }
+
+            resolve(result);
+          }).catch((err) => {
+            log.warn(`API request getBalances(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
+            resolve(undefined);
           });
-
-          // console.log('getMarkets result: ' + JSON.stringify(result));
-
-          if (Object.keys(result).length > 0) {
-            module.exports.exchangeMarkets = result;
-            log.log(`Received info about ${Object.keys(result).length} markets on ${exchangeName} exchange.`);
-          }
-
-          resolve(result);
         } catch (e) {
           log.warn(`Error while processing getMarkets(${paramString}) request: ${e}`);
           resolve(undefined);
@@ -79,14 +110,85 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
     });
   }
 
+  /**
+   * Receiving all currencies codes
+   * @returns {Object} [{code: String: {code: String, value: String, isHalted: Boolean, isFiat: Boolean, digits: Integer,
+   *                    allowDeposits: Boolean, allowWithdrawals: Boolean, networkConfirmations: String, website: String,
+   *                    whitePaper: String, about: String, issuingTime: Date, issuingPrice: String, totalSupply: String,
+   *                    currencyChains: [{chainId: Integer, isNativeToken: Boolean, contractAddress: String}]}]
+   */
+
+  function getCurrencies(coin) {
+    const paramString = `coin: ${coin}`;
+    if (module.exports.gettingCurrencies) return;
+    if (module.exports.exchangeCurrencies) return module.exports.exchangeCurrencies[coin];
+
+    module.exports.gettingCurrencies = true;
+
+    return new Promise((resolve, reject) => {
+      AzbitClient.getBalances().then(function(data) {
+        try {
+          const result = [];
+          const currencies = data.currencies;
+          currencies.forEach((currency) => {
+            const marketName = currency.code;
+            result[marketName] = currency;
+          });
+
+          if (Object.keys(result).length > 0) {
+            module.exports.exchangeCurrencies = result;
+            log.log(`Received info about ${Object.keys(result).length} currencies on ${exchangeName} exchange.`);
+            resolve(result);
+          }
+        } catch (e) {
+          log.warn(`Error while processing getCurrencies(${paramString}) request: ${e}`);
+          resolve(undefined);
+        }
+      }).catch((err) => {
+        log.warn(`API request getCurrencies(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
+        resolve(undefined);
+      }).finally(() => {
+        module.exports.gettingCurrencies = false;
+      });
+    });
+  }
+
   return {
+
+    /**
+     * Getter stored markets info
+     * @returns {Object}
+     */
     get markets() {
       return module.exports.exchangeMarkets;
     },
 
+    /**
+     * Getter stored currencies info
+     * @returns {Object}
+     */
+
+    get currencies() {
+      return module.exports.exchangeCurrencies;
+    },
+
+    /**
+     * Get exchange currencies pairs config
+     * @param pair
+     * @returns {Object} - the same as getMarkets result
+     */
     marketInfo(pair) {
-      console.log('marketInfo');
       return getMarkets(pair);
+    },
+
+    /**
+     * Get currencies info
+     * @param coin
+     * @returns {Object} - the same as getCurrencies result
+     */
+
+    currenciesInfo(coin) {
+      return getCurrencies(coin);
     },
 
     features() {
@@ -103,7 +205,10 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
         supportCoinNetworks: true,
         allowAmountForMarketBuy: false,
         amountForMarketOrderNecessary: false,
-        openOrdersCacheSec: 180, // P2PB2B exchange say cache time is ~5 sec, but it's not true. Real cache time is unknown.
+        maxOrdersPerMinute: 120,
+        maxOrdersPerHour: 3600,
+        maxOrdersPerDay: 64000,
+        // openOrdersCacheSec: 180,
       };
     },
 
@@ -119,13 +224,10 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
       return new Promise((resolve, reject) => {
         AzbitClient.getBalances().then(function(data) {
           try {
-            console.log('data: ' + data.length);
-
             let result = [];
             const assets = data.balances;
             assets.forEach((asset) => {
               const inOrder = data.balancesBlockedInOrder.find((obj) => obj.currencyCode === asset['currencyCode']);
-              // console.log('inOrder: ' + inOrder);
               result.push({
                 code: asset.currencyCode.toUpperCase(),
                 free: asset.amount,
@@ -173,15 +275,6 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
         const result = [];
 
         openOrders.forEach((order) => {
-          let orderStatus;
-          if (order.left === order.amount) {
-            orderStatus = 'new';
-          } else if (order.left === '0') {
-            orderStatus = 'filled';
-          } else {
-            orderStatus = 'part_filled';
-          }
-
           let side = 'sell';
           if (order.isBid) {
             side = 'buy';
@@ -192,7 +285,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
             symbol: order.currencyPairCode, // In Azbit format as ETH_USDT
             price: +order.price,
             side: side, // 'isBid' => 'buy' or 'sell'
-            //type: order.type, // 'limit' or 'market'
+            // type: order.type, // 'limit' or 'market'
             timestamp: new Date(order.date).getTime(), //  date str => Timestamp
             // TODO: figure out with amounts: initialAmount, amount, quoteAmount
             /* amount: +order.amount,
@@ -212,7 +305,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
 
     /**
      * Cancel an order
-     * @param {String} orderId
+     * @param {String} orderId GUID i.e "70192a8b-c34e-48ce-badf-889584670507"
      * @param {String} side Not used for Azbit
      * @param {String} pair Not used for Azbit
      * @returns {Promise<unknown>}
@@ -223,12 +316,11 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
 
       return new Promise((resolve, reject) => {
         AzbitClient.cancelOrder(orderId).then(function(data) {
-          if (data?.success && data?.result?.orderId) {
+          if (!data?.errors ) {
             log.log(`Cancelling order ${orderId}`);
-            // log.log(`Cancelling order ${orderId} on ${pair_.pairReadable} pair…`);
             resolve(true);
           } else {
-            const errorMessage = data?.p2bErrorInfo || 'No details';
+            const errorMessage = JSON.stringify(data?.errors) || 'No details';
             log.log(`Unable to cancel ${orderId} on ${pair_.pairReadable}: ${errorMessage}.`);
             resolve(false);
           }
@@ -242,7 +334,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
     /**
      * Cancel all order on specific pair
      * @param pair
-     * @returns {Promise<unknown>}
+     * @returns {Object} true || undefined
      */
     cancelAllOrders(pair) {
       const paramString = `pair: ${pair}`;
@@ -261,7 +353,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
     /**
      * Get info on trade pair
      * @param pair
-     * @returns {Promise<unknown>}
+     * @returns {Object}
      */
     getRates(pair) {
       const paramString = `pair: ${pair}`;
@@ -289,6 +381,17 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
         });
       });
     },
+
+    /**
+     * Create buy or sell limit order on a specific pair
+     * @param {String} orderType
+     * @param {String} pair
+     * @param {Number} price
+     * @param {Number} coin1Amount
+     * @param {BigInteger} limit - Azbit supports only limits orders
+     * @param {Number} coin2Amount
+     * @returns {String} Order GUID string i.e. "e2cd407c-28c8-4768-bd73-cd7357fbccde"
+     */
 
     placeOrder(orderType, pair, price, coin1Amount, limit = 1, coin2Amount) {
       const paramString = `orderType: ${orderType}, pair: ${pair}, price: ${price}, coin1Amount: ${coin1Amount}, limit: ${limit}, coin2Amount: ${coin2Amount}`;
@@ -345,36 +448,22 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
       let output;
 
       if (limit) { // Limit order
-        output = `${orderType} ${coin1Amount} ${marketInfo.coin1} at ${price} ${marketInfo.coin2}.`;
+        output = `${orderType} ${coin1Amount} ${marketInfo.currencyFromId} at ${price} ${marketInfo.currencyToId}.`;
 
         return new Promise((resolve, reject) => {
           AzbitClient.addOrder(marketInfo.pairPlain, coin1Amount, price, orderType).then(function(data) {
             try {
               const result = data;
-              console.log('order_id: ' + result);
+              log.log(`Place new order on ${exchangeName}. ${output}`);
               order.orderId = result;
               resolve(order);
-              /*
-              if (data.success && result?.orderId) {
-                message = `Order placed to ${output} Order Id: ${result.orderId}.`;
-                log.info(message);
-                order.orderId = result.orderId.toString();
-                order.message = message;
-                resolve(order);
-              } else {
-                message = `Unable to place order to ${output} Check parameters and balances. Details: ${data.p2bErrorInfo}.`;
-                log.warn(message);
-                order.orderId = false;
-                order.message = message;
-                resolve(order);
-              }*/
             } catch (e) {
               message = `Error while processing placeOrder(${paramString}) request: ${e}`;
               log.warn(message);
               order.orderId = false;
               order.message = message;
               resolve(order);
-            };
+            }
           }).catch((err) => {
             log.warn(`API request addOrder(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
             resolve(undefined);
@@ -389,6 +478,12 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
         return Promise.resolve(order);
       }
     }, // placeOrder()
+
+    /**
+     * Get orderbook (40 bids + 40 asks) on a specific pair
+     * @param pair
+     * @returns {Object} {amount: Number, price: Number, count: BigInteger, type: String}
+     */
 
     getOrderBook(pair) {
       const paramString = `pair: ${pair}`;
@@ -441,6 +536,15 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
       });
     },
 
+    /**
+     * Get history of trade page
+     * @param {String} pair
+     * @param {BigInteger} page
+     * @param {BigInteger} limit = 500 for Azbit
+     * @returns {Object} {coin1Amount: Number, price: Number, coin2Amount: Number, date: Date, type: String,
+     * tradeId: String (GUID)}
+     */
+
     async getTradesHistoryPage(pair, page, limit = 500) {
       const paramString = `pair: ${pair}, limit: ${limit}`;
       const pair_ = formatPairName(pair);
@@ -487,22 +591,30 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
       });
     },
 
+    /**
+     * Get trade history for currency pair
+     * @returns {Object} - the same as TradeHistoryPage
+     */
     async getTradesHistory() {
       let allTrades = [];
       let ordersInfo;
       let page = 1;
+      // Total records limit
       const limit = 5000;
 
       do {
         ordersInfo = await this.getTradesHistoryPage(pair, page);
-        if (ordersInfo)
-        {
+        if (ordersInfo) {
           allTrades = allTrades.concat(ordersInfo);
         }
         page += 1;
       } while (ordersInfo.length === limit);
     },
 
+    /**
+     * Get all currencies codes
+     * @returns {Object} [{String}]
+     */
 
     getCurrencies() {
       const paramString = ``;
@@ -510,7 +622,6 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
         AzbitClient.getCurrencies().then(function(data) {
           try {
             const result = data;
-            console.log('getCurrencies len: ' + result.length);
             resolve(result);
           } catch (e) {
             log.warn(`Error while processing getCurrencies(${paramString}) request: ${e}`);
@@ -523,17 +634,26 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
       });
     },
 
+    /**
+     * Get inforamtion for deposit
+     * @param {String} coin
+     * @returns {Object} {address: String, addressPublicKey: String, addressMemo: String, commissionPercent: Number,
+     * commissionMinimum: Number, minAmount: Number, chain: BigInteger}
+     */
+
     getDepositAddress(coin) {
       const paramString = `coin: ${coin}`;
       return new Promise((resolve, reject) => {
         AzbitClient.getDepositAddress(coin).then(function(data) {
           try {
 
-            console.log('getDepositAddress data: ' + JSON.stringify(data));
             const result = {};
             if (data.length > 0) {
               result.address = data[0].address;
-              result.commission = data[0].commissionPercent;
+              result.addressPublicKey = data[0].addressPublicKey;
+              result.addressMemo = data[0].addressMemo;
+              result.commissionPercent = data[0].commissionPercent;
+              result.commissionMinimum = data[0].commissionMinimum;
               result.minAmount = data[0].minAmount;
               result.chain = data[0].chain;
             }
@@ -551,12 +671,17 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
       });
     },
 
+    /**
+     * Get currency pair commissions
+     * @returns {Object} {code: String, dealBid: Boolean, dealAsk: Boolean, percent: Number}
+     */
+
     getFees() {
       const paramString = ``;
       return new Promise((resolve, reject) => {
         AzbitClient.getFees().then(function(data) {
           try {
-            console.log('getDepositAddress data: ' + JSON.stringify(data));
+            //console.log('getFees data: ' + JSON.stringify(data));
             const result = [];
 
             data.forEach((fee) => {

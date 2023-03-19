@@ -3,7 +3,7 @@
     The bot's secret passphrase. Create separate ADM account for the bot.
     Bot's ADM address will correspond this passphrase.
   **/
-  "passPhrase": "legend primary similar jar lawsuit swear color alter network coyote pretty always",
+  "passPhrase": "distance expect praise frequent..",
 
   /**
     List of nodes to fetch transactions.
@@ -35,7 +35,7 @@
 
   /** ADAMANT accounts to accept commands from. Commands from other accounts will not be executed. **/
   "admin_accounts": [
-    "U15070292514923319239"
+    "U123.."
   ],
 
   /** Notify non-admins that they are not admins. If false, bot will be silent. **/
@@ -49,7 +49,7 @@
   ],
 
   /** Exchange to work with. Case insensitive. **/
-  "exchange": "Azbit",
+  "exchange": "Resfinex",
 
   /** Pair to trade **/
   "pair": "ADM/USDT",
@@ -65,10 +65,10 @@
   "clearAllOrdersInterval": 0,
 
   /** Exchange's account API key for connection **/
-  "apikey": "dMwnxoAlDxp9QzPw-j2FYhJMnU6bwrn2dAghZg",
+  "apikey": "YOUR-KEY..",
 
   /** Exchange's account API secret for connection **/
-  "apisecret": "zpwmLK8dlhdFwBVMUsyf2esH93pWbHayFawJBImpno5rX3O7IXUQ0xLUHUCovYzg7UXTNQ",
+  "apisecret": "YOUR-SECRET..",
 
   /** Exchange's account trade password **/
   "apipassword": "YOUR-TRADE-PASS",

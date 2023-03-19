@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const axios = require('axios');
+const logger = require('../../helpers/log');
 const utils = require('../../helpers/utils');
 
 module.exports = function() {
@@ -13,7 +14,7 @@ module.exports = function() {
     'apiKey': '',
     'secret_key': '',
   };
-  let log = {};
+  let log = logger;
 
   const notValidStatuses = [
     401, // ~Invalid auth, payload, nonce
@@ -36,17 +37,17 @@ module.exports = function() {
   const handleResponse = (responseOrError, resolve, reject, bodyString, queryString, url) => {
     const httpCode = responseOrError?.response?.status || responseOrError?.status;
     const httpMessage = responseOrError?.response?.statusText || responseOrError?.statusText;
-    const azbitData = responseOrError?.response?.data || responseOrError?.data;
+    let azbitData = responseOrError?.response?.data || responseOrError?.data;
 
     /*
       Axios Response struct:
       status, statusText, headers, config, request, data
      */
 
-    console.log('responseOrError keys : ' + JSON.stringify(Object.keys(responseOrError)));
-    // console.log('responseOrError.response: ' + JSON.stringify(Object.keys(responseOrError?.response)));
-    console.log('[ResponseOrError] status: ' + responseOrError.status + ' statusText: ' + httpMessage + ' response: ' + JSON.stringify(azbitData));
-    const azbitErrorMessage = utils.trimAny(azbitData?.message || azbitData?.errors?.message?.[0], '. ');
+    //log.log('responseOrError keys : ' + JSON.stringify(Object.keys(responseOrError)));
+    //log.log('[ResponseOrError] status: ' + responseOrError.status + ' statusText: ' + httpMessage);
+    //log.log('[ResponseOrError] data: ' + JSON.stringify(azbitData));
+    const azbitErrorMessage = JSON.stringify(azbitData?.errors) || azbitData;
     const azbitErrorInfo = `${utils.trimAny(azbitErrorMessage, ' .')}`;
 
     const errorMessage = httpCode ? `${httpCode} ${httpMessage}, ${azbitErrorInfo}` : String(responseOrError);
@@ -61,7 +62,8 @@ module.exports = function() {
         reject(azbitData);
       } else {
         log.log(`Azbit processed a request to ${url} with data ${reqParameters}, but with error: ${errorMessage}. Resolving…`);
-        resolve(azbitData);
+        azbitData = Object.assign(azbitData, );
+        resolve(azbitData, {errors: errorMessage});
       }
     } catch (e) {
       log.warn(`Error while processing response of request to ${url} with data ${reqParameters}: ${e}. Data object I've got: ${JSON.stringify(azbitData)}.`);
@@ -115,7 +117,6 @@ module.exports = function() {
     let bodyString;
 
     try {
-      console.log('method: ' + JSON.stringify(method) + ' data.length: ' + Object.keys(data).length);
       if (method.toLowerCase() === 'get') {
         bodyString = '';
         url = makeUrlFromData(url, data);
@@ -127,10 +128,7 @@ module.exports = function() {
           bodyString = '';
         }
       }
-
-      console.log('url: ' + JSON.stringify(url) + '  bodyString: ' + bodyString);
       const signature = getSignature(url, bodyString)
-      console.log('signature: ' + signature.toString());
       headers = {
         ...DEFAULT_HEADERS,
         'API-PublicKey': config.apiKey,
@@ -163,7 +161,6 @@ module.exports = function() {
   };
 
   const getSignature = (url, payload) => {
-    console.log('signature data: ' + config.apiKey + url + payload);
     return crypto.createHmac('sha256', config.secret_key).update(config.apiKey + url + payload).digest('hex');
   };
 
@@ -189,7 +186,7 @@ module.exports = function() {
      * List of user balances for all currencies
      * @return {Object}
      */
-    getBalances: function() {
+    getBalances: async function() {
       const data = {};
       return protectedRequest('/wallets/balances', data, 'get');
     },
@@ -239,7 +236,7 @@ module.exports = function() {
     /**
      * Cancel all orders for currency pair
      * @param {String} pair
-     * @returns {Promise<never>|Promise<unknown>}
+     * @returns {Object} Success response with no data
      */
 
     cancelAllOrders: function(pair) {
