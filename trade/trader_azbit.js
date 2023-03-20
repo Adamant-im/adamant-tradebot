@@ -56,47 +56,29 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
         try {
 
           const result = {};
-          AzbitClient.getBalances().then(async function(balances) {
-            const currencies = balances.currencies;
-            // log.log('currencies: ' + JSON.stringify(currencies));
-            data.forEach((market) => {
-              const marketName = market.code;
-              const pair = deformatPairName(marketName);
-              result[pair.pairReadable] = {
-                // stock — coin1, money — coin2
-                pairPlain: pair.pairPlain,
-                pairReadable: pair.pairReadable,
-                currencyFromId: pair.coin1,
-                currencyFrom: currencies.find((o) => o.code === pair.coin1),
-                currencyToId: pair.coin2,
-                currencyTo: currencies.find((o) => o.code === pair.coin2),
-                coin1Decimals: market.digitsPrice,
-                coin2Decimals: market.digitsAmount,
-                minTrade: +market.minQuoteAmount,
-                // If the limit is 0, then this limit does not apply to this market
-                /* coin1Precision: utils.getPrecision(+market.precision?.stock),
-                coin2Precision: utils.getPrecision(+market.precision?.money),
-                coin1MinAmount: +market.limits.min_amount,
-                coin1MaxAmount: +market.limits.max_amount,
-                coin2MinAmount: +market.limits.min_total,
-                coin2MaxAmount: null,
-                coin2MinPrice: +market.limits.min_price,
-                coin2MaxPrice: +market.limits.max_price,
-                minTrade: +market.limits.min_total, // in coin2*/
-              };
-            });
-
-            // console.log('result[]: ' + JSON.stringify(result[pair.pairReadable]));
-            if (Object.keys(result).length > 0) {
-              module.exports.exchangeMarkets = result;
-              log.log(`Received info about ${Object.keys(result).length} markets on ${exchangeName} exchange.`);
-            }
-
-            resolve(result);
-          }).catch((err) => {
-            log.warn(`API request getBalances(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
-            resolve(undefined);
+          data.forEach((market) => {
+            const marketName = market.code;
+            const pair = deformatPairName(marketName);
+            result[pair.pairReadable] = {
+              // stock — coin1, money — coin2
+              pairPlain: pair.pairPlain,
+              pairReadable: pair.pairReadable,
+              //currencyFromId: pair.coin1,
+              //currencyFrom: currencies.find((o) => o.code === pair.coin1),
+              //currencyToId: pair.coin2,
+              //currencyTo: currencies.find((o) => o.code === pair.coin2),
+              coin1Decimals: market.digitsPrice,
+              coin2Decimals: market.digitsAmount,
+              minTrade: +market.minQuoteAmount,
+            };
           });
+
+          if (Object.keys(result).length > 0) {
+            module.exports.exchangeMarkets = result;
+            log.log(`Received info about ${Object.keys(result).length} markets on ${exchangeName} exchange.`);
+          }
+
+          resolve(result);
         } catch (e) {
           log.warn(`Error while processing getMarkets(${paramString}) request: ${e}`);
           resolve(undefined);
@@ -353,7 +335,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
     /**
      * Get info on trade pair
      * @param pair
-     * @returns {Object}
+     * @returns {Object} [{ask: Number, bid: Number, volume: Number, volumeInCoin2: Number}]
      */
     getRates(pair) {
       const paramString = `pair: ${pair}`;
@@ -367,9 +349,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
               ask: +ticker.askPrice,
               bid: +ticker.bidPrice,
               volume: +ticker.volume24h,
-              /* volumeInCoin2: +ticker.deal,
-              high: +ticker.high,
-              low: +ticker.low,*/
+              volumeInCoin2: +ticker.volume24h * ticker.price,
             });
           } catch (e) {
             log.warn(`Error while processing getRates(${paramString}) request: ${e}`);
@@ -448,7 +428,9 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
       let output;
 
       if (limit) { // Limit order
-        output = `${orderType} ${coin1Amount} ${marketInfo.currencyFromId} at ${price} ${marketInfo.currencyToId}.`;
+        const pairName = formatPairName(pair);
+        log.log('pairName: ' + JSON.stringify(pairName));
+        output = `${orderType} ${coin1Amount} ${pairName.coin1} at ${price} ${pairName.coin2}.`;
 
         return new Promise((resolve, reject) => {
           AzbitClient.addOrder(marketInfo.pairPlain, coin1Amount, price, orderType).then(function(data) {
@@ -572,8 +554,6 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
               });
             });
 
-            console.log('getTradeHistory result: ' + JSON.stringify(result));
-
             // We need ascending sort order
             result.sort(function(a, b) {
               return parseFloat(a.date) - parseFloat(b.date);
@@ -593,14 +573,15 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
 
     /**
      * Get trade history for currency pair
-     * @returns {Object} - the same as TradeHistoryPage
+     * @param {String} pair
+     * @returns {Object} - the same as getTradesHistoryPage
      */
-    async getTradesHistory() {
+    async getTradesHistory(pair) {
       let allTrades = [];
       let ordersInfo;
       let page = 1;
       // Total records limit
-      const limit = 5000;
+      const limit = 1000;
 
       do {
         ordersInfo = await this.getTradesHistoryPage(pair, page);
@@ -608,7 +589,8 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
           allTrades = allTrades.concat(ordersInfo);
         }
         page += 1;
-      } while (ordersInfo.length === limit);
+      } while (allTrades.length < limit);
+      return allTrades;
     },
 
     /**

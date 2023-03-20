@@ -50,17 +50,24 @@ module.exports = function() {
     const azbitErrorMessage = JSON.stringify(azbitData?.errors) || azbitData;
     const azbitErrorInfo = `${utils.trimAny(azbitErrorMessage, ' .')}`;
 
+    const axiosError = responseOrError?.name;
+    const axiosStack = responseOrError?.stack;
     const errorMessage = httpCode ? `${httpCode} ${httpMessage}, ${azbitErrorInfo}` : String(responseOrError);
     const reqParameters = queryString || bodyString || '{ No parameters }';
 
     try {
-      if (httpCode === 200 && httpMessage === 'OK') {
+      if (httpCode === 200) {
         resolve(azbitData);
       } else
       if (notValidStatuses.includes(httpCode)) {
         log.log(`Azbit request to ${url} with data ${reqParameters} failed: ${errorMessage}. Rejecting…`);
         reject(azbitData);
-      } else {
+      } else
+      if (axiosError && axiosStack) {
+        log.log(`Azbit request to ${url} with data ${reqParameters} failed: ${errorMessage}. Rejecting…`);
+        reject(axiosError);
+      }
+      else {
         log.log(`Azbit processed a request to ${url} with data ${reqParameters}, but with error: ${errorMessage}. Resolving…`);
         azbitData = Object.assign(azbitData, );
         resolve(azbitData, {errors: errorMessage});
@@ -101,8 +108,6 @@ module.exports = function() {
         timeout: 10000,
         headers: DEFAULT_HEADERS,
       };
-
-      console.log('queryString: ' + queryString + 'typeof: ' + typeof queryString);
       axios(httpOptions)
           .then((response) => handleResponse(response, resolve, reject, undefined, queryString, urlBase))
           .catch((error) => handleResponse(error, resolve, reject, undefined, queryString, urlBase));

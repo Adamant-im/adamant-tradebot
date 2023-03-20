@@ -8,7 +8,6 @@ const equal = require('fast-deep-equal');
 const AVERAGE_SPREAD_DEVIATION = 0.15;
 
 module.exports = {
-
   saveConfig(isWebApi = false) {
     let oldConfig;
     eval(fs.readFileSync(config.fileWithPath).toString().replace('module.exports', 'oldConfig'));
@@ -952,8 +951,8 @@ module.exports = {
             const bidQuoteAccPrev = qhTable[qhTable.length - 1] ? qhTable[qhTable.length - 1].bidQuoteAcc : 0;
             const bidQuoteAcc = bidQuote + bidQuoteAccPrev;
             const bidPriceDumpPercent = this.numbersDifferencePercentDirect(
-                highestBid,
-                index === 0 ? orderBookBidsThirdParty[index + 1].price : bidPrice,
+              highestBid,
+              index === 0 ? orderBookBidsThirdParty[index + 1].price : bidPrice,
             );
             // const bidPriceRemainderPercent = 100 - bidPriceDumpPercent;
             // const bidPriceRemainderPowed = Math.pow(bidPriceRemainderPercent/100, 10);
