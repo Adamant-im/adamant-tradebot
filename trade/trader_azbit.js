@@ -319,7 +319,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
 
     /**
      * Get info on trade pair
-     * @param pair
+     * @param pair In classic format as BTC/USDT
      * @returns {Object} [{ask: Number, bid: Number, volume: Number, volumeInCoin2: Number}]
      */
     getRates(pair) {
@@ -330,11 +330,15 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
         azbitClient.ticker(pair_.pair).then(function(data) {
           try {
             const ticker = data;
+
             resolve({
               ask: +ticker.askPrice,
               bid: +ticker.bidPrice,
-              volume: +ticker.volume24h,
-              volumeInCoin2: +ticker.volume24h * ticker.price,
+              volume: +ticker.volume24h / +ticker.price,
+              volumeInCoin2: +ticker.volume24h,
+              high: undefined,
+              low: undefined,
+              last: +ticker.price,
             });
           } catch (e) {
             log.warn(`Error while processing getRates(${paramString}) request: ${e}`);

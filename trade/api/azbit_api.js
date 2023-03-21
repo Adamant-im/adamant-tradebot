@@ -284,12 +284,15 @@ module.exports = function() {
 
     /**
      * Get trade details for a ticker (market rates)
-     * @param {String} pair
+     * @param {String} pair In Azbit format as ETH_USDT
      * @return {Object}
+     * https://docs.azbit.com/docs/public-api/tickers#apitickers
      */
     ticker: function(pair) {
-      const data = {};
-      data.currencyPairCode = pair;
+      const data = {
+        currencyPairCode: pair,
+      };
+
       return publicRequest('/tickers', data);
     },
 
