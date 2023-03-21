@@ -13,7 +13,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
 
   // Fulfill markets and currencies on initialization
   getMarkets();
-  // getCurrencies();
+  getCurrencies();
 
   /**
    * Get exchange trade pairs config
@@ -76,28 +76,27 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
   }
 
   /**
-   * Receiving all currencies codes
-   * @returns {Object} [{code: String: {code: String, value: String, isHalted: Boolean, isFiat: Boolean, digits: Integer,
-   *                    allowDeposits: Boolean, allowWithdrawals: Boolean, networkConfirmations: String, website: String,
-   *                    whitePaper: String, about: String, issuingTime: Date, issuingPrice: String, totalSupply: String,
-   *                    currencyChains: [{chainId: Integer, isNativeToken: Boolean, contractAddress: String}]}]
+   * Get exchange coins
+   * @param {String} coin As BTC
+   * @returns {Object}
    */
-
   function getCurrencies(coin) {
     const paramString = `coin: ${coin}`;
+
     if (module.exports.gettingCurrencies) return;
     if (module.exports.exchangeCurrencies) return module.exports.exchangeCurrencies[coin];
 
     module.exports.gettingCurrencies = true;
 
     return new Promise((resolve, reject) => {
-      azbitClient.getBalances().then(function(data) {
+      azbitClient.getCurrencies().then(function(data) {
         try {
           const result = [];
-          const currencies = data.currencies;
-          currencies.forEach((currency) => {
-            const marketName = currency.code;
-            result[marketName] = currency;
+
+          data.forEach((currency) => {
+            result[currency] = {
+              symbol: currency,
+            };
           });
 
           if (Object.keys(result).length > 0) {

@@ -38,11 +38,11 @@ module.exports = function() {
     const httpMessage = responseOrError?.statusText || responseOrError?.response?.statusText;
 
     const azbitData = responseOrError?.data || responseOrError?.response?.data;
-    console.log('');
-    console.log('');
-    console.log(httpCode);
-    console.log(url);
-    console.log(azbitData);
+    // console.log('');
+    // console.log('');
+    // console.log(httpCode);
+    // console.log(url);
+    // console.log(azbitData);
 
 
     const azbitStatus = httpCode === 200 && azbitData ? true : false; // Azbit doesn't return any special status on success
@@ -312,9 +312,9 @@ module.exports = function() {
 
     /**
      * Get all crypto currencies
+     * Note: v1 endpoint returns only coin tickers. v2 https://api2.azbit.com/api/currencies offer much more, but never mind.
      * @returns {Object}
      */
-
     getCurrencies() {
       const data = {};
       return publicRequest('/currencies', data);
