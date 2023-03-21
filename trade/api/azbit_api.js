@@ -44,10 +44,21 @@ module.exports = function() {
     // console.log(url);
     // console.log(azbitData);
 
-
-    const azbitStatus = httpCode === 200 && azbitData ? true : false; // Azbit doesn't return any special status on success
+    const azbitStatus = httpCode === 200 ? true : false; // Azbit doesn't return any special status on success
     const azbitErrorCode = 'No error code'; // Azbit doesn't have error codes
-    const azbitErrorMessage = typeof azbitData === 'string' ? azbitData : undefined; // Azbit returns string in case of error
+
+    // Azbit returns string in case of error, or { errors }
+    let azbitErrorMessage;
+    if (azbitData) {
+      if (azbitData.errors) {
+        azbitErrorMessage = JSON.stringify(azbitData.errors);
+      }
+
+      if (typeof azbitData === 'string') {
+        azbitErrorMessage = azbitData;
+      }
+    }
+
     const azbitErrorInfo = `[${azbitErrorCode}] ${utils.trimAny(azbitErrorMessage, ' .')}`;
 
     const errorMessage = httpCode ? `${httpCode} ${httpMessage}, ${azbitErrorInfo}` : String(responseOrError);
@@ -55,16 +66,14 @@ module.exports = function() {
 
     try {
       if (azbitStatus) {
-        resolve(azbitData);
+        resolve(azbitData || azbitStatus); // If cancel request is successful, azbitData is undefined :)
       } else if (azbitErrorMessage) {
-        azbitData.azbitErrorInfo = azbitErrorInfo;
-
         if (notValidStatuses.includes(httpCode)) {
           log.log(`Azbit request to ${url} with data ${reqParameters} failed: ${errorMessage}. Rejecting…`);
-          reject(azbitData);
+          reject({ azbitErrorInfo });
         } else {
           log.log(`Azbit processed a request to ${url} with data ${reqParameters}, but with error: ${errorMessage}. Resolving…`);
-          resolve(azbitData);
+          resolve({ azbitErrorInfo });
         }
       } else {
         log.warn(`Request to ${url} with data ${reqParameters} failed: ${errorMessage}. Rejecting…`);
@@ -255,12 +264,12 @@ module.exports = function() {
 
     /**
      * Cancel an order
-     * @param {String} orderId
+     * @param {String} orderId Example: '70192a8b-c34e-48ce-badf-889584670507'
      * @return {Object}
+     * https://docs.azbit.com/docs/public-api/orders#delete-1
      */
     cancelOrder: function(orderId) {
-      const data = {};
-      return protectedRequest(`/orders/${orderId}`, data, 'delete');
+      return protectedRequest(`/orders/${orderId}`, {}, 'delete');
     },
 
     /**

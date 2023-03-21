@@ -265,22 +265,22 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
 
     /**
      * Cancel an order
-     * @param {String} orderId GUID i.e "70192a8b-c34e-48ce-badf-889584670507"
+     * @param {String} orderId Example: '70192a8b-c34e-48ce-badf-889584670507'
      * @param {String} side Not used for Azbit
      * @param {String} pair Not used for Azbit
      * @returns {Promise<unknown>}
      */
     cancelOrder(orderId, side, pair) {
       const paramString = `orderId: ${orderId}, side: ${side}, pair: ${pair}`;
-      // const pair_ = formatPairName(pair);
+      const pair_ = formatPairName(pair);
 
       return new Promise((resolve, reject) => {
         azbitClient.cancelOrder(orderId).then(function(data) {
-          if (!data?.errors ) {
-            log.log(`Cancelling order ${orderId}`);
+          if (data && !data.azbitErrorInfo) {
+            log.log(`Cancelling order ${data.result.orderId} on ${pair_.pairReadable} pair…`);
             resolve(true);
           } else {
-            const errorMessage = JSON.stringify(data?.errors) || 'No details';
+            const errorMessage = data?.azbitErrorInfo || 'No details';
             log.log(`Unable to cancel ${orderId} on ${pair_.pairReadable}: ${errorMessage}.`);
             resolve(false);
           }
