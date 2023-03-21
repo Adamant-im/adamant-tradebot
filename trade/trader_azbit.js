@@ -29,28 +29,30 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
     module.exports.gettingMarkets = true;
 
     return new Promise((resolve, reject) => {
-      /*
-        Response from AzbitClient:
-        code, digitsPrice, digitsAmount, minQouteAmount
-      */
       azbitClient.markets().then(async function(data) {
         try {
-
           const result = {};
+
           data.forEach((market) => {
             const marketName = market.code;
             const pair = deformatPairName(marketName);
+
             result[pair.pairReadable] = {
-              // stock — coin1, money — coin2
               pairPlain: pair.pairPlain,
               pairReadable: pair.pairReadable,
-              //currencyFromId: pair.coin1,
-              //currencyFrom: currencies.find((o) => o.code === pair.coin1),
-              //currencyToId: pair.coin2,
-              //currencyTo: currencies.find((o) => o.code === pair.coin2),
-              coin1Decimals: market.digitsPrice,
-              coin2Decimals: market.digitsAmount,
-              minTrade: +market.minQuoteAmount,
+              coin1: pair.coin1,
+              coin2: pair.coin2,
+              coin1Decimals: market.digitsAmount,
+              coin2Decimals: market.digitsPrice,
+              coin1Precision: utils.getPrecision(market.digitsAmount),
+              coin2Precision: utils.getPrecision(market.digitsPrice),
+              coin1MinAmount: null,
+              coin1MaxAmount: null,
+              coin2MinAmount: market.minQuoteAmount,
+              coin2MaxAmount: null,
+              coin2MinPrice: null,
+              coin2MaxPrice: null,
+              minTrade: market.minQuoteAmount, // in coin2
             };
           });
 
