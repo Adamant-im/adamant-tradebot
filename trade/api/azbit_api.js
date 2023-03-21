@@ -34,42 +34,43 @@ module.exports = function() {
    * @param {String} url
    */
   const handleResponse = (responseOrError, resolve, reject, bodyString, queryString, url) => {
-    const httpCode = responseOrError?.response?.status || responseOrError?.status;
-    const httpMessage = responseOrError?.response?.statusText || responseOrError?.statusText;
-    let azbitData = responseOrError?.response?.data || responseOrError?.data;
+    const httpCode = responseOrError?.status || responseOrError?.response?.status;
+    const httpMessage = responseOrError?.statusText || responseOrError?.response?.statusText;
 
-    /*
-      Axios Response struct:
-      status, statusText, headers, config, request, data
-     */
+    const azbitData = responseOrError?.data || responseOrError?.response?.data;
+    console.log('');
+    console.log('');
+    console.log(httpCode);
+    console.log(url);
+    console.log(azbitData);
 
-    //log.log('responseOrError keys : ' + JSON.stringify(Object.keys(responseOrError)));
-    //log.log('[ResponseOrError] status: ' + responseOrError.status + ' statusText: ' + httpMessage);
-    //log.log('[ResponseOrError] data: ' + JSON.stringify(azbitData));
-    const azbitErrorMessage = JSON.stringify(azbitData?.errors) || azbitData;
-    const azbitErrorInfo = `${utils.trimAny(azbitErrorMessage, ' .')}`;
 
-    const axiosError = responseOrError?.name;
-    const axiosStack = responseOrError?.stack;
+    const azbitStatus = httpCode === 200 && azbitData ? true : false; // Azbit doesn't return any special status on success
+    const azbitErrorCode = undefined;
+    const azbitErrorMessage = undefined;
+    const azbitErrorInfo = azbitErrorCode ? `[${azbitErrorCode}] ${utils.trimAny(azbitErrorMessage, ' .')}` : `[No error code]`;
+
     const errorMessage = httpCode ? `${httpCode} ${httpMessage}, ${azbitErrorInfo}` : String(responseOrError);
     const reqParameters = queryString || bodyString || '{ No parameters }';
 
     try {
-      if (httpCode === 200) {
+      if (azbitStatus) {
         resolve(azbitData);
-      } else
-      if (notValidStatuses.includes(httpCode)) {
-        log.log(`Azbit request to ${url} with data ${reqParameters} failed: ${errorMessage}. Rejecting…`);
-        reject(azbitData);
-      } else
-      if (axiosError && axiosStack) {
-        log.log(`Azbit request to ${url} with data ${reqParameters} failed: ${errorMessage}. Rejecting…`);
-        reject(axiosError);
-      }
-      else {
-        log.log(`Azbit processed a request to ${url} with data ${reqParameters}, but with error: ${errorMessage}. Resolving…`);
-        azbitData = Object.assign(azbitData, );
-        resolve(azbitData, {errors: errorMessage});
+      } else if (azbitErrorCode) {
+        if (azbitData) {
+          azbitData.azbitErrorInfo = azbitErrorInfo;
+        }
+
+        if (notValidStatuses.includes(httpCode)) {
+          log.log(`Azbit request to ${url} with data ${reqParameters} failed: ${errorMessage}. Rejecting…`);
+          reject(azbitData);
+        } else {
+          log.log(`Azbit processed a request to ${url} with data ${reqParameters}, but with error: ${errorMessage}. Resolving…`);
+          resolve(azbitData);
+        }
+      } else {
+        log.warn(`Request to ${url} with data ${reqParameters} failed: ${errorMessage}. Rejecting…`);
+        reject(errorMessage);
       }
     } catch (e) {
       log.warn(`Error while processing response of request to ${url} with data ${reqParameters}: ${e}. Data object I've got: ${JSON.stringify(azbitData)}.`);
@@ -97,6 +98,7 @@ module.exports = function() {
   function publicRequest(path, data) {
     let url = `${WEB_BASE}${path}`;
     const urlBase = url;
+
     const queryString = getQueryStringFromData(data);
     url = makeUrlFromData(url, data);
 
@@ -321,13 +323,12 @@ module.exports = function() {
 
     /**
      * Get info on all markets
-     * @return string
+     * @returns {Object}
      */
     markets: async function() {
       const data = {};
       return publicRequest('/currencies/pairs', data);
     },
-
   };
 
   return EXCHANGE_API;

@@ -13,7 +13,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
 
   // Fulfill markets and currencies on initialization
   getMarkets();
-  getCurrencies();
+  // getCurrencies();
 
   /**
    * Get exchange trade pairs config
