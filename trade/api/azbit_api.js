@@ -46,9 +46,9 @@ module.exports = function() {
 
 
     const azbitStatus = httpCode === 200 && azbitData ? true : false; // Azbit doesn't return any special status on success
-    const azbitErrorCode = undefined;
-    const azbitErrorMessage = undefined;
-    const azbitErrorInfo = azbitErrorCode ? `[${azbitErrorCode}] ${utils.trimAny(azbitErrorMessage, ' .')}` : `[No error code]`;
+    const azbitErrorCode = 'No error code'; // Azbit doesn't have error codes
+    const azbitErrorMessage = typeof azbitData === 'string' ? azbitData : undefined; // Azbit returns string in case of error
+    const azbitErrorInfo = `[${azbitErrorCode}] ${utils.trimAny(azbitErrorMessage, ' .')}`;
 
     const errorMessage = httpCode ? `${httpCode} ${httpMessage}, ${azbitErrorInfo}` : String(responseOrError);
     const reqParameters = queryString || bodyString || '{ No parameters }';
@@ -56,10 +56,8 @@ module.exports = function() {
     try {
       if (azbitStatus) {
         resolve(azbitData);
-      } else if (azbitErrorCode) {
-        if (azbitData) {
-          azbitData.azbitErrorInfo = azbitErrorInfo;
-        }
+      } else if (azbitErrorMessage) {
+        azbitData.azbitErrorInfo = azbitErrorInfo;
 
         if (notValidStatuses.includes(httpCode)) {
           log.log(`Azbit request to ${url} with data ${reqParameters} failed: ${errorMessage}. Rejecting…`);
