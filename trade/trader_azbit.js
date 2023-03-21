@@ -171,10 +171,9 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
 
     /**
      * Get user balances
-     * @param nonzero
+     * @param {Boolean} nonzero Return only non-zero balances
      * @returns {Object[]} [code: String, free: Float, freezed: Float, total: Float]
      */
-
     getBalances(nonzero = true) {
       const paramString = `nonzero: ${nonzero}`;
 
@@ -182,14 +181,15 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
         azbitClient.getBalances().then(function(data) {
           try {
             let result = [];
-            const assets = data.balances;
-            assets.forEach((asset) => {
-              const inOrder = data.balancesBlockedInOrder.find((obj) => obj.currencyCode === asset['currencyCode']);
+
+            data.balances.forEach((asset) => {
+              const inOrders = data.balancesBlockedInOrder.find((obj) => obj.currencyCode === asset['currencyCode']);
+
               result.push({
                 code: asset.currencyCode.toUpperCase(),
                 free: asset.amount,
-                freezed: inOrder.amount,
-                total: asset.amount - inOrder.amount,
+                freezed: inOrders.amount,
+                total: asset.amount + inOrders.amount,
               });
             });
 
@@ -203,7 +203,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
             resolve(undefined);
           }
         }).catch((err) => {
-          log.warn(`API request getBalances(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}\n err_stack: ${err.stack}`);
+          log.warn(`API request getBalances(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
           resolve(undefined);
         });
       });

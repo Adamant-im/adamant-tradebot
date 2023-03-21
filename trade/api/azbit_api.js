@@ -210,7 +210,7 @@ module.exports = function() {
 
     /**
      * List of user balances for all currencies
-     * @return {Object}
+     * @return {Object} { balances, balancesBlockedInOrder, balancesInCurrencyOfferingsVesting?, withdrawalLimits, currencies }
      */
     getBalances: async function() {
       const data = {};
@@ -312,7 +312,8 @@ module.exports = function() {
 
     /**
      * Get all crypto currencies
-     * Note: v1 endpoint returns only coin tickers. v2 https://api2.azbit.com/api/currencies offer much more, but never mind.
+     * Note: v1 endpoint returns only coin tickers.
+     * v1 /wallets/balances and v2 https://api2.azbit.com/api/currencies offer much more, but never mind.
      * @returns {Object}
      */
     getCurrencies() {
