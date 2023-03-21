@@ -1,6 +1,5 @@
 const crypto = require('crypto');
 const axios = require('axios');
-const logger = require('../../helpers/log');
 const utils = require('../../helpers/utils');
 
 module.exports = function() {
@@ -14,7 +13,7 @@ module.exports = function() {
     'apiKey': '',
     'secret_key': '',
   };
-  let log = logger;
+  let log = {};
 
   const notValidStatuses = [
     401, // ~Invalid auth, payload, nonce
