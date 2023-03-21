@@ -78,29 +78,49 @@ module.exports = function() {
     }
   };
 
-  function getQueryStringFromData(data) {
+  /**
+   * Creates an url params string as: key1=value1&key2=value2
+   * @param {Object} data Request params
+   * @returns {String}
+   */
+  function getParamsString(data) {
     const params = [];
+
     for (const key in data) {
       const v = data[key];
       params.push(key + '=' + v);
     }
+
     return params.join('&');
   }
 
-  function makeUrlFromData(url, data) {
-    const queryString = getQueryStringFromData(data);
+  /**
+   * Creates a full url with params as https://data.azbit.com/api/endpoint?key1=value1&key2=value2
+   * @param {Object} data Request params
+   * @returns {String}
+   */
+  function getUrlWithParams(url, data) {
+    const queryString = getParamsString(data);
+
     if (queryString) {
       url = url + '?' + queryString;
     }
+
     return url;
   }
 
+  /**
+   * Makes a request to public endpoint
+   * @param {String} path Endpoint
+   * @param {Object} data Request params
+   * @returns {*}
+   */
   function publicRequest(path, data) {
     let url = `${WEB_BASE}${path}`;
     const urlBase = url;
 
-    const queryString = getQueryStringFromData(data);
-    url = makeUrlFromData(url, data);
+    const queryString = getParamsString(data);
+    url = getUrlWithParams(url, data);
 
     return new Promise((resolve, reject) => {
       const httpOptions = {
@@ -115,7 +135,14 @@ module.exports = function() {
     });
   }
 
-  function protectedRequest(path, data, method='get') {
+  /**
+   * Makes a request to private (auth) endpoint
+   * @param {String} path Endpoint
+   * @param {Object} data Request params
+   * @param {String} method Request type: get, post, delete
+   * @returns {*}
+   */
+  function protectedRequest(path, data, method) {
     let url = `${WEB_BASE}${path}`;
     const urlBase = url;
 
@@ -123,18 +150,15 @@ module.exports = function() {
     let bodyString;
 
     try {
-      if (method.toLowerCase() === 'get') {
+      if (method === 'get') {
         bodyString = '';
-        url = makeUrlFromData(url, data);
+        url = getUrlWithParams(url, data);
       } else {
-        if (Object.keys(data).length > 0) {
-          bodyString = getBody(data);
-        }
-        else {
-          bodyString = '';
-        }
+        bodyString = getBody(data);
       }
-      const signature = getSignature(url, bodyString)
+
+      const signature = getSignature(url, bodyString);
+
       headers = {
         ...DEFAULT_HEADERS,
         'API-PublicKey': config.apiKey,
@@ -146,15 +170,13 @@ module.exports = function() {
     }
 
     return new Promise((resolve, reject) => {
-      let httpOptions = {
+      const httpOptions = {
         method: method,
         url: url,
         timeout: 10000,
         headers: headers,
+        data,
       };
-      if (method.toLowerCase() !== 'get' && Object.keys(data).length > 0) {
-        httpOptions = Object.assign(httpOptions, { data: data });
-      }
 
       axios(httpOptions)
           .then((response) => handleResponse(response, resolve, reject, bodyString, undefined, urlBase))
@@ -163,7 +185,7 @@ module.exports = function() {
   }
 
   const getBody = (data) => {
-    return JSON.stringify(data);
+    return utils.isObjectNotEmpty(data) ? JSON.stringify(data) : '';
   };
 
   const getSignature = (url, payload) => {
@@ -208,7 +230,7 @@ module.exports = function() {
       const data = {};
       if (pair) data.currencyPairCode = pair;
       data.status = status;
-      return protectedRequest('/user/orders', data);
+      return protectedRequest('/user/orders', data, 'get');
     },
 
     /**
@@ -308,7 +330,7 @@ module.exports = function() {
 
     getDepositAddress: function(coin) {
       const data = {};
-      return protectedRequest(`/deposit-address/${coin}`, data);
+      return protectedRequest(`/deposit-address/${coin}`, data, 'get');
     },
 
     /**
