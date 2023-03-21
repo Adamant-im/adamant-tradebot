@@ -459,11 +459,10 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
     }, // placeOrder()
 
     /**
-     * Get orderbook (40 bids + 40 asks) on a specific pair
-     * @param pair
-     * @returns {Object} {amount: Number, price: Number, count: BigInteger, type: String}
+     * Get orderbook on a specific pair
+     * @param pair In classic format as BTC/USDT
+     * @returns {Object}
      */
-
     getOrderBook(pair) {
       const paramString = `pair: ${pair}`;
       const pair_ = formatPairName(pair);
@@ -476,18 +475,18 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
               asks: [],
             };
 
-            data.forEach((crypto) => {
-              if (crypto.isBid === true) {
+            data.forEach((order) => {
+              if (order.isBid) {
                 result.bids.push({
-                  amount: +crypto.amount,
-                  price: +crypto.price,
+                  amount: +order.amount,
+                  price: +order.price,
                   count: 1,
                   type: 'bid-buy-left',
                 });
               } else {
                 result.asks.push({
-                  amount: +crypto[1],
-                  price: +crypto[0],
+                  amount: +order.amount,
+                  price: +order.price,
                   count: 1,
                   type: 'ask-sell-right',
                 });

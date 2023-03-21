@@ -299,15 +299,17 @@ module.exports = function() {
     },
 
     /**
-     * Get market depth
-     * @param pair
+     * Get market depth, 40 bids + 40 asks
+     * Note: returns [] for a wrong trade pair
+     * @param pair In Azbit format as ETH_USDT
      * @return {Object}
+     * https://docs.azbit.com/docs/public-api/orders#apiorderbook
      */
     orderBook: function(pair) {
-      const data = {};
-      data.currencyPairCode = pair;
-      // if (limit) data.limit = limit;
-      // if (interval) data.interval = interval;
+      const data = {
+        currencyPairCode: pair,
+      };
+
       return publicRequest('/orderbook', data);
     },
 
