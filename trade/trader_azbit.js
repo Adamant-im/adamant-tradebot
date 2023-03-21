@@ -1,5 +1,6 @@
 const Azbit = require('./api/azbit_api');
 const utils = require('../helpers/utils');
+const constants = require('../helpers/const');
 
 // API endpoints:
 // Base URL for requests: https://data.azbit.com for v1, https://api2.azbit.com for v2 (public requests only)
@@ -353,15 +354,14 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
 
     /**
      * Create buy or sell limit order on a specific pair
-     * @param {String} orderType
-     * @param {String} pair
-     * @param {Number} price
-     * @param {Number} coin1Amount
-     * @param {BigInteger} limit - Azbit supports only limits orders
-     * @param {Number} coin2Amount
-     * @returns {String} Order GUID string i.e. "e2cd407c-28c8-4768-bd73-cd7357fbccde"
+     * @param {String} orderType 'buy' or 'sell'
+     * @param {String} pair In classic format as BTC/USDT
+     * @param {Number} price Order price
+     * @param {Number} coin1Amount Amount for coin1
+     * @param {Number} limit Azbit supports only limits orders
+     * @param {Number} coin2Amount Quote coin value
+     * @returns {Object}
      */
-
     placeOrder(orderType, pair, price, coin1Amount, limit = 1, coin2Amount) {
       const paramString = `orderType: ${orderType}, pair: ${pair}, price: ${price}, coin1Amount: ${coin1Amount}, limit: ${limit}, coin2Amount: ${coin2Amount}`;
 
@@ -418,16 +418,24 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
 
       if (limit) { // Limit order
         const pairName = formatPairName(pair);
-        log.log('pairName: ' + JSON.stringify(pairName));
         output = `${orderType} ${coin1Amount} ${pairName.coin1} at ${price} ${pairName.coin2}.`;
 
         return new Promise((resolve, reject) => {
           azbitClient.addOrder(marketInfo.pairPlain, coin1Amount, price, orderType).then(function(data) {
             try {
-              const result = data;
-              log.log(`Place new order on ${exchangeName}. ${output}`);
-              order.orderId = result;
-              resolve(order);
+              if (data && !data.azbitErrorInfo && data.match(constants.REGEXP_UUID)) {
+                message = `Order placed to ${output} Order Id: ${data}.`;
+                log.info(message);
+                order.orderId = data;
+                order.message = message;
+                resolve(order);
+              } else {
+                message = `Unable to place order to ${output} Check parameters and balances. Details: ${data.azbitErrorInfo}.`;
+                log.warn(message);
+                order.orderId = false;
+                order.message = message;
+                resolve(order);
+              }
             } catch (e) {
               message = `Error while processing placeOrder(${paramString}) request: ${e}`;
               log.warn(message);

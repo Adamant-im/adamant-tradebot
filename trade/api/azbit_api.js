@@ -247,9 +247,11 @@ module.exports = function() {
     /**
      * Places a order
      * @param {String} market In Azbit format as ETH_USDT
-     * @param {Number} amount Order amount
+     * @param {Number} amount Order amount in coin1
      * @param {Number} price Order price
      * @param {String} side 'buy' or 'sell'
+     * @return {Object} Order GUID in case if success. Example: "e2cd407c-28c8-4768-bd73-cd7357fbccde".
+     * https://docs.azbit.com/docs/public-api/orders#post
      */
     addOrder: function(market, amount, price, side) {
       const data = {
