@@ -118,9 +118,8 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
   }
 
   return {
-
     /**
-     * Getter stored markets info
+     * Getter for stored markets info
      * @returns {Object}
      */
     get markets() {
@@ -128,29 +127,27 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
     },
 
     /**
-     * Getter stored currencies info
+     * Getter for stored currencies info
      * @returns {Object}
      */
-
     get currencies() {
       return module.exports.exchangeCurrencies;
     },
 
     /**
-     * Get exchange currencies pairs config
-     * @param pair
-     * @returns {Object} - the same as getMarkets result
+     * Get info for a specific market
+     * @param pair In classic format as BTC/USDT
+     * @returns {Object}
      */
     marketInfo(pair) {
       return getMarkets(pair);
     },
 
     /**
-     * Get currencies info
-     * @param coin
-     * @returns {Object} - the same as getCurrencies result
+     * Get info for a specific coin
+     * @param coin As BTC
+     * @returns {Object}
      */
-
     currenciesInfo(coin) {
       return getCurrencies(coin);
     },
@@ -159,20 +156,16 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
       return {
         getDepositAddress: true,
         getMarkets: true,
-        getCurrencies: true,
+        getCurrencies: false, // Use v2 to get currencies
         placeMarketOrder: false,
         getTradingFees: true,
         selfTradeProhibited: false,
         createDepositAddressWithWebsiteOnly: false,
         getFundHistory: true,
         getFundHistoryImplemented: false,
-        supportCoinNetworks: true,
+        supportCoinNetworks: true, // Use v2 to get info
         allowAmountForMarketBuy: false,
         amountForMarketOrderNecessary: false,
-        maxOrdersPerMinute: 120,
-        maxOrdersPerHour: 3600,
-        maxOrdersPerDay: 64000,
-        // openOrdersCacheSec: 180,
       };
     },
 
