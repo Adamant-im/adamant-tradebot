@@ -2,7 +2,7 @@ const Azbit = require('./api/azbit_api');
 const utils = require('../helpers/utils');
 
 // API endpoints:
-// Base URL for requests is https://data.azbit.com
+// Base URL for requests: https://data.azbit.com for v1, https://api2.azbit.com for v2 (public requests only)
 const apiServer = 'https://data.azbit.com';
 const exchangeName = 'Azbit';
 

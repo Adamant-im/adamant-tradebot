@@ -7,7 +7,7 @@ module.exports = function() {
     'Content-Type': 'application/json',
   };
 
-  let WEB_BASE = 'https://data.azbit.com'; // To be set in setConfig()
+  let WEB_BASE = ''; // To be set in setConfig()
   const WEB_BASE_PREFIX = '/api';
   let config = {
     'apiKey': '',
