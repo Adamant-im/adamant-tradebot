@@ -277,7 +277,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
       return new Promise((resolve, reject) => {
         azbitClient.cancelOrder(orderId).then(function(data) {
           if (data && !data.azbitErrorInfo) {
-            log.log(`Cancelling order ${data.result.orderId} on ${pair_.pairReadable} pair…`);
+            log.log(`Cancelling order ${orderId} on ${pair_.pairReadable} pair…`);
             resolve(true);
           } else {
             const errorMessage = data?.azbitErrorInfo || 'No details';
@@ -293,16 +293,23 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
 
     /**
      * Cancel all order on specific pair
-     * @param pair
-     * @returns {Object} true || undefined
+     * @param pair In classic format as BTC/USDT
+     * @returns {Promise<unknown>}
      */
     cancelAllOrders(pair) {
       const paramString = `pair: ${pair}`;
       const pair_ = formatPairName(pair);
+
       return new Promise((resolve, reject) => {
-        azbitClient.cancelAllOrders(pair).then(function(data) {
-          log.log(`Cancelling all orders on ${pair_.pairReadable} pair…`);
-          resolve(true);
+        azbitClient.cancelAllOrders(pair_.pairPlain).then(function(data) {
+          if (data && !data.azbitErrorInfo) {
+            log.log(`Cancelling all orders on ${pair_.pairReadable} pair…`);
+            resolve(true);
+          } else {
+            const errorMessage = data?.azbitErrorInfo || 'No details';
+            log.log(`Unable to cancel all orders on ${pair_.pairReadable}: ${errorMessage}.`);
+            resolve(false);
+          }
         }).catch((err) => {
           log.warn(`API request cancelAllOrders(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
           resolve(undefined);

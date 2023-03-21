@@ -265,7 +265,7 @@ module.exports = function() {
     /**
      * Cancel an order
      * @param {String} orderId Example: '70192a8b-c34e-48ce-badf-889584670507'
-     * @return {Object}
+     * @return {Object} Success response with no data
      * https://docs.azbit.com/docs/public-api/orders#delete-1
      */
     cancelOrder: function(orderId) {
@@ -274,13 +274,12 @@ module.exports = function() {
 
     /**
      * Cancel all orders for currency pair
-     * @param {String} pair
-     * @returns {Object} Success response with no data
+     * @param {String} pair In Azbit format as ETH_USDT
+     * @returns {Object} Success response with no data. Never mind, if no success, no data as well. Same 200 status.
+     * https://docs.azbit.com/docs/public-api/orders#delete
      */
-
     cancelAllOrders: function(pair) {
-      const data = {};
-      return protectedRequest(`/orders?currencyPairCode=${pair}`, data, 'delete');
+      return protectedRequest(`/orders?currencyPairCode=${pair}`, {}, 'delete');
     },
 
     /**
