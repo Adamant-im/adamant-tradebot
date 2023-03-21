@@ -7,21 +7,13 @@ const apiServer = 'https://data.azbit.com';
 const exchangeName = 'Azbit';
 
 module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
-  const azbitClient = initApiClient();
+  const azbitClient = Azbit();
+
+  azbitClient.setConfig(apiServer, apiKey, secretKey, pwd, log, publicOnly);
 
   // Fulfill markets and currencies on initialization
   getMarkets();
   getCurrencies();
-
-  /**
-   * Module initialization
-   * @returns {Object} Azbit API Client
-   */
-  function initApiClient() {
-    const azbitClient = Azbit();
-    azbitClient.setConfig(apiServer, apiKey, secretKey, pwd, log, publicOnly);
-    return azbitClient;
-  }
 
   /**
    * Get exchange trade pairs config
