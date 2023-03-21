@@ -211,6 +211,7 @@ module.exports = function() {
     /**
      * List of user balances for all currencies
      * @return {Object} { balances, balancesBlockedInOrder, balancesInCurrencyOfferingsVesting?, withdrawalLimits, currencies }
+     * https://docs.azbit.com/docs/public-api/wallet#apiwalletsbalances
      */
     getBalances: async function() {
       const data = {};
@@ -218,16 +219,19 @@ module.exports = function() {
     },
 
     /**
-     * Query account active orders
+     * Query account orders
      * @param {String} pair In Azbit format as ETH_USDT
-     * @param {String} status ["all", "active", "cancelled"]
+     * @param {String} status ["all", "active", "cancelled"]. Optional.
      * @return {Object}
+     * https://docs.azbit.com/docs/public-api/orders#apiuserorders
      *
      */
-    getOrders: function(pair, status='active') {
+    getOrders: function(pair, status) {
       const data = {};
+
       if (pair) data.currencyPairCode = pair;
-      data.status = status;
+      if (status) data.status = status;
+
       return protectedRequest('/user/orders', data, 'get');
     },
 

@@ -211,7 +211,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
 
     /**
      * List of all account open orders
-     * @param {String} pair
+     * @param {String} pair  In classic format as BTC/USDT
      * @returns {Object} [{orderId: String, symbol: String, price: Float, side: String, timestamp: Integer, status: String}]
      */
     async getOpenOrders(pair) {
@@ -221,7 +221,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
       let data;
 
       try {
-        data = await azbitClient.getOrders(pair_.pair);
+        data = await azbitClient.getOrders(pair_.pair, 'active');
       } catch (err) {
         log.warn(`API request getOpenOrders(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
         return undefined;
@@ -232,30 +232,33 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
         const result = [];
 
         openOrders.forEach((order) => {
-          let side = 'sell';
-          if (order.isBid) {
-            side = 'buy';
+          let orderStatus;
+          if (order.initialAmount === order.amount) {
+            orderStatus = 'new';
+          } else if (order.amount === 0) {
+            orderStatus = 'filled';
+          } else {
+            orderStatus = 'part_filled';
           }
 
           result.push({
-            orderId: order.id,
+            orderId: order.id.toString(),
             symbol: order.currencyPairCode, // In Azbit format as ETH_USDT
             price: +order.price,
-            side: side, // 'isBid' => 'buy' or 'sell'
-            // type: order.type, // 'limit' or 'market'
-            timestamp: new Date(order.date).getTime(), //  date str => Timestamp
-            // TODO: figure out with amounts: initialAmount, amount, quoteAmount
-            /* amount: +order.amount,
-            amountExecuted: +order.dealStock,
-            amountLeft: +order.left,*/
-            status: order.status,
-            // Additionally: dealStock, takerFee, makerFee, dealFee
+            side: order.isBid ? 'buy' : 'sell', // 'buy' or 'sell'
+            type: 'limit', // 'limit' or 'market'
+            timestamp: new Date(order.date).getTime(), // '2023-03-17T18:31:13.225615'
+            amount: +order.initialAmount,
+            amountExecuted: +order.initialAmount - +order.amount,
+            amountLeft: +order.amount,
+            status: orderStatus,
+            // Additionally: isCanceled
           });
         });
 
         return result;
       } catch (e) {
-        log.warn(`Error while processing getOpenOrdersPage(${paramString}) request results: ${JSON.stringify(data)}. ${e}`);
+        log.warn(`Error while processing getOpenOrders(${paramString}) request results: ${JSON.stringify(data)}. ${e}`);
         return undefined;
       }
     },
