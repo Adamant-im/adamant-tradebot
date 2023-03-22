@@ -265,6 +265,76 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
     },
 
     /**
+     * Get specific order details
+     * What's important is to understand the order was filled or closed by other reason
+     * status: unknown, new, filled, part_filled, cancelled
+     * @param {String} orderId Example: '70192a8b-c34e-48ce-badf-889584670507'
+     * @param {String} pair In classic format as BTC/USDT. For logging purposes.
+     * @returns {Promise<unknown>}
+     */
+    async getOrderDetails(orderId, pair) {
+      const paramString = `orderId: ${orderId}, pair: ${pair}`;
+      const pair_ = formatPairName(pair);
+
+      let data;
+
+      try {
+        data = await azbitClient.getOrderDeals(orderId);
+      } catch (err) {
+        log.warn(`API request getOrderDetails(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
+        return undefined;
+      }
+
+      try {
+        if (data && !data.azbitErrorInfo) {
+          const orderTrades = data.deals;
+
+          let orderStatus;
+          if (data.isCanceled) {
+            orderStatus = 'cancelled';
+          } if (data.initialAmount === data.amount) {
+            orderStatus = 'new';
+          } else if (data.amount === 0) {
+            orderStatus = 'filled';
+          } else {
+            orderStatus = 'part_filled';
+          }
+
+          const result = {
+            orderId: data.id,
+            tradesCount: orderTrades.length,
+            amount: data.initialAmount,
+            volume: data.quoteAmount,
+            pairPlain: pair_.pairPlain,
+            pairReadable: pair_.pairReadable,
+            totalFeeInCoin2: undefined, // Azbit doesn't provide fee info
+            amountExecuted: 0, // In coin1
+            volumeExecuted: 0, // In coin2
+            status: orderStatus,
+          };
+
+          orderTrades.forEach((trade) => {
+            result.amountExecuted += +trade.volume; // Finally should be as (initialAmount - amount)
+            result.volumeExecuted += +trade.volume * +trade.price;
+          });
+
+          return result;
+        } else {
+          const errorMessage = data?.azbitErrorInfo || 'No details';
+          log.log(`Unable to get order ${orderId} details: ${errorMessage}.`);
+
+          return {
+            orderId,
+            status: 'unknown', // Order doesn't exist or Wrong orderId
+          };
+        }
+      } catch (e) {
+        log.warn(`Error while processing getOrderDetails(${paramString}) request results: ${JSON.stringify(data)}. ${e}`);
+        return undefined;
+      }
+    },
+
+    /**
      * Cancel an order
      * @param {String} orderId Example: '70192a8b-c34e-48ce-badf-889584670507'
      * @param {String} side Not used for Azbit

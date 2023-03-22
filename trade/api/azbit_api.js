@@ -20,6 +20,7 @@ module.exports = function() {
     429, // Too many requests
     423, // Temporary block
     500, // Service temporary unavailable
+    // 404, ~Not found: for getOrderDeals()
     // 400, ~Processed with an error
     // 422, ~Data validation error
   ];
@@ -50,6 +51,10 @@ module.exports = function() {
 
       if (typeof azbitData === 'string') {
         azbitErrorMessage = azbitData;
+      }
+
+      if (azbitData.status === 404 && url.includes('/deals')) {
+        azbitErrorMessage = 'Order not found';
       }
     }
 
@@ -236,6 +241,24 @@ module.exports = function() {
       if (status) data.status = status;
 
       return protectedRequest('/user/orders', data, 'get');
+    },
+
+    /**
+     * Query order deals
+     * @param {String} orderId Exchange's orderId as '70192a8b-c34e-48ce-badf-889584670507'
+     * @return {Object} { deals[], id, isCanceled and other order details }
+     * https://docs.azbit.com/docs/public-api/orders#apiordersorderiddeals
+     * Order doesn't exist: 404, { status: 404 }
+     * Wrong orderId (not a GUID): 400, { status: 400, errors: { ... } }
+     * No deals: { deals: [], ... }
+     * Cancelled order: { deals: [...], isCanceled: true, ... }
+     */
+    getOrderDeals: function(orderId) {
+      const data = {
+        orderId,
+      };
+
+      return protectedRequest(`/orders/${orderId}/deals`, {}, 'get');
     },
 
     /**

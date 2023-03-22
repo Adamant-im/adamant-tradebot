@@ -65,6 +65,8 @@ module.exports = {
     // console.log(await traderapi.cancelOrder('5d13f3e8-dcb3-4a6d-88c1-16cf6e8d8179', undefined, 'DOGE/USDT'));
     // console.log(await traderapi.cancelOrder('ODM54B-5CJUX-RSUKCK', undefined, 'DOGE/USDT'));
     // console.log(traderapi.features().orderNumberLimit);
+
+    // console.log(await traderapi.getOrderDetails('11680204-90ca-4fd1-bb63-efed480d0632', 'ADM/USDT'));
   },
 
   run() {
