@@ -48,9 +48,9 @@ We can run market-making for you, see [marketmaking.app/services](https://market
 
 ## Requirements
 
-* Ubuntu 18–22, centOS 7 or 8 (we didn't test others)
+* Ubuntu 18–22, centOS 8 (we didn't test others)
 * NodeJS v16+
-* MongoDB ([installation instructions](https://docs.mongodb.com/manual/tutorial/install-mongodb-on-ubuntu/))
+* MongoDB v6+ ([installation instructions](https://docs.mongodb.com/manual/tutorial/install-mongodb-on-ubuntu/))
 
 ## Setup
 
@@ -77,7 +77,7 @@ Parameters: see comments in config file.
 You can start the Bot with the `node app` command, but it is recommended to use the process manager for this purpose.
 
 ```
-pm2 start --name tradebot app.js
+pm2 start app.js --name tradebot
 ```
 
 ## Add a Bot to cron
@@ -89,7 +89,7 @@ crontab -e
 Add string:
 
 ```
-@reboot cd /home/adamant/adamant-tradebot && pm2 start --name tradebot app.js
+@reboot cd /home/adamant/adamant-tradebot && pm2 start app.js --name tradebot
 ```
 
 ## Updating

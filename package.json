@@ -31,8 +31,6 @@
     "arbitrage",
     "crypto",
     "cryptocurrency",
-    "coindeal",
-    "resfinex",
     "p2pb2b",
     "spread",
     "liquidity",
@@ -54,17 +52,17 @@
     "mongodb": "^4.14.0"
   },
   "devDependencies": {
-    "@babel/core": "^7.21.0",
-    "@babel/eslint-parser": "^7.19.1",
+    "@babel/core": "^7.21.3",
+    "@babel/eslint-parser": "^7.21.3",
     "@babel/plugin-transform-runtime": "^7.21.0",
     "@babel/preset-env": "^7.20.2",
     "axios-mock-adapter": "^1.21.2",
-    "eslint": "^8.34.0",
+    "eslint": "^8.36.0",
     "eslint-config-google": "^0.14.0",
     "eslint-plugin-import": "^2.27.5",
     "eslint-plugin-node": "^11.1.0",
     "eslint-plugin-promise": "^6.1.1",
-    "jest": "^29.4.3"
+    "jest": "^29.5.0"
   },
   "publishConfig": {
     "access": "public"
