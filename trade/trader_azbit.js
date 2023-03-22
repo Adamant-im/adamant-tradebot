@@ -515,37 +515,28 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
     },
 
     /**
-     * Get history of trade page
-     * @param {String} pair
-     * @param {BigInteger} page
-     * @param {BigInteger} limit = 500 for Azbit
-     * @returns {Object} {coin1Amount: Number, price: Number, coin2Amount: Number, date: Date, type: String,
-     * tradeId: String (GUID)}
+     * Get history of trades
+     * @param {String} pair In classic format as BTC/USDT
+     * @param {Number} limit Number of records to return
+     * @returns {Object[]} [{coin1Amount: Number, price: Number, coin2Amount: Number, date: Date, type: String,
+     *   tradeId: String (GUID)}]
      */
-
-    async getTradesHistoryPage(pair, page, limit = 500) {
+    async getTradesHistory(pair, limit) {
       const paramString = `pair: ${pair}, limit: ${limit}`;
       const pair_ = formatPairName(pair);
 
       return new Promise((resolve, reject) => {
-        azbitClient.getTradesHistory(pair_.pair, page, limit).then(function(data) {
+        azbitClient.getTradesHistory(pair_.pair, limit).then(function(data) {
           try {
-            const trades = data;
             const result = [];
 
-            trades.forEach((trade) => {
-              let tradeType;
-              if (trade.isBuy === true) {
-                tradeType = 'buy';
-              } else {
-                tradeType = 'sell';
-              }
+            data.forEach((trade) => {
               result.push({
                 coin1Amount: +trade.volume, // amount in coin1
                 price: +trade.price, // trade price
                 coin2Amount: +trade.volume * +trade.price, // quote in coin2
-                date: trade.dealDateUTC, // string date in UTC
-                type: tradeType, // 'buy' or 'sell'
+                date: new Date(trade.dealDateUtc).getTime(), // '2023-03-21T20:18:17.0724200'
+                type: trade.isBuy? 'buy' : 'sell', // 'buy' or 'sell'
                 tradeId: trade.id,
               });
             });
@@ -565,28 +556,6 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
           resolve(undefined);
         });
       });
-    },
-
-    /**
-     * Get trade history for currency pair
-     * @param {String} pair
-     * @returns {Object} - the same as getTradesHistoryPage
-     */
-    async getTradesHistory(pair) {
-      let allTrades = [];
-      let ordersInfo;
-      let page = 1;
-      // Total records limit
-      const limit = 1000;
-
-      do {
-        ordersInfo = await this.getTradesHistoryPage(pair, page);
-        if (ordersInfo) {
-          allTrades = allTrades.concat(ordersInfo);
-        }
-        page += 1;
-      } while (allTrades.length < limit);
-      return allTrades;
     },
 
     /**

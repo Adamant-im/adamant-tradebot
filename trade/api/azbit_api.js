@@ -315,17 +315,21 @@ module.exports = function() {
 
     /**
      * Get trades history
-     * @param pair Trading pair, like BTC_USDT
-     * @param page
-     * @param pageSize
+     * Note: returns [] for a wrong trade pair
+     * @param pair In Azbit format as ETH_USDT
+     * @param pageSize Number of trades to return
+     * @param pageNumber Page number. Optional.
      * @return {Object} Last trades
+     * https://docs.azbit.com/docs/public-api/deals#apideals
      */
-    getTradesHistory: function(pair, page, pageSize = 500) {
+    getTradesHistory: function(pair, pageSize = 500, pageNumber) {
       const data = {
-        pageNumber: page,
-        pageSize: pageSize,
+        pageSize,
         currencyPairCode: pair,
       };
+
+      if (pageNumber) data.pageNumber = pageNumber;
+
       return publicRequest(`/deals`, data);
     },
 
