@@ -1582,11 +1582,18 @@ async function stats(params) {
       let average = (exchangeRates.high+exchangeRates.low)/2;
       let deltaPercent = delta/average * 100;
       output += `\nVol: ${utils.formatNumber(+exchangeRates.volume.toFixed(coin1Decimals), true)} ${coin1}${volumeInCoin2String}.`;
-      output += `\nLow: ${exchangeRates.low.toFixed(coin2Decimals)}, high: ${exchangeRates.high.toFixed(coin2Decimals)}, delta: _${(delta).toFixed(coin2Decimals)}_ ${coin2} (${(deltaPercent).toFixed(2)}%).`;
+      if (exchangeRates.low && exchangeRates.high) {
+        output += `\nLow: ${exchangeRates.low.toFixed(coin2Decimals)}, high: ${exchangeRates.high.toFixed(coin2Decimals)}, delta: _${(delta).toFixed(coin2Decimals)}_ ${coin2} (${(deltaPercent).toFixed(2)}%).`;
+      } else {
+        output += `\nNo low and high rates available.`;
+      }
       delta = exchangeRates.ask-exchangeRates.bid;
       average = (exchangeRates.ask+exchangeRates.bid)/2;
       deltaPercent = delta/average * 100;
       output += `\nBid: ${exchangeRates.bid.toFixed(coin2Decimals)}, ask: ${exchangeRates.ask.toFixed(coin2Decimals)}, spread: _${(delta).toFixed(coin2Decimals)}_ ${coin2} (${(deltaPercent).toFixed(2)}%).`;
+      if (exchangeRates.last) {
+        output += `\nLast price: _${(exchangeRates.last).toFixed(coin2Decimals)}_ ${coin2}.`;
+      }
     } else {
       output += `Unable to get ${config.exchangeName} stats for ${pairObj.pair}. Try again later.`;
     }
