@@ -559,29 +559,26 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
     },
 
     /**
-     * Get inforamtion for deposit
-     * @param {String} coin
-     * @returns {Object} {address: String, addressPublicKey: String, addressMemo: String, commissionPercent: Number,
-     * commissionMinimum: Number, minAmount: Number, chain: BigInteger}
+     * Get deposit address for a coin
+     * @param {String} coin As BTC
+     * @returns {Object}
      */
-
     getDepositAddress(coin) {
       const paramString = `coin: ${coin}`;
+
       return new Promise((resolve, reject) => {
         azbitClient.getDepositAddress(coin).then(function(data) {
           try {
-
             const result = {};
-            if (data.length > 0) {
-              result.address = data[0].address;
-              result.addressPublicKey = data[0].addressPublicKey;
-              result.addressMemo = data[0].addressMemo;
-              result.commissionPercent = data[0].commissionPercent;
-              result.commissionMinimum = data[0].commissionMinimum;
-              result.minAmount = data[0].minAmount;
-              result.chain = data[0].chain;
+
+            if (data?.length) {
+              // Note: chain returns as Id (Number). To map it, re-build getCurrencies() with all the info.
+              // Also, getDepositAddress() returns additional fields.
+              resolve(data.map(({ chain, address }) => ({ network: chain, address: address })));
+            } else {
+              resolve(false);
             }
-            console.log('getDepositAddress result: ' + JSON.stringify(result));
+
 
             resolve(result);
           } catch (e) {
@@ -589,7 +586,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
             resolve(undefined);
           }
         }).catch((err) => {
-          log.log(`API request getDepositAddress${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}.`);
+          log.log(`API request getDepositAddress(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}.`);
           resolve(undefined);
         });
       });

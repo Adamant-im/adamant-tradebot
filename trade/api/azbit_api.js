@@ -346,13 +346,12 @@ module.exports = function() {
 
     /**
      * Get user deposit address
-     * @param coin
+     * @param coin As BTC
      * @returns {Object}
+     * https://docs.azbit.com/docs/public-api/wallet#apideposit-addresscurrencycode
      */
-
     getDepositAddress: function(coin) {
-      const data = {};
-      return protectedRequest(`/deposit-address/${coin}`, data, 'get');
+      return protectedRequest(`/deposit-address/${coin}`, {}, 'get');
     },
 
     /**
