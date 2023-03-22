@@ -559,29 +559,6 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
     },
 
     /**
-     * Get all currencies codes
-     * @returns {Object} [{String}]
-     */
-
-    getCurrencies() {
-      const paramString = ``;
-      return new Promise((resolve, reject) => {
-        azbitClient.getCurrencies().then(function(data) {
-          try {
-            const result = data;
-            resolve(result);
-          } catch (e) {
-            log.warn(`Error while processing getCurrencies(${paramString}) request: ${e}`);
-            resolve(undefined);
-          }
-        }).catch((err) => {
-          log.log(`API request getCurrencies${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}.`);
-          resolve(undefined);
-        });
-      });
-    },
-
-    /**
      * Get inforamtion for deposit
      * @param {String} coin
      * @returns {Object} {address: String, addressPublicKey: String, addressMemo: String, commissionPercent: Number,
