@@ -43,12 +43,12 @@
 
   /** List of supported exchanges **/
   "exchanges": [
-    "Resfinex",
-    "P2PB2B"
+    "P2PB2B",
+    "Azbit"
   ],
 
   /** Exchange to work with. Case insensitive. **/
-  "exchange": "Resfinex",
+  "exchange": "Azbit",
 
   /** Pair to trade **/
   "pair": "ADM/USDT",

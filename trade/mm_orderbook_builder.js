@@ -43,7 +43,7 @@ module.exports = {
     // const TraderApi = require('../trade/trader_' + config.exchange);
 
     // const traderapi3 = TraderApi(config.apikey2, config.apisecret2, config.apipassword2, log);
-    // const traderapi2 = require('./trader_' + 'resfinex')(config.apikey, config.apisecret, config.apipassword, log);
+    // const traderapi2 = require('./trader_' + 'azbit')(config.apikey, config.apisecret, config.apipassword, log);
 
     // const ob = await traderapi.getOrderBook('DOGE/USD');
     // console.log(ob);
@@ -52,8 +52,8 @@ module.exports = {
     // console.log(req);
 
     // setTimeout(() => {
-    //   const traderapi = require('./trader_' + 'resfinex')(config.apikey, config.apisecret, config.apipassword, log);
-    //   console.log(require('./orderUtils').parseMarket('ADM/USDT', 'resfinex'));
+    //   const traderapi = require('./trader_' + 'azbit')(config.apikey, config.apisecret, config.apipassword, log);
+    //   console.log(require('./orderUtils').parseMarket('ADM/USDT', 'azbit'));
     // }, 3000);
 
     // const orderCollector = require('./orderCollector');
