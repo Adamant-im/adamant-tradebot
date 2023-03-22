@@ -248,7 +248,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
             price: +order.price,
             side: order.isBid ? 'buy' : 'sell', // 'buy' or 'sell'
             type: 'limit', // 'limit' or 'market'
-            timestamp: new Date(order.date).getTime(), // '2023-03-17T18:31:13.225615'
+            timestamp: new Date(order.date + '+00:00').getTime(), // '2023-03-17T18:31:13.225615'
             amount: +order.initialAmount,
             amountExecuted: +order.initialAmount - +order.amount,
             amountLeft: +order.amount,
@@ -535,7 +535,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
                 coin1Amount: +trade.volume, // amount in coin1
                 price: +trade.price, // trade price
                 coin2Amount: +trade.volume * +trade.price, // quote in coin2
-                date: new Date(trade.dealDateUtc).getTime(), // '2023-03-21T20:18:17.0724200'
+                date: new Date(trade.dealDateUtc + '+00:00').getTime(), // '2023-03-21T20:18:17.0724200'
                 type: trade.isBuy? 'buy' : 'sell', // 'buy' or 'sell'
                 tradeId: trade.id,
               });
