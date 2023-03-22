@@ -33,9 +33,8 @@ Trading is a mode when a bot runs orders according to some strategy. It can be p
 
 # Supported exchanges
 
-* [CoinDeal](https://coindeal.com)
-* [Resfinex](https://resfinex.com)
 * [P2PB2B](https://p2pb2b.com)
+* [Azbit](https://azbit.com?referralCode=9YVWYAF)
 
 To add other exchange support, see [marketmaking.app/services](https://marketmaking.app/services/).
 
