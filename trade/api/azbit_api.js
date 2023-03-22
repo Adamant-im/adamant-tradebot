@@ -355,13 +355,12 @@ module.exports = function() {
     },
 
     /**
-     * Get currency pairs commissions
+     * Get trade fees
      * @returns {Object}
+     * https://docs.azbit.com/docs/public-api/currency#apicurrenciesusercommissions
      */
-
     getFees: function() {
-      const data = {};
-      return publicRequest('/currencies/commissions', data);
+      return protectedRequest('/currencies/user/commissions', {}, 'get');
     },
 
     /**

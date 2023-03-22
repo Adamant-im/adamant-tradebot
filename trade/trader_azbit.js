@@ -579,7 +579,6 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
               resolve(false);
             }
 
-
             resolve(result);
           } catch (e) {
             log.warn(`Error while processing getDepositAddress(${paramString}) request: ${e}`);
@@ -593,48 +592,12 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
     },
 
     /**
-     * Get currency pair commissions
-     * @returns {Object} {code: String, dealBid: Boolean, dealAsk: Boolean, percent: Number}
+     * Get trading fees for account
+     * @param coinOrPair Coin in classic format as BTC, or pair in classic format as BTC/USD
      */
-
-    getFees() {
-      const paramString = ``;
-      return new Promise((resolve, reject) => {
-        azbitClient.getFees().then(function(data) {
-          try {
-            //console.log('getFees data: ' + JSON.stringify(data));
-            const result = [];
-
-            data.forEach((fee) => {
-              const commissionType = fee.commissionType.valueKey;
-              if (commissionType === 'DealBid' || commissionType === 'DealAsk') {
-                let dealBid = false;
-                let dealAsk = false;
-                if (commissionType === 'DealBid') {
-                  dealBid = true;
-                } else {
-                  dealAsk = true;
-                }
-                result.push({
-                  code: fee.currencyCode.toUpperCase(),
-                  dealBid: dealBid,
-                  dealAsk: dealAsk,
-                  percent: fee.percent,
-                });
-              }
-            });
-            resolve(result);
-          } catch (e) {
-            log.warn(`Error while processing getFees(${paramString}) request: ${e}`);
-            resolve(undefined);
-          }
-        }).catch((err) => {
-          log.log(`API request getFees${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}.`);
-          resolve(undefined);
-        });
-      });
+    async getFees(coinOrPair) {
+      // Azbit supports it, but we haven't implemented
     },
-
   };
 };
 
