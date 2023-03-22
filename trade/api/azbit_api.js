@@ -338,6 +338,7 @@ module.exports = function() {
      * Note: v1 endpoint returns only coin tickers.
      * v1 /wallets/balances and v2 https://api2.azbit.com/api/currencies offer much more, but never mind.
      * @returns {Object}
+     * https://docs.azbit.com/docs/public-api/currency#apicurrencies
      */
     getCurrencies() {
       const data = {};
@@ -366,6 +367,7 @@ module.exports = function() {
     /**
      * Get info on all markets
      * @returns {Object}
+     * https://docs.azbit.com/docs/public-api/currency#apicurrenciespairs
      */
     markets: async function() {
       const data = {};
