@@ -38,12 +38,6 @@ module.exports = function() {
     const httpMessage = responseOrError?.statusText || responseOrError?.response?.statusText;
 
     const azbitData = responseOrError?.data || responseOrError?.response?.data;
-    // console.log('');
-    // console.log('');
-    // console.log(httpCode);
-    // console.log(url);
-    // console.log(azbitData);
-
     const azbitStatus = httpCode === 200 ? true : false; // Azbit doesn't return any special status on success
     const azbitErrorCode = 'No error code'; // Azbit doesn't have error codes
 
