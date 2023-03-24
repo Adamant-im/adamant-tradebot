@@ -94,7 +94,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
         getFundHistoryImplemented: false,
         allowAmountForMarketBuy: false,
         amountForMarketOrderNecessary: false,
-        openOrdersCacheSec: 180, // P2PB2B exchange say cache time is ~5 sec, but it's not true. Real cache time is unknown.
+        openOrdersCacheSec: 60, // P2PB2B exchange say cache time is ~5 sec, but it's not true. Real cache time is unknown.
       };
     },
 
@@ -211,6 +211,57 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
       } while (ordersInfo.length === limit);
 
       return allOrders;
+    },
+
+    /**
+     * Get specific order details
+     * What's important is to understand the order was filled or closed by other reason
+     * @param {String} orderId Example: 120531775560
+     * @param {String} pair In classic format as BTC/USDT. For logging purposes.
+     * @returns {Promise<unknown>}
+     */
+    async getOrderDetails(orderId, pair) {
+      const paramString = `orderId: ${orderId}, pair: ${pair}`;
+      const pair_ = formatPairName(pair);
+
+      let data;
+
+      try {
+        data = await P2PB2BClient.getOrderDeals(orderId);
+      } catch (err) {
+        log.warn(`API request getOrderDetails(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
+        return undefined;
+      }
+
+      try {
+        const orderTrades = data.result.records;
+
+        const result = {
+          orderId,
+          tradesCount: 0,
+          amount: undefined, // P2PB2B doesn't provide initial order amount
+          volume: undefined, // P2PB2B doesn't provide initial order volume
+          pairPlain: pair_.pairPlain,
+          pairReadable: pair_.pairReadable,
+          totalFeeInCoin2: 0,
+          amountExecuted: 0, // In coin1
+          volumeExecuted: 0, // In coin2
+          status: 'unknown', // For zero records, we don't know if order never exists or cancelled
+        };
+
+        orderTrades.forEach((trade) => {
+          result.tradesCount += 1;
+          result.totalFeeInCoin2 += +trade.fee;
+          result.amountExecuted += +trade.amount;
+          result.volumeExecuted += +trade.deal;
+          result.status = 'part_filled'; // Actually, we don't know if it's fully filled or partially filled
+        });
+
+        return result;
+      } catch (e) {
+        log.warn(`Error while processing getOrderDetails(${paramString}) request results: ${JSON.stringify(data)}. ${e}`);
+        return undefined;
+      }
     },
 
     /**

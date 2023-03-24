@@ -33,9 +33,8 @@ Trading is a mode when a bot runs orders according to some strategy. It can be p
 
 # Supported exchanges
 
-* [CoinDeal](https://coindeal.com)
-* [Resfinex](https://resfinex.com)
 * [P2PB2B](https://p2pb2b.com)
+* [Azbit](https://azbit.com?referralCode=9YVWYAF)
 
 To add other exchange support, see [marketmaking.app/services](https://marketmaking.app/services/).
 
@@ -49,9 +48,9 @@ We can run market-making for you, see [marketmaking.app/services](https://market
 
 ## Requirements
 
-* Ubuntu 18–22, centOS 7 or 8 (we didn't test others)
+* Ubuntu 18–22, centOS 8 (we didn't test others)
 * NodeJS v16+
-* MongoDB ([installation instructions](https://docs.mongodb.com/manual/tutorial/install-mongodb-on-ubuntu/))
+* MongoDB v6+ ([installation instructions](https://docs.mongodb.com/manual/tutorial/install-mongodb-on-ubuntu/))
 
 ## Setup
 
@@ -78,7 +77,7 @@ Parameters: see comments in config file.
 You can start the Bot with the `node app` command, but it is recommended to use the process manager for this purpose.
 
 ```
-pm2 start --name tradebot app.js
+pm2 start app.js --name tradebot
 ```
 
 ## Add a Bot to cron
@@ -90,7 +89,7 @@ crontab -e
 Add string:
 
 ```
-@reboot cd /home/adamant/adamant-tradebot && pm2 start --name tradebot app.js
+@reboot cd /home/adamant/adamant-tradebot && pm2 start app.js --name tradebot
 ```
 
 ## Updating

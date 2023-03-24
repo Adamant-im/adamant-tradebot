@@ -260,7 +260,7 @@ module.exports = {
       if (exchangeOrders) {
         for (const dbOrder of dbOrders) {
 
-          const orderInfoString = `${dbOrder.purpose}-order${onWhichAccount} with params: id=${dbOrder._id}, type=${dbOrder.type}, pair=${dbOrder.pair}, price=${dbOrder.price}, coin1Amount=${dbOrder.coin1Amount}, coin2Amount=${dbOrder.coin2Amount}`;
+          const orderInfoString = `${dbOrder.purpose}-order${onWhichAccount} with params: id=${dbOrder._id}, type=${dbOrder.type}, pair=${dbOrder.pair}, price=${dbOrder.price}, coin1Amount=${dbOrder.coin1AmountInitial || dbOrder.coin1Amount}, coin2Amount=${dbOrder.coin2Amount}`;
 
           let isLifeOrder = false;
           let isOrderFound = false;
@@ -275,6 +275,7 @@ module.exports = {
                   break;
                 case 'part_filled':
                   isLifeOrder = true;
+
                   if (dbOrder.coin1Amount > exchangeOrder.amountLeft) {
                     if (dbOrder.purpose === 'ld') {
                       dbOrder.update({
@@ -282,11 +283,18 @@ module.exports = {
                       });
                     }
 
+                    if (!dbOrder.coin1AmountInitial) {
+                      dbOrder.coin1AmountInitial = dbOrder.coin1Amount;
+                      dbOrder.amountUpdateCount = 0;
+                    }
+
                     await dbOrder.update({
                       isExecuted: true,
                       coin1Amount: exchangeOrder.amountLeft,
+                      amountUpdateCount: dbOrder.amountUpdateCount + 1,
                     }, true);
-                    log.log(`orderUtils: Updating ${orderInfoString}: order is partly filled. Amount left: ${dbOrder.coin1Amount}.`);
+
+                    log.log(`orderUtils: Updating ${orderInfoString}. It's partly filled (${utils.inclineNumber(dbOrder.amountUpdateCount)} update): ${dbOrder.coin1AmountInitial} -> ${dbOrder.coin1Amount} ${dbOrder.coin1}.`);
                   }
                   break;
                 default:

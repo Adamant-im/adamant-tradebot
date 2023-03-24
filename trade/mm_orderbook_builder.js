@@ -43,7 +43,7 @@ module.exports = {
     // const TraderApi = require('../trade/trader_' + config.exchange);
 
     // const traderapi3 = TraderApi(config.apikey2, config.apisecret2, config.apipassword2, log);
-    // const traderapi2 = require('./trader_' + 'resfinex')(config.apikey, config.apisecret, config.apipassword, log);
+    // const traderapi2 = require('./trader_' + 'azbit')(config.apikey, config.apisecret, config.apipassword, log);
 
     // const ob = await traderapi.getOrderBook('DOGE/USD');
     // console.log(ob);
@@ -52,8 +52,8 @@ module.exports = {
     // console.log(req);
 
     // setTimeout(() => {
-    //   const traderapi = require('./trader_' + 'resfinex')(config.apikey, config.apisecret, config.apipassword, log);
-    //   console.log(require('./orderUtils').parseMarket('ADM/USDT', 'resfinex'));
+    //   const traderapi = require('./trader_' + 'azbit')(config.apikey, config.apisecret, config.apipassword, log);
+    //   console.log(require('./orderUtils').parseMarket('ADM/USDT', 'azbit'));
     // }, 3000);
 
     // const orderCollector = require('./orderCollector');
@@ -65,6 +65,8 @@ module.exports = {
     // console.log(await traderapi.cancelOrder('5d13f3e8-dcb3-4a6d-88c1-16cf6e8d8179', undefined, 'DOGE/USDT'));
     // console.log(await traderapi.cancelOrder('ODM54B-5CJUX-RSUKCK', undefined, 'DOGE/USDT'));
     // console.log(traderapi.features().orderNumberLimit);
+
+    // console.log(await traderapi.getOrderDetails('11680204-90ca-4fd1-bb63-efed480d0632', 'ADM/USDT'));
   },
 
   run() {
