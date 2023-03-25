@@ -379,8 +379,8 @@ async function setPrice(type, orderBookInfo, subPurpose) {
       liqKoefMin = 0;
       liqKoefMax = constants.LIQUIDITY_SS_MAX_SPREAD_PERCENT/100;
     } else {
-      liqKoefMin = tradeParams.mm_liquiditySpreadPercentMin/100 / 2 || 0;
-      liqKoefMax = tradeParams.mm_liquiditySpreadPercent/100 / 2;
+      liqKoefMin = tradeParams.mm_liquiditySpreadPercentMin/100 || 0;
+      liqKoefMax = tradeParams.mm_liquiditySpreadPercent/100;
     }
 
     // Keep spread enough for in-spread trading

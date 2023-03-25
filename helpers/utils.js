@@ -775,8 +775,8 @@ module.exports = {
         liquidity[key].totalCount = 0;
         liquidity[key].amountTotal = 0;
         liquidity[key].amountTotalQuote = 0;
-        liquidity[key].lowPrice = averagePrice * (1 - liquidity[key].spreadPercent/100/2);
-        liquidity[key].highPrice = averagePrice * (1 + liquidity[key].spreadPercent/100/2);
+        liquidity[key].lowPrice = averagePrice * (1 - liquidity[key].spreadPercent/100);
+        liquidity[key].highPrice = averagePrice * (1 + liquidity[key].spreadPercent/100);
         liquidity[key].spread = averagePrice * liquidity[key].spreadPercent / 100;
         // average price is the same for any spread
       }
@@ -1282,8 +1282,8 @@ module.exports = {
 
       // Second, check mm_liquiditySpreadPercentMin: 'depth' orders should be not close to mid of spread
       if (order.subPurpose !== 'ss' && tradeParams.mm_liquiditySpreadPercentMin) {
-        const innerLowPrice = orderBookInfo.averagePrice * (1 - tradeParams.mm_liquiditySpreadPercentMin/100/2) + roughness;
-        const innerHighPrice = orderBookInfo.averagePrice * (1 + tradeParams.mm_liquiditySpreadPercentMin/100/2) - roughness;
+        const innerLowPrice = orderBookInfo.averagePrice * (1 - tradeParams.mm_liquiditySpreadPercentMin/100) + roughness;
+        const innerHighPrice = orderBookInfo.averagePrice * (1 + tradeParams.mm_liquiditySpreadPercentMin/100) - roughness;
         if (order.price > innerLowPrice && order.price < innerHighPrice) {
           return true;
         }
