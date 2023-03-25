@@ -167,6 +167,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
         supportCoinNetworks: true, // Use v2 to get info
         allowAmountForMarketBuy: false,
         amountForMarketOrderNecessary: false,
+        dontTrustApi: true, // Azbit can return false empty order list even if there are orders
       };
     },
 
@@ -292,7 +293,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
           let orderStatus;
           if (data.isCanceled) {
             orderStatus = 'cancelled';
-          } if (data.initialAmount === data.amount) {
+          } else if (data.initialAmount === data.amount) {
             orderStatus = 'new';
           } else if (data.amount === 0) {
             orderStatus = 'filled';
