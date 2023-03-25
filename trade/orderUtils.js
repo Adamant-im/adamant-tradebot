@@ -258,6 +258,63 @@ module.exports = {
       log.log(`orderUtils: Updating ${dbOrders.length} ${samePurpose}dbOrders on ${pair} for ${moduleName}, noCache: ${noCache}, hideNotOpened: ${hideNotOpened}… Received ${exchangeOrders?.length} orders from exchange.`);
 
       if (exchangeOrders) {
+
+        // If we don't trust exchange API, it can return false empty order list even if there are orders. Re-check then.
+        // Bullshit, but it's a reality. We'll deal with it.
+
+        if (
+          dbOrders.length !== 0 &&
+          exchangeOrders.length === 0 &&
+          traderapi.features().dontTrustApi &&
+          traderapi.getOrderDetails
+        ) {
+          let allOrdersAreUnknown = true;
+          let falseResultDetails;
+
+          for (const dbOrder of dbOrders) {
+            if (
+              !dbOrder.isVirtual &&
+              (!dbOrder.apikey || dbOrder.apikey === config.apikey)
+            ) {
+              const orderDetails = await traderapi.getOrderDetails(dbOrder._id, dbOrder.pair);
+              const orderStatus = orderDetails?.status;
+
+              /**
+               * !orderStatus, 'new', 'part_filled' -> API failed, don't trust
+               * 'filled', 'cancelled' -> Empty order list is still possible
+               * 'unknown' means Order doesn't exist or Wrong orderId. It's possible/accepted, if:
+               * - Order is virtual (ld-order which is not created)
+               * - Order placed with other API keys. We check it where an order stores API key.
+               * - On other exchange. Don't check it as we already filtered orders by exchange.
+               * - If any order is not 'unknown', empty order list is still possible
+               */
+
+              if (!orderStatus) {
+                falseResultDetails = `No order ${dbOrder._id} status received. Request result is ${JSON.stringify(orderDetails)}`;
+                break;
+              }
+
+              if (['new', 'part_filled'].includes(orderStatus)) {
+                falseResultDetails = `Order ${dbOrder._id} status is ${orderStatus}`;
+                break;
+              }
+
+              if (orderStatus !== 'unknown') {
+                allOrdersAreUnknown = false;
+              }
+            }
+          } // for (const dbOrder of dbOrders)
+
+          if (!falseResultDetails && allOrdersAreUnknown) {
+            falseResultDetails = `All of ${dbOrders.length} ${samePurpose}dbOrders are in unknown status`;
+          }
+
+          if (falseResultDetails) {
+            log.warn(`orderUtils: It seems ${config.exchangeName} API returned false empty order list: ${falseResultDetails}. Leaving ${samePurpose}dbOrders as is.`);
+            return dbOrders;
+          }
+        }
+
         for (const dbOrder of dbOrders) {
 
           const orderInfoString = `${dbOrder.purpose}-order${onWhichAccount} with params: id=${dbOrder._id}, type=${dbOrder.type}, pair=${dbOrder.pair}, price=${dbOrder.price}, coin1Amount=${dbOrder.coin1AmountInitial || dbOrder.coin1Amount}, coin2Amount=${dbOrder.coin2Amount}`;
