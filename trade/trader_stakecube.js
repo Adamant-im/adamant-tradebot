@@ -107,7 +107,7 @@ module.exports = (
         getMarkets: true,
         getCurrencies: false,
         placeMarketOrder: false,
-        getDepositAddress: false,
+        getDepositAddress: true,
         getTradingFees: false,
         getAccountTradeVolume: false,
         createDepositAddressWithWebsiteOnly: false,
@@ -434,6 +434,45 @@ module.exports = (
         return order;
       }
 
+    },
+
+    /**
+     * Get deposit address for specific coin
+     * @param coin e.g. BTC
+     * @returns {Promise<unknown>}
+     */
+    async getDepositAddress(coin) {
+      const paramString = `coin: ${coin}`;
+
+      let userData;
+      try {
+        userData = await stakeCubeApiClient.getUserData();
+
+        if (userData.errorMessage) {
+          log.warn(`API request getDepositAddress(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${userData.errorMessage}`);
+          return undefined;
+        }
+      } catch (err) {
+        log.warn(`API request getDepositAddress(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
+        return undefined;
+      }
+
+      try {
+        const { wallets } = userData;
+        let result;
+
+        for (const wallet of wallets) {
+          if (wallet.asset === coin.toUpperCase()) {
+            result = [{ network: wallet.network, address: wallet.address }];
+            break;
+          }
+        }
+
+        return result;
+      } catch (err) {
+        log.warn(`Error while processing getDepositAddress(${paramString}) request: ${e}`);
+        return undefined;
+      }
     },
 
     /**
