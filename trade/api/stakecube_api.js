@@ -164,11 +164,11 @@ module.exports = function() {
     },
 
     /**
-     * List of user balances for all currencies
+     * User data including: wallets with balances and deposit addresses, exchange fee
      * @return {Promise<Object>}
      * https://www.gate.io/docs/developers/apiv4/en/#list-spot-accounts
      */
-    getBalances: function() {
+    getUserData: function() {
       return protectedRequest('/user/account', {}, 'get');
     },
 

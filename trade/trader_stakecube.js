@@ -130,7 +130,7 @@ module.exports = (
       let userData;
 
       try {
-        userData = await stakeCubeApiClient.getBalances();
+        userData = await stakeCubeApiClient.getUserData();
 
         if (userData.errorMessage) {
           log.warn(`API request getBalances(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
