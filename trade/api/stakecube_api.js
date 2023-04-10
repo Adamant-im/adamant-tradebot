@@ -125,7 +125,7 @@ module.exports = function() {
       const httpOptions = {
         url: url,
         method: type,
-        timeout: 30000,
+        timeout: 20000,
       };
 
       axios(httpOptions)
@@ -169,7 +169,7 @@ module.exports = function() {
     /**
      * User data including: wallets with balances and deposit addresses, exchange fee
      * @return {Promise<Object>}
-     * https://www.gate.io/docs/developers/apiv4/en/#list-spot-accounts
+     * https://github.com/stakecube-hub/stakecube-api-docs/blob/master/rest-api/user.md#account
      */
     getUserData: function() {
       return protectedRequest('/user/account', {}, 'get');
