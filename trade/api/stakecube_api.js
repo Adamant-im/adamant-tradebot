@@ -138,7 +138,7 @@ module.exports = function() {
    * Sign string
    * @param {String} secret
    * @param {String} str
-   * @returns {string}
+   * @returns {String}
    */
   function setSign(secret, str) {
     return crypto
@@ -176,7 +176,7 @@ module.exports = function() {
     },
 
     /**
-     * Query account active orders
+     * Returns a list of your currently open orders, their IDs, their market pair, and other relevant order information.
      * @param {String} symbol In StakeCube format as BTC_USDT
      * @param {Number} limit Number of records to return. Default is 100.
      * @return {Promise<Object>}
@@ -192,11 +192,12 @@ module.exports = function() {
     },
 
     /**
-     * Places an order
+     * Creates an exchange limit order on the chosen market, side, price and amount
      * @param {String} symbol In StakeCube format as BTC_USDT
      * @param {Number} amount Order amount in coin1
      * @param {Number} price Order price
      * @param {String} side 'BUY' or 'SELL'. StakeCube supports only uppercase side parameter.
+     * @return {Promise<Object>}
      * https://github.com/stakecube-hub/stakecube-api-docs/blob/master/rest-api/exchange.md#order
      */
     addOrder: function(symbol, amount, price, side) {
@@ -211,7 +212,7 @@ module.exports = function() {
     },
 
     /**
-     * Cancel an order
+     * Cancels an order by it's unique ID
      * @param {String} orderId Example 285088438163
      * @return {Promise<Object>}
      * https://github.com/stakecube-hub/stakecube-api-docs/blob/master/rest-api/exchange.md#cancel
@@ -225,7 +226,7 @@ module.exports = function() {
     },
 
     /**
-     * Cancel all orders
+     * Cancels all orders in a chosen market pair
      * @param {String} symbol In StakeCube format as BTC_USDT
      * https://github.com/stakecube-hub/stakecube-api-docs/blob/master/rest-api/exchange.md#cancel-all
      */
@@ -238,7 +239,7 @@ module.exports = function() {
     },
 
     /**
-     * Get market depth
+     * Returns orderbook data for a specified market pair
      * @param {String} symbol Trading pair in StakeCube format as BTC_USDT
      * @return {Promise<Object>}
      * https://github.com/stakecube-hub/stakecube-api-docs/blob/master/rest-api/exchange.md#orderbook
@@ -252,7 +253,7 @@ module.exports = function() {
     },
 
     /**
-     * Get trades history
+     * Returns the last trades of a specified market pair
      * @param {String} symbol Trading pair in StakeCube format as BTC_USDT
      * @param {Number} limit Number of records to return. Default: 100, Minimum: 1, Maximum: 1000.
      * @return {Promise<Array<Object>>} Last trades
@@ -268,7 +269,7 @@ module.exports = function() {
     },
 
     /**
-     * Get info on all markets
+     * Returns a list of all markets
      * @return {Promise<Object>}
      * https://github.com/stakecube-hub/stakecube-api-docs/blob/master/rest-api/exchange.md#markets
      */
@@ -277,7 +278,7 @@ module.exports = function() {
     },
 
     /**
-     * Get trade info for a ticker
+     * Returns info on a specified market
      * @param {String} symbol In StakeCube format as DOGE_SCC
      * @return {Promise<Object>}
      * https://github.com/stakecube-hub/stakecube-api-docs/blob/master/rest-api/exchange.md#markets
