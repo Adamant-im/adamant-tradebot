@@ -122,7 +122,7 @@ module.exports = (
     /**
      * List of account balances for all currencies
      * @param {Boolean} nonzero
-     * @returns {Promise<unknown>}
+     * @returns {Promise<[]|undefined>}
      */
     async getBalances(nonzero = true) {
       const paramString = `nonzero: ${nonzero}`;
@@ -144,14 +144,14 @@ module.exports = (
       try {
         let result = [];
 
-        userData.wallets.forEach((crypto) => {
+        for (crypto of userData.wallets) {
           result.push({
             code: crypto.asset,
             free: +crypto.balance,
             freezed: +crypto.balanceInOrder,
             total: +crypto.balance + +crypto.balanceInOrder,
           });
-        });
+        }
 
         if (nonzero) {
           result = result.filter((crypto) => crypto.free || crypto.freezed);
@@ -167,7 +167,7 @@ module.exports = (
     /**
      * List of all account open orders
      * @param {String} pair In classic format as BTC/USD
-     * @returns {Promise<*[]|undefined>}
+     * @returns {Promise<[]|undefined>}
      */
     async getOpenOrders(pair) {
       const paramString = `pair: ${pair}`;
@@ -241,7 +241,7 @@ module.exports = (
      * @param {String} orderId Example: 285088438163
      * @param {String} side 'buy' or 'sell'. Not used for StakeCube.
      * @param {String} pair In classic format as BTC/USDT. Not used for StakeCube.
-     * @returns {Promise<unknown>}
+     * @returns {Promise<Boolean|undefined>}
      */
     async cancelOrder(orderId, side, pair) {
       const paramString = `orderId: ${orderId}, pair: ${pair}`;
@@ -276,8 +276,8 @@ module.exports = (
     /**
      * Cancel all orders on a specific pair
      * @param {String} pair In classic format as BTC/USD
-     * @param {String} side Cancel buy or sell orders. Cancel both if not set. Not used for StakeCube.
-     * @returns {Promise<boolean>}
+     * @param {String} side Not used for StakeCube.
+     * @returns {Promise<Boolean|undefined>}
      */
     async cancelAllOrders(pair, side = '') {
       const paramString = `pair: ${pair}, side: ${side}`;
@@ -417,13 +417,12 @@ module.exports = (
         order.message = message;
         return order;
       }
-
     },
 
     /**
      * Get deposit address for specific coin
      * @param coin e.g. BTC
-     * @returns {Promise<unknown>}
+     * @returns {Promise<[]|undefined>}
      */
     async getDepositAddress(coin) {
       const paramString = `coin: ${coin}`;
@@ -462,7 +461,7 @@ module.exports = (
     /**
      * Get trade details for a market rates
      * @param {String} pair In classic format as BTC/USD
-     * @returns {Promise<unknown>}
+     * @returns {Promise<Object|undefined>}
      */
     async getRates(pair) {
       const paramString = `pair: ${pair}`;
@@ -515,7 +514,7 @@ module.exports = (
     /**
      * Get market depth
      * @param {String} pair In classic format as BTC/USDT
-     * @returns {Promise<unknown>}
+     * @returns {Promise<Object|undefined>}
      */
     async getOrderBook(pair) {
       const paramString = `pair: ${pair}`;
@@ -575,7 +574,7 @@ module.exports = (
      * Get trades history
      * @param {String} pair In classic format as BTC/USDT
      * @param {Number} limit Number of records to return
-     * @returns {Promise<unknown>}
+     * @returns {Promise<[]|undefined>}
      */
     async getTradesHistory(pair, limit) {
       const paramString = `pair: ${pair}`;
