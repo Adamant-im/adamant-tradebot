@@ -38,7 +38,7 @@ module.exports = (
       stakeCubeApiClient.markets().then((markets) => {
         try {
           if (markets.errorMessage) {
-            log.warn(`API request getMarkets(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
+            log.warn(`API request getMarkets(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${markets.errorMessage}`);
             resolve(undefined);
           }
 
@@ -133,7 +133,7 @@ module.exports = (
         userData = await stakeCubeApiClient.getUserData();
 
         if (userData.errorMessage) {
-          log.warn(`API request getBalances(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
+          log.warn(`API request getBalances(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${userData.errorMessage}`);
           return undefined;
         }
       } catch (err) {
@@ -301,22 +301,6 @@ module.exports = (
         log.warn(`API request cancelOrder(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
         return undefined;
       }
-
-      // return new Promise((resolve) => {
-      //   stakeCubeApiClient.cancelAllOrders(pair_.pair).then((data) => {
-      //     // if (data.length === 0 || data.find((order) => order.status === 'cancelled')) {
-      //     //   log.log(`Cancelling all ${data.length}${sideString} on ${pair_.pairReadable} orders…`);
-      //     //   resolve(true);
-      //     // } else {
-      //     //   const errorMessage = `${data.gateioErrorInfo}`;
-      //     //   log.log(`Unable to cancel all ${data.length}${sideString} orders on ${pair_.pairReadable} pair: ${errorMessage || 'No details'}.`);
-      //     //   resolve(false);
-      //     // }
-      //   }).catch((err) => {
-      //     log.warn(`API request cancelAllOrders(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
-      //     resolve(undefined);
-      //   });
-      // });
     },
 
     /**
@@ -490,7 +474,7 @@ module.exports = (
         ticker = await stakeCubeApiClient.ticker(pair_.pair);
 
         if (ticker.errorMessage || !ticker[pair_.pair]) {
-          log.warn(`API request getRates(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
+          log.warn(`API request getRates(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${ticker.errorMessage}`);
           return undefined;
         }
       } catch (err) {
@@ -503,7 +487,7 @@ module.exports = (
         orderBook = await stakeCubeApiClient.orderBook(pair_.pair);
 
         if (orderBook.errorMessage) {
-          log.warn(`API request getRates(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
+          log.warn(`API request getRates(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${orderBook.errorMessage}`);
           return undefined;
         }
       } catch (err) {
@@ -542,7 +526,7 @@ module.exports = (
         book = await stakeCubeApiClient.orderBook(pair_.pair);
 
         if (book.errorMessage) {
-          log.warn(`API request getOrderBook(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
+          log.warn(`API request getOrderBook(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${book.errorMessage}`);
           return undefined;
         }
       } catch (err) {
@@ -602,7 +586,7 @@ module.exports = (
         trades = await stakeCubeApiClient.getTradesHistory(pair_.pairPlain, limit);
 
         if (trades.errorMessage) {
-          log.warn(`API request getTradesHistory(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
+          log.warn(`API request getTradesHistory(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${trades.errorMessage}}`);
           return undefined;
         }
       } catch (err) {
