@@ -40,7 +40,10 @@ module.exports = function() {
         scResult.errorMessage = scError;
         resolve(scResult);
       } else if ([404].includes(httpCode)) {
-        log.warn(`Request to ${url} with data ${reqParameters} failed: ${errorMessage}. Invalid request. Rejecting…`);
+        log.warn(`Request to ${url} with data ${reqParameters} failed: ${errorMessage}. Not found. Rejecting…`);
+        reject(errorMessage);
+      } else {
+        log.warn(`Request to ${url} with data ${reqParameters} failed: ${errorMessage}. Rejecting…`);
         reject(errorMessage);
       }
     } catch (e) {
