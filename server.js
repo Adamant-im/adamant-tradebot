@@ -19,19 +19,19 @@ if (port) {
       });
       return;
     }
-    tb.find().toArray((err, data) => {
-      if (err) {
-        res.json({
-          success: false,
-          err,
+    tb.find().toArray()
+        .then((result) => {
+          res.json({
+            result,
+            success: true,
+          });
+        })
+        .catch((err) => {
+          res.json({
+            err,
+            success: false,
+          });
         });
-        return;
-      }
-      res.json({
-        success: true,
-        result: data,
-      });
-    });
   });
 
   app.listen(port, () => log.info(`${config.notifyName} debug server is listening on http://localhost:${port}. F. e., http://localhost:${port}/db?tb=systemDb.`));
