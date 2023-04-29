@@ -42,7 +42,7 @@ module.exports = {
       data = JSON.stringify(data);
     }
 
-    if (data.length > length) {
+    if (data?.length > length) {
       data = data.slice(0, length-1) + '…';
     }
 
