@@ -53,10 +53,11 @@ module.exports = function() {
   };
 
   /**
-   * @param {String} path
-   * @param {Object} data
-   * @param {String} type
-   * @returns {Promise<never>|Promise<unknown>}
+   * Makes a request to private (auth) endpoint
+   * @param {String} path Endpoint
+   * @param {Object} data Request params
+   * @param {String} type Request type: get, post, delete
+   * @returns {*}
    */
   function protectedRequest(path, data, type = 'get') {
     let url = `${WEB_BASE}${path}`;
@@ -78,7 +79,7 @@ module.exports = function() {
 
       queryString = queryString + `&signature=${sign}`;
     } catch (e) {
-      log.error(`An error occurred while generating  request signature: ${e}`);
+      log.error(`Error while generating request signature: ${e}`);
       return Promise.reject(e);
     }
 
@@ -106,6 +107,13 @@ module.exports = function() {
     });
   }
 
+  /**
+   * Makes a request to public endpoint
+   * @param {String} path Endpoint
+   * @param {Object} data Request params
+   * @param {String} path Endpoint
+   * @returns {*}
+   */
   function publicRequest(path, data, type = 'get') {
     let url = `${WEB_BASE}${path}`;
     const urlBase = url;
@@ -167,7 +175,7 @@ module.exports = function() {
     },
 
     /**
-     * User data including: wallets with balances and deposit addresses, exchange fee
+     * Account: Returns general information about your StakeCube account, including wallets, balances, fee-rate in percentage and your account username
      * @return {Promise<Object>}
      * https://github.com/stakecube-hub/stakecube-api-docs/blob/master/rest-api/user.md#account
      */
@@ -176,13 +184,13 @@ module.exports = function() {
     },
 
     /**
-     * Returns a list of your currently open orders, their IDs, their market pair, and other relevant order information.
+     * Returns a list of your currently open orders, their IDs, their market pair, and other relevant order information
      * @param {String} symbol In StakeCube format as BTC_USDT
      * @param {Number} limit Number of records to return. Default is 100.
      * @return {Promise<Object>}
      * https://github.com/stakecube-hub/stakecube-api-docs/blob/master/rest-api/exchange.md#my-open-orders
      */
-    getOrders: async function(symbol, limit = 100) {
+    getOrders: async function(symbol, limit = 1000) {
       const data = {
         market: symbol,
         limit,
@@ -193,6 +201,7 @@ module.exports = function() {
 
     /**
      * Creates an exchange limit order on the chosen market, side, price and amount
+     * Note: market order are not supported via API
      * @param {String} symbol In StakeCube format as BTC_USDT
      * @param {Number} amount Order amount in coin1
      * @param {Number} price Order price
@@ -212,8 +221,8 @@ module.exports = function() {
     },
 
     /**
-     * Cancels an order by it's unique ID
-     * @param {String} orderId Example 285088438163
+     * Cancels an order by its unique ID
+     * @param {String} orderId Example: 285088438163
      * @return {Promise<Object>}
      * https://github.com/stakecube-hub/stakecube-api-docs/blob/master/rest-api/exchange.md#cancel
      */
@@ -259,7 +268,7 @@ module.exports = function() {
      * @return {Promise<Array<Object>>} Last trades
      * https://github.com/stakecube-hub/stakecube-api-docs/blob/master/rest-api/exchange.md#trades
      */
-    getTradesHistory: function(symbol, limit ) {
+    getTradesHistory: function(symbol, limit = 300) {
       const data = {
         market: symbol,
         limit,
@@ -279,6 +288,7 @@ module.exports = function() {
 
     /**
      * Returns info on a specified market
+     * Note: same endpoint as for markets()
      * @param {String} symbol In StakeCube format as DOGE_SCC
      * @return {Promise<Object>}
      * https://github.com/stakecube-hub/stakecube-api-docs/blob/master/rest-api/exchange.md#markets
