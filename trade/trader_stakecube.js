@@ -221,7 +221,7 @@ module.exports = (
             price: +order.price,
             side: order.side.toLowerCase(), // 'buy' or 'sell'
             type: 'limit', // StakeCube supports only limit orders
-            timestamp: Date.parse(order.placed), // e.g. StakeCube timestamp (order.placed) 2023-04-10 10:17:03, converting to 1681111023000
+            timestamp: Date.parse(order.placed + '+00:00'), // e.g. StakeCube timestamp (order.placed) 2023-04-29 13:22:44, converting to 1681111023000
             amount: +order.amount,
             amountExecuted: +order.executedAmount,
             amountLeft,
@@ -597,12 +597,13 @@ module.exports = (
 
       try {
         const result = [];
+
         trades.forEach((trade) => {
           result.push({
             coin1Amount: +trade.amount, // amount in coin1
             price: +trade.price, // trade price
             coin2Amount: +trade.amount * +trade.price, // quote in coin2
-            date: Date.parse(trade.timeConverted), // e.g. StakeCube timestamp (trade.timeConverted) 2023-04-10 10:17:03, converting to 1681111023000
+            date: Date.parse(trade.timeConverted + '+00:00'), // e.g. StakeCube timestamp (trade.timeConverted) 2023-04-10 10:17:03, converting to 1681111023000
             type: trade.direction.toLowerCase(), // 'buy' or 'sell'
             tradeId: null,
           });
