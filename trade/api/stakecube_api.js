@@ -201,7 +201,7 @@ module.exports = function() {
 
     /**
      * Creates an exchange limit order on the chosen market, side, price and amount
-     * Note: market order are not supported via API
+     * Note: market orders are not supported via API
      * @param {String} symbol In StakeCube format as BTC_USDT
      * @param {Number} amount Order amount in coin1
      * @param {Number} price Order price

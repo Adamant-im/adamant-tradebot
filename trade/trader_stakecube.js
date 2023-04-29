@@ -252,7 +252,7 @@ module.exports = (
 
         if (data.errorMessage) {
           if (data.errorMessage === 'Order already canceled or filled') {
-            log.warn(`Order ${orderId} on ${pair_.pairReadable} pair is already canceled or filled`);
+            log.log(`Order ${orderId} on ${pair_.pairReadable} pair is already cancelled or filled.`);
             return true;
           } else {
             log.warn(`API request cancelOrder(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${data.errorMessage}`);
@@ -288,7 +288,7 @@ module.exports = (
 
         if (data.errorMessage) {
           if (data.errorMessage === 'no open order') {
-            log.log(`No open orders on ${pair_.pairReadable}`);
+            log.log(`No open orders on ${pair_.pairReadable}.`);
             return true;
           } else {
             log.warn(`API request cancelOrder(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${data.errorMessage}`);
@@ -305,6 +305,7 @@ module.exports = (
 
     /**
      * Places an order
+     * Note: market orders are not supported via API
      * @param {String} side 'buy' or 'sell'
      * @param {String} pair In classic format like BTC/USD
      * @param {Number} price Order price
@@ -473,11 +474,11 @@ module.exports = (
         ticker = await stakeCubeApiClient.ticker(pair_.pair);
 
         if (ticker.errorMessage || !ticker[pair_.pair]) {
-          log.warn(`API request getRates(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${ticker.errorMessage}`);
+          log.warn(`API request getRates-ticker(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${ticker.errorMessage}`);
           return undefined;
         }
       } catch (err) {
-        log.warn(`API request getRates(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
+        log.warn(`API request getRates-ticker(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
         return undefined;
       }
 
@@ -486,16 +487,17 @@ module.exports = (
         orderBook = await stakeCubeApiClient.orderBook(pair_.pair);
 
         if (orderBook.errorMessage) {
-          log.warn(`API request getRates(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${orderBook.errorMessage}`);
+          log.warn(`API request getRates-orderBook(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${orderBook.errorMessage}`);
           return undefined;
         }
       } catch (err) {
-        log.warn(`API request getRates(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
+        log.warn(`API request getRates-orderBook(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
         return undefined;
       }
 
       try {
         ticker = ticker[pair_.pair];
+
         return {
           ask: +orderBook.asks[orderBook.asks.length - 1]?.price, // assuming asks are sorted in descending order by price. We need the lowest ask
           bid: +orderBook.bids[0]?.price, // assuming bids are sorted in descending order by price. We need the highest bid
