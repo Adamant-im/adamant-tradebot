@@ -12,13 +12,13 @@ module.exports = (db) => {
     static get db() {
       return db;
     }
-    static async find(req) { // return Promise<Array>
-      const data = await this.db.find(req).toArray();
+    static async find(req) {
+      const data = await db.find(req).toArray();
 
       return data.map((d) => new this(d));
     }
-    static async aggregate(req) { // return Promise<Array>
-      const data = await this.db.aggregate(req).toArray();
+    static async aggregate(req) {
+      const data = await db.aggregate(req).toArray();
 
       return data.map((d) => new this(d));
     }
