@@ -63,7 +63,7 @@ module.exports = (
               coin2MinPrice: null,
               coin2MaxPrice: null,
               minTrade: null,
-              status: market.status === 'ACTIVE' ? 'ONLINE' : 'OFFLINE',
+              status: market.state === 'ACTIVE' ? 'ONLINE' : 'OFFLINE',
             };
           });
 
