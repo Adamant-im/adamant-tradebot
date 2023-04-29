@@ -25,16 +25,29 @@ module.exports = function() {
 
     const scData = responseOrError?.data || responseOrError?.response?.data;
 
+    /**
+      {
+        success: true,
+        result: {
+          ...
+        },
+        error: '',
+        timestamp: 1682773618,
+        timestampConverted: '2023-04-29 13:06:58', (UTC)
+        executionTime: 0.25620508193969727
+      }
+    */
+
     const scResult = scData?.result;
     const scStatus = scData?.success;
     const scError = scData?.error;
-    const scErrorInfo = scStatus ? `[No error code]` : `[${scError}]`;
 
+    const scErrorInfo = scStatus ? `[No error code]` : `[${scError}]`;
     const errorMessage = httpCode ? `${httpCode} ${httpMessage}, ${scErrorInfo}` : String(responseOrError);
     const reqParameters = queryString || bodyString || '{ No parameters }';
 
     try {
-      if ([200, 201].includes(httpCode) && scData && scStatus) {
+      if (scStatus) {
         resolve(scResult);
       } else if ([200, 201].includes(httpCode) && scData) {
         scResult.errorMessage = scError;
