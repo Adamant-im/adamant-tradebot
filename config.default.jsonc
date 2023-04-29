@@ -44,7 +44,8 @@
   /** List of supported exchanges **/
   "exchanges": [
     "P2PB2B",
-    "Azbit"
+    "Azbit",
+    "StakeCube"
   ],
 
   /** Exchange to work with. Case insensitive. **/
