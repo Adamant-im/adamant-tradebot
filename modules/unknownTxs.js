@@ -15,7 +15,7 @@ module.exports = async (tx, itx) => {
         senderId: tx.senderId,
         type: 'unknown',
         date: { $gt: (utils.unixTimeStampMs() - 24 * 3600 * 1000) }, // last 24h
-      }).sort({ date: -1 }).toArray((err, docs) => {
+      }).sort({ date: -1 }).toArray().then((docs) => {
         const twoHoursAgo = utils.unixTimeStampMs() - 2 * 3600 * 1000;
         let countMsgs = docs.length;
         if (!docs[1] || twoHoursAgo > docs[1].date) {
