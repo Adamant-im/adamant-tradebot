@@ -35,12 +35,14 @@ module.exports = (
 
     module.exports.gettingMarkets = true;
     return new Promise((resolve) => {
-      stakeCubeApiClient.markets().then((markets) => {
+      stakeCubeApiClient.markets().then((scData) => {
         try {
-          if (markets.errorMessage) {
-            log.warn(`API request getMarkets(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${markets.errorMessage}`);
+          if (scData.error) {
+            log.warn(`API request getMarkets(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${scData.error}`);
             resolve(undefined);
           }
+
+          const markets = scData.result;
 
           const result = {};
 
@@ -127,19 +129,21 @@ module.exports = (
     async getBalances(nonzero = true) {
       const paramString = `nonzero: ${nonzero}`;
 
-      let userData;
+      let scData;
 
       try {
-        userData = await stakeCubeApiClient.getUserData();
+        scData = await stakeCubeApiClient.getUserData();
 
-        if (userData.errorMessage) {
-          log.warn(`API request getBalances(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${userData.errorMessage}`);
+        if (scData.error) {
+          log.warn(`API request getBalances(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${scData.error}`);
           return undefined;
         }
       } catch (err) {
         log.warn(`API request getBalances(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
         return undefined;
       }
+
+      const userData = scData.result;
 
       try {
         let result = [];
@@ -180,16 +184,16 @@ module.exports = (
         return undefined;
       }
 
-      let orders;
+      let scData;
 
       try {
-        orders = await stakeCubeApiClient.getOrders(pair_.pair);
+        scData = await stakeCubeApiClient.getOrders(pair_.pair);
 
-        if (orders.errorMessage) {
-          if (orders.errorMessage === 'no data') {
+        if (scData.error) {
+          if (scData.error === 'no data') {
             return [];
           } else {
-            log.warn(`API request getOpenOrders(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${orders.errorMessage}`);
+            log.warn(`API request getOpenOrders(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${scData.error}`);
             return undefined;
           }
         }
@@ -197,6 +201,8 @@ module.exports = (
         log.warn(`API request getOpenOrders(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
         return undefined;
       }
+
+      const orders = scData.result;
 
       try {
         const result = [];
@@ -248,17 +254,19 @@ module.exports = (
       const pair_ = formatPairName(pair);
 
       try {
-        const data = await stakeCubeApiClient.cancelOrder(orderId);
+        const scData = await stakeCubeApiClient.cancelOrder(orderId);
 
-        if (data.errorMessage) {
-          if (data.errorMessage === 'Order already canceled or filled') {
+        if (scData.error) {
+          if (scData.error === 'Order already canceled or filled') {
             log.log(`Order ${orderId} on ${pair_.pairReadable} pair is already cancelled or filled.`);
             return true;
           } else {
-            log.warn(`API request cancelOrder(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${data.errorMessage}`);
+            log.warn(`API request cancelOrder(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${scData.error}`);
             return undefined;
           }
         }
+
+        const data = scData.result;
 
         if (data.orderId === orderId) {
           log.log(`Cancelling order ${orderId} on ${pair_.pairReadable} pair…`);
@@ -284,14 +292,14 @@ module.exports = (
       const pair_ = formatPairName(pair);
 
       try {
-        const data = await stakeCubeApiClient.cancelAllOrders(pair_.pair);
+        const scData = await stakeCubeApiClient.cancelAllOrders(pair_.pair);
 
-        if (data.errorMessage) {
-          if (data.errorMessage === 'no open order') {
+        if (scData.error) {
+          if (scData.error === 'no open order') {
             log.log(`No open orders on ${pair_.pairReadable}.`);
             return true;
           } else {
-            log.warn(`API request cancelOrder(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${data.errorMessage}`);
+            log.warn(`API request cancelOrder(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${scData.error}`);
             return undefined;
           }
         }
@@ -376,10 +384,12 @@ module.exports = (
         const order = {};
         let orderId;
         let errorMessage;
-        let response;
+        let scData;
 
         try {
-          response = await stakeCubeApiClient.addOrder(marketInfo.pairPlain, coin1Amount, price, side);
+          scData = await stakeCubeApiClient.addOrder(marketInfo.pairPlain, coin1Amount, price, side);
+
+          const response = scData.result;
 
           orderId = response?.orderId;
           errorMessage = response?.errorMessage;
@@ -428,18 +438,20 @@ module.exports = (
     async getDepositAddress(coin) {
       const paramString = `coin: ${coin}`;
 
-      let userData;
+      let scData;
       try {
-        userData = await stakeCubeApiClient.getUserData();
+        scData = await stakeCubeApiClient.getUserData();
 
-        if (userData.errorMessage) {
-          log.warn(`API request getDepositAddress(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${userData.errorMessage}`);
+        if (scData.error) {
+          log.warn(`API request getDepositAddress(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${scData.error}`);
           return undefined;
         }
       } catch (err) {
         log.warn(`API request getDepositAddress(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
         return undefined;
       }
+
+      const userData = scData.result;
 
       try {
         const { wallets } = userData;
@@ -468,13 +480,13 @@ module.exports = (
       const paramString = `pair: ${pair}`;
       const pair_ = formatPairName(pair);
 
-      let ticker;
+      let scTickerData;
 
       try {
-        ticker = await stakeCubeApiClient.ticker(pair_.pair);
+        scTickerData = await stakeCubeApiClient.ticker(pair_.pair);
 
-        if (ticker.errorMessage || !ticker[pair_.pair]) {
-          log.warn(`API request getRates-ticker(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${ticker.errorMessage}`);
+        if (scTickerData.error || !scTickerData.result[pair_.pair]) {
+          log.warn(`API request getRates-ticker(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${scTickerData.error}`);
           return undefined;
         }
       } catch (err) {
@@ -482,18 +494,22 @@ module.exports = (
         return undefined;
       }
 
-      let orderBook;
-      try {
-        orderBook = await stakeCubeApiClient.orderBook(pair_.pair);
+      let ticker = scTickerData.result;
 
-        if (orderBook.errorMessage) {
-          log.warn(`API request getRates-orderBook(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${orderBook.errorMessage}`);
+      let scOrderBookData;
+      try {
+        scOrderBookData = await stakeCubeApiClient.orderBook(pair_.pair);
+
+        if (scOrderBookData.error) {
+          log.warn(`API request getRates-orderBook(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${scOrderBookData.error}`);
           return undefined;
         }
       } catch (err) {
         log.warn(`API request getRates-orderBook(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
         return undefined;
       }
+
+      const orderBook = scOrderBookData.result;
 
       try {
         ticker = ticker[pair_.pair];
@@ -522,18 +538,20 @@ module.exports = (
       const paramString = `pair: ${pair}`;
       const pair_ = formatPairName(pair);
 
-      let book;
+      let scData;
       try {
-        book = await stakeCubeApiClient.orderBook(pair_.pair);
+        scData = await stakeCubeApiClient.orderBook(pair_.pair);
 
-        if (book.errorMessage) {
-          log.warn(`API request getOrderBook(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${book.errorMessage}`);
+        if (scData.error) {
+          log.warn(`API request getOrderBook(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${scData.error}`);
           return undefined;
         }
       } catch (err) {
         log.warn(`API request getOrderBook(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
         return undefined;
       }
+
+      const book = scData.result;
 
       try {
         const result = {
@@ -582,18 +600,20 @@ module.exports = (
       const paramString = `pair: ${pair}`;
       const pair_ = formatPairName(pair);
 
-      let trades = [];
+      let scData = [];
       try {
-        trades = await stakeCubeApiClient.getTradesHistory(pair_.pairPlain, limit);
+        scData = await stakeCubeApiClient.getTradesHistory(pair_.pairPlain, limit);
 
-        if (trades.errorMessage) {
-          log.warn(`API request getTradesHistory(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${trades.errorMessage}}`);
+        if (scData.error) {
+          log.warn(`API request getTradesHistory(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${scData.error}}`);
           return undefined;
         }
       } catch (err) {
         log.warn(`API request getTradesHistory(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
         return undefined;
       }
+
+      const trades = scData.result;
 
       try {
         const result = [];

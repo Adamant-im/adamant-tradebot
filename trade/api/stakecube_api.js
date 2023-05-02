@@ -38,7 +38,6 @@ module.exports = function() {
       }
     */
 
-    const scResult = scData?.result;
     const scStatus = scData?.success;
     const scError = scData?.error;
 
@@ -48,10 +47,9 @@ module.exports = function() {
 
     try {
       if (scStatus) {
-        resolve(scResult);
+        resolve(scData);
       } else if ([200, 201].includes(httpCode) && scData) {
-        scResult.errorMessage = scError;
-        resolve(scResult);
+        resolve(scData);
       } else if ([404].includes(httpCode)) {
         log.warn(`Request to ${url} with data ${reqParameters} failed: ${errorMessage}. Not found. Rejecting…`);
         reject(errorMessage);
