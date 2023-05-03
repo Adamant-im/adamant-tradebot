@@ -148,7 +148,7 @@ module.exports = (
       try {
         let result = [];
 
-        for (crypto of userData.wallets) {
+        for (const crypto of userData.wallets) {
           result.push({
             code: crypto.asset,
             free: +crypto.balance,
