@@ -167,17 +167,11 @@ module.exports = (
       const paramString = `pair: ${pair}`;
       const pair_ = formatPairName(pair);
 
-      const marketInfo = this.marketInfo(pair);
-
-      if (!marketInfo) {
-        log.warn(`Unable to place an order on ${exchangeName} exchange. I don't have info about market ${pair}`);
-        return undefined;
-      }
-
       let scData;
 
       try {
         scData = await stakeCubeApiClient.getOrders(pair_.pair);
+        console.log(scData);
       } catch (err) {
         log.warn(`API request getOpenOrders(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
         return undefined;

@@ -49,6 +49,7 @@ module.exports = function() {
       if (scStatus) {
         resolve(scData);
       } else if ([200, 201].includes(httpCode) && scData) {
+        // For spot/myOpenOrder with no open orders API returns 200 OK, success: false, result: [], error: 'no data'
         scData.errorMessage = errorMessage;
         log.log(`StakeCube processed a request to ${url} with data ${reqParameters}, but with error: ${errorMessage}. Resolving…`);
         resolve(scData);
