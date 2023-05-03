@@ -171,7 +171,6 @@ module.exports = (
 
       try {
         scData = await stakeCubeApiClient.getOrders(pair_.pair);
-        console.log(scData);
       } catch (err) {
         log.warn(`API request getOpenOrders(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
         return undefined;
@@ -367,7 +366,7 @@ module.exports = (
           const response = scData.result;
 
           orderId = response?.orderId;
-          errorMessage = response?.errorMessage;
+          errorMessage = scData?.errorMessage;
         } catch (err) {
           message = `API request addOrder(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}.`;
           log.warn(message);
@@ -385,7 +384,7 @@ module.exports = (
         } else if (!orderId && !errorMessage) {
           message = `Order executed to ${output}`;
           log.info(message);
-          order.orderId = null;
+          order.orderId = Math.floor(Math.random() * 10 ** 12); // 12 digit random number
           order.message = message;
         } else {
           const details = errorMessage ? ` Details: ${utils.trimAny(errorMessage, ' .')}.` : ' { No details }.';
