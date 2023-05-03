@@ -37,11 +37,6 @@ module.exports = (
     return new Promise((resolve) => {
       stakeCubeApiClient.markets().then((scData) => {
         try {
-          if (scData.error) {
-            log.warn(`API request getMarkets(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${scData.error}`);
-            resolve(undefined);
-          }
-
           const markets = scData.result;
 
           const result = {};
@@ -133,11 +128,6 @@ module.exports = (
 
       try {
         scData = await stakeCubeApiClient.getUserData();
-
-        if (scData.error) {
-          log.warn(`API request getBalances(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${scData.error}`);
-          return undefined;
-        }
       } catch (err) {
         log.warn(`API request getBalances(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
         return undefined;
@@ -188,15 +178,6 @@ module.exports = (
 
       try {
         scData = await stakeCubeApiClient.getOrders(pair_.pair);
-
-        if (scData.error) {
-          if (scData.error === 'no data') {
-            return [];
-          } else {
-            log.warn(`API request getOpenOrders(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${scData.error}`);
-            return undefined;
-          }
-        }
       } catch (err) {
         log.warn(`API request getOpenOrders(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
         return undefined;
@@ -441,11 +422,6 @@ module.exports = (
       let scData;
       try {
         scData = await stakeCubeApiClient.getUserData();
-
-        if (scData.error) {
-          log.warn(`API request getDepositAddress(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${scData.error}`);
-          return undefined;
-        }
       } catch (err) {
         log.warn(`API request getDepositAddress(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
         return undefined;
@@ -484,11 +460,6 @@ module.exports = (
 
       try {
         scTickerData = await stakeCubeApiClient.ticker(pair_.pair);
-
-        if (scTickerData.error || !scTickerData.result[pair_.pair]) {
-          log.warn(`API request getRates-ticker(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${scTickerData.error}`);
-          return undefined;
-        }
       } catch (err) {
         log.warn(`API request getRates-ticker(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
         return undefined;
@@ -499,11 +470,6 @@ module.exports = (
       let scOrderBookData;
       try {
         scOrderBookData = await stakeCubeApiClient.orderBook(pair_.pair);
-
-        if (scOrderBookData.error) {
-          log.warn(`API request getRates-orderBook(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${scOrderBookData.error}`);
-          return undefined;
-        }
       } catch (err) {
         log.warn(`API request getRates-orderBook(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
         return undefined;
@@ -541,11 +507,6 @@ module.exports = (
       let scData;
       try {
         scData = await stakeCubeApiClient.orderBook(pair_.pair);
-
-        if (scData.error) {
-          log.warn(`API request getOrderBook(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${scData.error}`);
-          return undefined;
-        }
       } catch (err) {
         log.warn(`API request getOrderBook(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
         return undefined;
@@ -603,11 +564,6 @@ module.exports = (
       let scData = [];
       try {
         scData = await stakeCubeApiClient.getTradesHistory(pair_.pairPlain, limit);
-
-        if (scData.error) {
-          log.warn(`API request getTradesHistory(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${scData.error}}`);
-          return undefined;
-        }
       } catch (err) {
         log.warn(`API request getTradesHistory(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
         return undefined;
