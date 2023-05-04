@@ -444,7 +444,7 @@ module.exports = (
         }
 
         return result;
-      } catch (err) {
+      } catch (e) {
         log.warn(`Error while processing getDepositAddress(${paramString}) request: ${e}`);
         return undefined;
       }
