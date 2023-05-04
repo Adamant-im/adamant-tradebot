@@ -359,14 +359,23 @@ module.exports = (
         let orderId;
         let errorMessage;
         let scData;
+        let filledNote = '';
 
         try {
           scData = await stakeCubeApiClient.addOrder(marketInfo.pairPlain, coin1Amount, price, side);
-
           const response = scData.result;
 
           orderId = response?.orderId;
           errorMessage = scData?.errorMessage;
+          const fills = response?.fills;
+
+          if (!orderId && !errorMessage && fills?.length) {
+            // When an order executes just after it placed, StakeCube returns no orderId
+            // To correspond with the bot's order structure, we'll generate a random 12-digit orderId
+            // Real orderId sample: 5413353. Fake orderId sample: 
+            orderId = Math.floor(Math.random() * 10 ** 12);
+            filledNote = ` Note: API haven't returned orderId, generated a random one. The order is fully executed with ${fills.length} ${utils.incline(fills.length, 'fill', 'fills')}.`;
+          }
         } catch (err) {
           message = `API request addOrder(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}.`;
           log.warn(message);
@@ -377,14 +386,9 @@ module.exports = (
         }
 
         if (orderId) {
-          message = `Order placed to ${output} Order Id: ${orderId}.`;
+          message = `Order placed to ${output} Order Id: ${orderId}.${filledNote}`;
           log.info(message);
           order.orderId = orderId;
-          order.message = message;
-        } else if (!orderId && !errorMessage) {
-          message = `Order executed to ${output}`;
-          log.info(message);
-          order.orderId = Math.floor(Math.random() * 10 ** 12); // 12 digit random number
           order.message = message;
         } else {
           const details = errorMessage ? ` Details: ${utils.trimAny(errorMessage, ' .')}.` : ' { No details }.';
