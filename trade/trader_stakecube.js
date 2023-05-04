@@ -372,7 +372,7 @@ module.exports = (
           if (!orderId && !errorMessage && fills?.length) {
             // When an order executes just after it placed, StakeCube returns no orderId
             // To correspond with the bot's order structure, we'll generate a random 12-digit orderId
-            // Real orderId sample: 5413353. Fake orderId sample: 
+            // Real orderId sample: 5413353. Fake orderId sample: 59039834250 (greater)
             orderId = Math.floor(Math.random() * 10 ** 12);
             filledNote = ` Note: API haven't returned orderId, generated a random one. The order is fully executed with ${fills.length} ${utils.incline(fills.length, 'fill', 'fills')}.`;
           }
