@@ -107,7 +107,7 @@ module.exports = (
         getDepositAddress: true,
         getTradingFees: false,
         getAccountTradeVolume: false,
-        createDepositAddressWithWebsiteOnly: false,
+        createDepositAddressWithWebsiteOnly: true,
         getFundHistory: false,
         getFundHistoryImplemented: false,
         supportCoinNetworks: false,
