@@ -227,30 +227,29 @@ module.exports = (
       const paramString = `orderId: ${orderId}, pair: ${pair}`;
       const pair_ = formatPairName(pair);
 
+      let scData;
+
       try {
-        const scData = await stakeCubeApiClient.cancelOrder(orderId);
+        scData = await stakeCubeApiClient.cancelOrder(orderId);
+      } catch (err) {
+        log.warn(`API request cancelOrder(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
+        return undefined;
+      }
 
-        if (scData.error) {
-          if (scData.error === 'Order already canceled or filled') {
-            log.log(`Order ${orderId} on ${pair_.pairReadable} pair is already cancelled or filled.`);
-            return true;
-          } else {
-            log.warn(`API request cancelOrder(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${scData.error}`);
-            return undefined;
-          }
-        }
-
+      try {
         const data = scData.result;
 
         if (data.orderId === orderId) {
           log.log(`Cancelling order ${orderId} on ${pair_.pairReadable} pair…`);
           return true;
         } else {
-          log.warn(`Failed to cancel order ${orderId} on ${pair_.pairReadable} pair: No details.`);
-          return false;
+          const errorMessage = scData?.errorMessage || 'No details';
+
+          log.log(`Failed to cancel order ${orderId} on ${pair_.pairReadable} pair: ${errorMessage}. Assuming it doesn't exist or already cancelled.`);
+          return true;
         }
-      } catch (err) {
-        log.warn(`API request cancelOrder(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
+      } catch (e) {
+        log.warn(`Error while processing cancelOrder(${paramString}) request: ${e}`);
         return undefined;
       }
     },
@@ -258,29 +257,36 @@ module.exports = (
     /**
      * Cancel all orders on a specific pair
      * @param {String} pair In classic format as BTC/USD
-     * @param {String} side Not used for StakeCube.
+     * @param {String} side Not used for StakeCube
      * @returns {Promise<Boolean|undefined>}
      */
     async cancelAllOrders(pair, side = '') {
       const paramString = `pair: ${pair}, side: ${side}`;
       const pair_ = formatPairName(pair);
 
+      let scData;
+
       try {
-        const scData = await stakeCubeApiClient.cancelAllOrders(pair_.pair);
-
-        if (scData.error) {
-          if (scData.error === 'no open order') {
-            log.log(`No open orders on ${pair_.pairReadable}.`);
-            return true;
-          } else {
-            log.warn(`API request cancelOrder(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${scData.error}`);
-            return undefined;
-          }
-        }
-
-        return true;
+        scData = await stakeCubeApiClient.cancelAllOrders(pair_.pair);
       } catch (err) {
-        log.warn(`API request cancelOrder(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
+        log.warn(`API request cancelAllOrders(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
+        return undefined;
+      }
+
+      try {
+        const data = scData.result;
+
+        if (data.length) {
+          log.log(`Cancelling all ${data.length} orders on ${pair_.pairReadable} pair…`);
+          return true;
+        } else {
+          const errorMessage = scData?.errorMessage || 'No details';
+
+          log.log(`Cancelling all orders on ${pair_.pairReadable} pair: ${errorMessage}.`);
+          return true;
+        }
+      } catch (e) {
+        log.warn(`Error while processing cancelAllOrders(${paramString}) request: ${e}`);
         return undefined;
       }
     },
