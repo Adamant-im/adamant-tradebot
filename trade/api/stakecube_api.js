@@ -10,6 +10,12 @@ module.exports = function() {
   };
   let log = {};
 
+  // In case if error message includes these words, consider request as failed
+  const doNotResolveErrors = [
+    'nonce', // ~invalid nonce. last nonce used: 1684169723966
+    'pending', // ~pending process need to finish
+  ];
+
   /**
    * Handles response from API
    * @param {Object} responseOrError
@@ -49,10 +55,16 @@ module.exports = function() {
       if (scStatus) {
         resolve(scData);
       } else if ([200, 201].includes(httpCode) && scData) {
-        // For spot/myOpenOrder with no open orders API returns 200 OK, success: false, result: [], error: 'no data'
-        scData.errorMessage = errorMessage;
-        log.log(`StakeCube processed a request to ${url} with data ${reqParameters}, but with error: ${errorMessage}. Resolving…`);
-        resolve(scData);
+        if (doNotResolveErrors.some((e) => scError.includes(e))) {
+          scData.errorMessage = errorMessage;
+          log.warn(`Request to ${url} with data ${reqParameters} failed: ${errorMessage}. Rejecting…`);
+          reject(errorMessage);
+        } else {
+          // For spot/myOpenOrder with no open orders API returns 200 OK, success: false, result: [], error: 'no data'
+          scData.errorMessage = errorMessage;
+          log.log(`StakeCube processed a request to ${url} with data ${reqParameters}, but with error: ${errorMessage}. Resolving…`);
+          resolve(scData);
+        }
       } else if ([404].includes(httpCode)) {
         log.warn(`Request to ${url} with data ${reqParameters} failed: ${errorMessage}. Not found. Rejecting…`);
         reject(errorMessage);
