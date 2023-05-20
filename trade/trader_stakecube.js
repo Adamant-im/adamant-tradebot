@@ -589,7 +589,7 @@ module.exports = (
         });
 
         // We need ascending sort order
-        result.sort(function(a, b) {
+        result.sort((a, b) => {
           return parseFloat(a.date) - parseFloat(b.date);
         });
 
