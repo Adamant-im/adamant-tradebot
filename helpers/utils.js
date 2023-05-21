@@ -20,11 +20,33 @@ module.exports = {
 
   /**
    * Returns object with all of properties as a string for logging
+   * @param {*} object Data to convert to string
    * @return {String}
    */
   getFullObjectString(object) {
     const util = require('util');
     return util.inspect(object, { showHidden: false, depth: null, colors: true });
+  },
+
+  /**
+   * Converts to a string and truncates for logging
+   * @param {String} data Data to log
+   * @param {Number} length Max length of output. Optional.
+   * @param {Boolean} multiLineObjects If get full object output
+   * @return {String}
+   */
+  getLogString(data, length, multiLineObjects = true) {
+    if (this.isObject(data) && multiLineObjects) {
+      data = this.getFullObjectString(data);
+    } else {
+      data = JSON.stringify(data);
+    }
+
+    if (data?.length > length) {
+      data = data.slice(0, length-1) + '…';
+    }
+
+    return data;
   },
 
   /**
@@ -48,6 +70,12 @@ module.exports = {
     return Math.floor((time - EPOCH) / 1000);
   },
 
+  /**
+   * Pads the value with '0' until length of 2 digits
+   * 2 -> '02'
+   * @param {Number} num Value to pad
+   * @returns {string}
+   */
   padTo2Digits(num) {
     return num.toString().padStart(2, '0');
   },
@@ -775,8 +803,8 @@ module.exports = {
         liquidity[key].totalCount = 0;
         liquidity[key].amountTotal = 0;
         liquidity[key].amountTotalQuote = 0;
-        liquidity[key].lowPrice = averagePrice * (1 - liquidity[key].spreadPercent/100/2);
-        liquidity[key].highPrice = averagePrice * (1 + liquidity[key].spreadPercent/100/2);
+        liquidity[key].lowPrice = averagePrice * (1 - liquidity[key].spreadPercent/100);
+        liquidity[key].highPrice = averagePrice * (1 + liquidity[key].spreadPercent/100);
         liquidity[key].spread = averagePrice * liquidity[key].spreadPercent / 100;
         // average price is the same for any spread
       }
@@ -1119,66 +1147,76 @@ module.exports = {
 
   /**
    * Calculates clean (non-cheater) price for the order book
+   * It depends on:
+   *   Distance^2 from smart price: bigger distance means higher probability of cheater order
+   *   Amount of order (accumulated): smaller amount means higher probability of cheater order
+   *   Koef threshold: bigger koef means higher probability of cheater order
    * @param {Array of object} items Bids or asks, received using traderapi.getOrderBook()
-   * @param {String} type Items are 'asks' or 'bids'?
-   * @param {Array of object} liquidity Liquidity info, calculated in getOrderBookInfo()
+   * @param {String} type Items are 'asks' or 'bids'? Asks arranged from low to high, Bids from high to low (spread in the center).
+   * @param {Array of object} liquidity Liquidity info, calculated in getOrderBookInfo(). Using percent50 liquidity for total.
    * @param {Number} smartPrice Smart price for the order book
-   * @param {Number} koef How to understand we achieve clean price. The more koef, the farther smart price from spread
-   * @return {Number} Clean price. It depends on distance from smart price
+   * @param {Number} koef How to understand we achieve clean price
+   * @return {Number} Clean price
    */
-  getCleanPrice(items, type, liquidity, smartPrice, koef = 0.02) {
+  getCleanPrice(items, type, liquidity, smartPrice, koef = 3) {
 
     try {
 
       let cleanPrice;
+
       let a = 0; let t = 0; let c = 0; let c_t = 0;
       let d = 0; let d2 = 0; let ct_d2 = 0;
-      const enough_ct_d2 = koef;
       const table = [];
+
+      // Each iteration el.price moves towards to Smart price
 
       for (let i = 0; i < items.length; i++) {
 
         const el = items[i];
+
         if (type === 'asks') {
-          if (items[i].price > smartPrice) break;
+          if (el.price > smartPrice) break;
           a = el.amount;
           t = liquidity['percent50'].amountAsks;
         } else {
-          if (items[i].price < smartPrice) break;
+          if (el.price < smartPrice) break;
           a = el.amount * el.price;
           t = liquidity['percent50'].amountBidsQuote;
         }
 
         d = this.numbersDifferencePercent(el.price, smartPrice) / 100;
-        d2 = d * d;
+        d2 = d * d; // Decreases every iteration. For order with smartPrice (last iteration) it equals 0.
         c += a;
-        c_t = c / t;
-        ct_d2 = c_t / d2;
+        c_t = c / t; // Grows each iteration
+        ct_d2 = c_t / d2; // Grows each iteration. For order with smartPrice (last iteration) it equals Infinity.
 
-        if (!cleanPrice && (ct_d2 > enough_ct_d2 || ct_d2 === Infinity)) {
-          cleanPrice = el.price;
+        if (ct_d2 < koef && items[i + 1]) { // While ct_d2 is less than Koef, consider an order as a cheater price
+          cleanPrice = items[i + 1].price;
         }
 
         // This table is only for logging
-        if (!cleanPrice) {
-          table.push({
-            items: items.length,
-            total: +t.toFixed(2),
-            price: el.price.toFixed(8),
-            d: +d.toFixed(2),
-            d2: +d2.toFixed(4),
-            a: a.toFixed(8),
-            c: +c.toFixed(8),
-            c_t: +c_t.toFixed(5),
-            ct_d2: +ct_d2.toFixed(5),
-          });
-        }
+        table.push({
+          items: items.length,
+          total: +t.toFixed(2),
+          price: el.price.toFixed(8),
+          d: +d.toFixed(2),
+          d2: +d2.toFixed(4),
+          a: a.toFixed(8),
+          c: +c.toFixed(8),
+          c_t: +c_t.toFixed(5),
+          ct_d2: +ct_d2.toFixed(5),
+          isCheater: ct_d2 < koef,
+        });
 
+      } // For i
+
+      if (!cleanPrice) { // Set Clean price as the best bid/ask
+        cleanPrice = items?.[0].price;
       }
 
       // See this table to understand the magic
       // console.table(table);
-      // console.log(`cleanPrice for ${type} and ${smartPrice.toFixed(8)} smart price is ${cleanPrice.toFixed(8)}\n`);
+      // console.log(`Clean price is ${cleanPrice.toFixed(8)} for ${type} when Smart price = ${smartPrice.toFixed(8)} and Koef = ${koef}.\n`);
 
       return cleanPrice;
 
@@ -1282,8 +1320,8 @@ module.exports = {
 
       // Second, check mm_liquiditySpreadPercentMin: 'depth' orders should be not close to mid of spread
       if (order.subPurpose !== 'ss' && tradeParams.mm_liquiditySpreadPercentMin) {
-        const innerLowPrice = orderBookInfo.averagePrice * (1 - tradeParams.mm_liquiditySpreadPercentMin/100/2) + roughness;
-        const innerHighPrice = orderBookInfo.averagePrice * (1 + tradeParams.mm_liquiditySpreadPercentMin/100/2) - roughness;
+        const innerLowPrice = orderBookInfo.averagePrice * (1 - tradeParams.mm_liquiditySpreadPercentMin/100) + roughness;
+        const innerHighPrice = orderBookInfo.averagePrice * (1 + tradeParams.mm_liquiditySpreadPercentMin/100) - roughness;
         if (order.price > innerLowPrice && order.price < innerHighPrice) {
           return true;
         }

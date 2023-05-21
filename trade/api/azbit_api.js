@@ -334,12 +334,12 @@ module.exports = function() {
      * Get trades history
      * Note: returns [] for a wrong trade pair
      * @param pair In Azbit format as ETH_USDT
-     * @param pageSize Number of trades to return
+     * @param pageSize Number of trades to return. Max is 200.
      * @param pageNumber Page number. Optional.
      * @return {Object} Last trades
      * https://docs.azbit.com/docs/public-api/deals#apideals
      */
-    getTradesHistory: function(pair, pageSize = 500, pageNumber) {
+    getTradesHistory: function(pair, pageSize = 200, pageNumber) {
       const data = {
         pageSize,
         currencyPairCode: pair,

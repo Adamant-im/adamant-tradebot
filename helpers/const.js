@@ -11,7 +11,7 @@ module.exports = {
   PRINT_DECIMALS: 8, // For pretty print, 9.12345678 ETH
   MAX_ADM_MESSAGE_LENGTH: 10000,
   EXECUTE_IN_ORDER_BOOK_MAX_PRICE_CHANGE_PERCENT: 0.15, // In-orderbook trading: don't change price by mm-order more, than 0.15%
-  LIQUIDITY_SS_MAX_SPREAD_PERCENT: 0.3, // Liquidity spread support orders: Maintain spread percent
+  LIQUIDITY_SS_MAX_SPREAD_PERCENT: 0.2, // Liquidity spread support orders: Maintain spread percent
   DEFAULT_ORDERBOOK_ORDERS_COUNT: 15,
   LADDER_STATES: ['Not placed', 'Open', 'Filled', 'Partly filled', 'Cancelled', 'Missed', 'To be removed', 'Removed'],
   LADDER_OPENED_STATES: ['Open', 'Partly filled'],
