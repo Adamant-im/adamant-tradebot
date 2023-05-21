@@ -4,11 +4,17 @@ const axios = require('axios');
 module.exports = function() {
   let WEB_BASE = 'https://stakecube.io/api/v2';
   let config = {
-    'apiKey': '',
-    'secret_key': '',
-    'tradePwd': '',
+    apiKey: '',
+    secret_key: '',
+    tradePwd: '',
   };
   let log = {};
+
+  // In case if error message includes these words, consider request as failed
+  const doNotResolveErrors = [
+    'nonce', // ~invalid nonce. last nonce used: 1684169723966
+    'pending', // ~pending process need to finish
+  ];
 
   /**
    * Handles response from API
@@ -41,7 +47,7 @@ module.exports = function() {
     const scStatus = scData?.success;
     const scError = scData?.error;
 
-    const scErrorInfo = scStatus ? `[No error code]` : `[${scError}]`;
+    const scErrorInfo = scStatus ? '[No error code]' : `[${scError}]`;
     const errorMessage = httpCode ? `${httpCode} ${httpMessage}, ${scErrorInfo}` : String(responseOrError);
     const reqParameters = queryString || bodyString || '{ No parameters }';
 
@@ -49,10 +55,16 @@ module.exports = function() {
       if (scStatus) {
         resolve(scData);
       } else if ([200, 201].includes(httpCode) && scData) {
-        // For spot/myOpenOrder with no open orders API returns 200 OK, success: false, result: [], error: 'no data'
-        scData.errorMessage = errorMessage;
-        log.log(`StakeCube processed a request to ${url} with data ${reqParameters}, but with error: ${errorMessage}. Resolving…`);
-        resolve(scData);
+        if (doNotResolveErrors.some((e) => scError.includes(e))) {
+          scData.errorMessage = errorMessage;
+          log.warn(`Request to ${url} with data ${reqParameters} failed: ${errorMessage}. Rejecting…`);
+          reject(errorMessage);
+        } else {
+          // For spot/myOpenOrder with no open orders API returns 200 OK, success: false, result: [], error: 'no data'
+          scData.errorMessage = errorMessage;
+          log.log(`StakeCube processed a request to ${url} with data ${reqParameters}, but with error: ${errorMessage}. Resolving…`);
+          resolve(scData);
+        }
       } else if ([404].includes(httpCode)) {
         log.warn(`Request to ${url} with data ${reqParameters} failed: ${errorMessage}. Not found. Rejecting…`);
         reject(errorMessage);
@@ -105,7 +117,7 @@ module.exports = function() {
 
     return new Promise((resolve, reject) => {
       const httpOptions = {
-        url: url,
+        url,
         method: type,
         timeout: 10000,
         headers: {
@@ -145,7 +157,7 @@ module.exports = function() {
 
     return new Promise((resolve, reject) => {
       const httpOptions = {
-        url: url,
+        url,
         method: type,
         timeout: 20000,
       };
@@ -170,7 +182,7 @@ module.exports = function() {
   }
 
   const EXCHANGE_API = {
-    setConfig: function(apiServer, apiKey, secretKey, tradePwd, logger, publicOnly = false) {
+    setConfig(apiServer, apiKey, secretKey, tradePwd, logger, publicOnly = false) {
       if (apiServer) {
         WEB_BASE = apiServer;
       }
@@ -181,9 +193,9 @@ module.exports = function() {
 
       if (!publicOnly) {
         config = {
-          'apiKey': apiKey,
-          'secret_key': secretKey,
-          'tradePwd': tradePwd,
+          apiKey,
+          secret_key: secretKey,
+          tradePwd: tradePwd,
         };
       }
     },
@@ -193,7 +205,7 @@ module.exports = function() {
      * @return {Promise<Object>}
      * https://github.com/stakecube-hub/stakecube-api-docs/blob/master/rest-api/user.md#account
      */
-    getUserData: function() {
+    getUserData() {
       return protectedRequest('/user/account', {}, 'get');
     },
 
@@ -204,7 +216,7 @@ module.exports = function() {
      * @return {Promise<Object>}
      * https://github.com/stakecube-hub/stakecube-api-docs/blob/master/rest-api/exchange.md#my-open-orders
      */
-    getOrders: async function(symbol, limit = 1000) {
+    getOrders(symbol, limit = 1000) {
       const data = {
         market: symbol,
         limit,
@@ -223,7 +235,7 @@ module.exports = function() {
      * @return {Promise<Object>}
      * https://github.com/stakecube-hub/stakecube-api-docs/blob/master/rest-api/exchange.md#order
      */
-    addOrder: function(symbol, amount, price, side) {
+    addOrder(symbol, amount, price, side) {
       const data = {
         market: symbol,
         side: side.toUpperCase(),
@@ -240,7 +252,7 @@ module.exports = function() {
      * @return {Promise<Object>}
      * https://github.com/stakecube-hub/stakecube-api-docs/blob/master/rest-api/exchange.md#cancel
      */
-    cancelOrder: function(orderId) {
+    cancelOrder(orderId) {
       const data = {
         orderId,
       };
@@ -253,7 +265,7 @@ module.exports = function() {
      * @param {String} symbol In StakeCube format as BTC_USDT
      * https://github.com/stakecube-hub/stakecube-api-docs/blob/master/rest-api/exchange.md#cancel-all
      */
-    cancelAllOrders: function(symbol) {
+    cancelAllOrders(symbol) {
       const data = {
         market: symbol,
       };
@@ -267,7 +279,7 @@ module.exports = function() {
      * @return {Promise<Object>}
      * https://github.com/stakecube-hub/stakecube-api-docs/blob/master/rest-api/exchange.md#orderbook
      */
-    orderBook: function(symbol) {
+    orderBook(symbol) {
       const data = {
         market: symbol,
       };
@@ -282,7 +294,7 @@ module.exports = function() {
      * @return {Promise<Array<Object>>} Last trades
      * https://github.com/stakecube-hub/stakecube-api-docs/blob/master/rest-api/exchange.md#trades
      */
-    getTradesHistory: function(symbol, limit = 300) {
+    getTradesHistory(symbol, limit = 300) {
       const data = {
         market: symbol,
         limit,
@@ -296,7 +308,7 @@ module.exports = function() {
      * @return {Promise<Object>}
      * https://github.com/stakecube-hub/stakecube-api-docs/blob/master/rest-api/exchange.md#markets
      */
-    markets: function() {
+    markets() {
       return publicRequest('/exchange/spot/markets', {}, 'get');
     },
 
@@ -307,7 +319,7 @@ module.exports = function() {
      * @return {Promise<Object>}
      * https://github.com/stakecube-hub/stakecube-api-docs/blob/master/rest-api/exchange.md#markets
      */
-    ticker: function(symbol) {
+    ticker(symbol) {
       const data = {
         market: symbol,
       };
