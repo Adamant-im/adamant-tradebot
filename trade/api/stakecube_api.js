@@ -248,13 +248,13 @@ module.exports = function() {
 
     /**
      * Cancels an order by its unique ID
-     * @param {String} orderId Example: 285088438163
+     * @param {String|Number} orderId Example: 5547806
      * @return {Promise<Object>}
      * https://github.com/stakecube-hub/stakecube-api-docs/blob/master/rest-api/exchange.md#cancel
      */
     cancelOrder(orderId) {
       const data = {
-        orderId,
+        orderId: +orderId,
       };
 
       return protectedRequest('/exchange/spot/cancel', data, 'post');
