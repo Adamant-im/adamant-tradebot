@@ -4,12 +4,12 @@ This is a free version. For premium features, see [marketmaking.app/services](ht
 
 # Market making
 
-In Market making mode, the bot places orders and executes them by itself, making a trade volume, maintaining spread and liquidity; builds live-like dynamic order books and watches a token price. Market making helps:
+In Market-making mode, the bot places orders and executes them by itself, making a trading volume, maintaining spread and liquidity; builds live-like dynamic order books, and watches a token price. Market making helps:
 
 * Cryptocurrency projects (token issuers)
 * Cryptocurrency exchanges
 
-See [marketmaking.app](https://marketmaking.app) to have a look at the bot possibilities.
+See [marketmaking.app](https://marketmaking.app) to look at the bot possibilities.
 
 ![Trading chart](./assets/Making-chart.png)
 
@@ -17,7 +17,7 @@ See [marketmaking.app](https://marketmaking.app) to have a look at the bot possi
 
 # Profit trading
 
-Trading is a mode when a bot runs orders according to some strategy. It can be profitable or not. This feature is unavailable now—we recommend to use [Zenbot](https://github.com/DeviaVir/zenbot) instead.
+Profit trading is a mode in which a bot runs orders according to some strategy. For Profit trading, see other software—[CoinOptimus](https://github.com/Adamant-im/adamant-coinoptimus).
 
 # Features
 
@@ -43,7 +43,7 @@ To add other exchange support, see [marketmaking.app/services](https://marketmak
 
 After installation, you control the bot in secure ADAMANT Messenger chat directly.
 
-Available commands: ask a bot with `/help` command. Read more how to install and use the bot: [marketmaking.app/guides](https://marketmaking.app/guides/).
+Available commands: ask a bot with the `/help` command. Read more about installing and using the bot: [marketmaking.app/guides](https://marketmaking.app/guides/).
 
 We can run market-making for you, see [marketmaking.app/services](https://marketmaking.app/services/).
 
@@ -71,7 +71,7 @@ cp config.default.jsonc config.jsonc
 nano config.jsonc
 ```
 
-Parameters: see comments in config file.
+Parameters: see comments in the config file.
 
 ## Launching
 
