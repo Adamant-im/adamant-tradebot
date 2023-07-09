@@ -196,7 +196,7 @@ module.exports = (
           }
 
           result.push({
-            orderId: order.id?.toString(),
+            orderId: order.id?.toString(), // Store all order ids as string
             symbol: pair.pairReadable,
             price: +order.price,
             side: order.side.toLowerCase(), // 'buy' or 'sell'
@@ -218,10 +218,13 @@ module.exports = (
 
     /**
      * Cancel an order
-     * @param {String} orderId Example: 285088438163
+     * @param {String} orderId Example: 5547806
      * @param {String} side 'buy' or 'sell'. Not used for StakeCube.
      * @param {String} pair In classic format as BTC/USDT. Not used for StakeCube.
      * @returns {Promise<Boolean|undefined>}
+     *   Undefined: the exchange didn't process a request; try one more time later
+     *   True: an order was cancelled
+     *   False: the exchange processed a request, but didn't cancel an order; it may be cancelled already, or orderId doesn't exist
      */
     async cancelOrder(orderId, side, pair) {
       const paramString = `orderId: ${orderId}, pair: ${pair}`;
@@ -239,14 +242,14 @@ module.exports = (
       try {
         const data = scData.result;
 
-        if (data.orderId === orderId) {
+        if (data.orderId) {
           log.log(`Cancelling order ${orderId} on ${pair_.pairReadable} pair…`);
           return true;
         } else {
-          const errorMessage = scData?.errorMessage || 'No details';
+          const errorMessage = scData?.errorMessage || JSON.stringify(scData) || 'No details';
 
           log.log(`Failed to cancel order ${orderId} on ${pair_.pairReadable} pair: ${errorMessage}. Assuming it doesn't exist or already cancelled.`);
-          return true;
+          return false;
         }
       } catch (e) {
         log.warn(`Error while processing cancelOrder(${paramString}) request: ${e}`);
@@ -280,10 +283,10 @@ module.exports = (
           log.log(`Cancelling all ${data.length} orders on ${pair_.pairReadable} pair…`);
           return true;
         } else {
-          const errorMessage = scData?.errorMessage || 'No details';
+          const errorMessage = scData?.errorMessage || JSON.stringify(scData) || 'No details';
 
           log.log(`Cancelling all orders on ${pair_.pairReadable} pair: ${errorMessage}.`);
-          return true;
+          return false;
         }
       } catch (e) {
         log.warn(`Error while processing cancelAllOrders(${paramString}) request: ${e}`);
@@ -300,7 +303,10 @@ module.exports = (
      * @param {Number} coin1Amount Base coin amount. Provide either coin1Amount or coin2Amount.
      * @param {Number} limit StakeCube supports only limit orders
      * @param {Number} coin2Amount Quote coin amount. Provide either coin1Amount or coin2Amount.
-     * @returns {Promise<unknown>|undefined}
+     * @returns {Promise<{orderId: string|boolean, message: string}>|message: string}
+     *   In case of pre-request error, returns error message string.
+     *   After request, returns an object with orderId and message. Cast orderId to string.
+     *   In case if order was not placed, orderId is false, and message contains error info.
      */
     async placeOrder(side, pair, price, coin1Amount, limit = 1, coin2Amount) {
       const paramString = `side: ${side}, pair: ${pair}, price: ${price}, coin1Amount: ${coin1Amount}, limit: ${limit}, coin2Amount: ${coin2Amount}`;
@@ -394,7 +400,7 @@ module.exports = (
         if (orderId) {
           message = `Order placed to ${output} Order Id: ${orderId}.${filledNote}`;
           log.info(message);
-          order.orderId = orderId;
+          order.orderId = String(orderId);
           order.message = message;
         } else {
           const details = errorMessage ? ` Details: ${utils.trimAny(errorMessage, ' .')}.` : ' { No details }.';
