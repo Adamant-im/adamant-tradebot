@@ -94,8 +94,9 @@ const fields = {
     type: String,
     default: 'Hello 😊. This is a stub. I have nothing to say. Please check my config.',
   },
-  debug_api: {
-    type: Number,
+  api: {
+    type: Object,
+    default: {},
   },
   amount_to_confirm_usd: {
     type: Number,

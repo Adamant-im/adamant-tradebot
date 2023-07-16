@@ -100,12 +100,23 @@
   **/
   "log_level": "log",
 
-  /**
-    Port for getting debug info.
-    Do not set for live bots, use only for debugging.
-    Allows to get DBs records like http://ip:port/db?tb=incomingTxsDb
-  **/
-  "debug_api": false,
+  "api": {
+    /** Port to listen on. Set 'false' to disable **/
+    "port": false,
+
+    /**
+      Enables health API
+      Allows to check if bot is running with http://ip:port/ping
+    **/
+    "health": false,
+
+    /**
+      Enables debug API
+      Do not set for live bots, use only for debugging.
+      Allows to get DBs records like http://ip:port/db?tb=incomingTxsDb
+    **/
+    "debug": false
+  },
 
   /** Minimal amount of USDT to confirm buy/sell/fill commands **/
   "amount_to_confirm_usd": 1000
