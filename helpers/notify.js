@@ -8,7 +8,16 @@ const {
   adamant_notify_priority = [],
   slack = [],
   slack_priority = [],
+  discord_notify = [],
+  discord_notify_priority = [],
 } = config;
+
+const discordColors = {
+  'error': '16711680',
+  'warn': '16776960',
+  'info': '65280',
+  'log': '16777215',
+};
 
 module.exports = (messageText, type, silent_mode = false, isPriority = false) => {
   try {
@@ -75,6 +84,29 @@ module.exports = (messageText, type, silent_mode = false, isPriority = false) =>
         });
       }
 
+      const discordKeys = isPriority ?
+        [...discord_notify, ...discord_notify_priority] :
+        discord_notify;
+
+      if (discordKeys.length) {
+        const params = {
+          embeds: [
+            {
+              color: discordColors[type],
+              description: makeBoldForDiscord(message),
+            },
+          ],
+        };
+        discordKeys.forEach((discordKey) => {
+          if (typeof discordKey === 'string') {
+            axios.post(discordKey, params)
+                .catch((error) => {
+                  log.log(`Request to Discord with message ${message} failed. ${error}.`);
+                });
+          }
+        });
+      }
+
     } else {
       log[type](`/No notification, Silent mode, Logging only/ ${removeMarkdown(message)}`);
     }
@@ -101,4 +133,8 @@ function makeBoldForMarkdown(text) {
 
 function makeBoldForSlack(text) {
   return doubleAsterisksToSingle(text);
+}
+
+function makeBoldForDiscord(text) {
+  return singleAsteriskToDouble(text);
 }
