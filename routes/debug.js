@@ -11,19 +11,19 @@ router.get('/db', (req, res) => {
     });
     return;
   }
-  tb.find().toArray((err, data) => {
-    if (err) {
-      res.json({
-        success: false,
-        err,
+  tb.find().toArray()
+      .then((result) => {
+        res.json({
+          result,
+          success: true,
+        });
+      })
+      .catch((err) => {
+        res.json({
+          err,
+          success: false,
+        });
       });
-      return;
-    }
-    res.json({
-      success: true,
-      result: data,
-    });
-  });
 });
 
 module.exports = router;
