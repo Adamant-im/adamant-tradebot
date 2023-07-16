@@ -12,6 +12,13 @@ const {
   discord_notify_priority = [],
 } = config;
 
+const slackColors = {
+  'error': '#FF0000',
+  'warn': '#FFFF00',
+  'info': '#00FF00',
+  'log': '#FFFFFF',
+};
+
 const discordColors = {
   'error': '16711680',
   'warn': '16776960',
@@ -32,26 +39,10 @@ module.exports = (messageText, type, silent_mode = false, isPriority = false) =>
         slack;
 
       if (slackKeys.length) {
-        let color;
-        switch (type) {
-          case ('error'):
-            color = '#FF0000';
-            break;
-          case ('warn'):
-            color = '#FFFF00';
-            break;
-          case ('info'):
-            color = '#00FF00';
-            break;
-          case ('log'):
-            color = '#FFFFFF';
-            break;
-        }
-
         const params = {
           'attachments': [{
             'fallback': message,
-            'color': color,
+            'color': slackColors[type],
             'text': makeBoldForSlack(message),
             'mrkdwn_in': ['text'],
           }],
