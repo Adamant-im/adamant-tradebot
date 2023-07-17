@@ -36,6 +36,7 @@ Profit trading is a mode in which a bot runs orders according to some strategy. 
 * [P2PB2B](https://p2pb2b.com)
 * [Azbit](https://azbit.com?referralCode=9YVWYAF)
 * [StakeCube](https://stakecube.net/?team=adm)
+* [Coinstore](https://coinstore.com)
 
 To add other exchange support, see [marketmaking.app/services](https://marketmaking.app/services/).
 
