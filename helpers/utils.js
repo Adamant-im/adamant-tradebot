@@ -1301,6 +1301,29 @@ module.exports = {
   },
 
   /**
+   * Returns decimals for arbitrary number
+   * 0.00001 -> 5
+   * 1000.00001 -> 5
+   * 1 -> 0
+   * 0 -> 0
+   * @param {Number|String} number
+   * @returns {Number|undefined}
+   */
+  getDecimalsFromNumber(number) {
+    number = number?.toString();
+
+    if (!isFinite(number)) return undefined;
+
+    const split = number.split('.');
+
+    if (split.length === 1) {
+      return 0;
+    }
+
+    return split[1]?.length;
+  },
+
+  /**
    * Checks if order price is out of order book custom percent (as mm_liquiditySpreadPercent) spread
    * @param order Object of ordersDb
    * @param orderBookInfo Object of utils.getOrderBookInfo()
@@ -1737,5 +1760,24 @@ module.exports = {
     const date = new Date();
     date.setMonth(date.getMonth() - 1);
     return +(date.getTime() / 1000).toFixed(0) + 86400;
+  },
+
+  /**
+   * Creates an url params string as: key1=value1&key2=value2
+   * @param {Object} data Request params
+   * @returns {String}
+   */
+  getParamsString(data) {
+    const params = [];
+
+    for (const key in data) {
+      const value = data[key];
+
+      if (value !== undefined) {
+        params.push(`${key}=${value}`);
+      }
+    }
+
+    return params.join('&');
   },
 };
