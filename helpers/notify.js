@@ -89,7 +89,7 @@ module.exports = (messageText, type, silent_mode = false, isPriority = false) =>
           ],
         };
         discordKeys.forEach((discordKey) => {
-          if (typeof discordKey === 'string') {
+          if (typeof discordKey === 'string' && discordKey.length > 36) {
             axios.post(discordKey, params)
                 .catch((error) => {
                   log.log(`Request to Discord with message ${message} failed. ${error}.`);
