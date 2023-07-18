@@ -54,12 +54,12 @@
     "mongodb": "^5.7.0"
   },
   "devDependencies": {
-    "@babel/core": "^7.22.8",
-    "@babel/eslint-parser": "^7.22.7",
-    "@babel/plugin-transform-runtime": "^7.22.7",
-    "@babel/preset-env": "^7.22.7",
+    "@babel/core": "^7.22.9",
+    "@babel/eslint-parser": "^7.22.9",
+    "@babel/plugin-transform-runtime": "^7.22.9",
+    "@babel/preset-env": "^7.22.9",
     "axios-mock-adapter": "^1.21.5",
-    "eslint": "^8.44.0",
+    "eslint": "^8.45.0",
     "eslint-config-google": "^0.14.0",
     "eslint-plugin-import": "^2.27.5",
     "eslint-plugin-node": "^11.1.0",
