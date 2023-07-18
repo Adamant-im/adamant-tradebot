@@ -91,6 +91,12 @@
   /** Slack keys for priority notifications **/
   "slack_priority": [],
 
+ /** Discord keys for notificationis and monitoring. Optional. **/
+ "discord_notify": ["https://discord.com/api/webhooks/..."],
+
+ /** Discord keys for priority notificatons. Optional. **/
+ "discord_notify_priority": [],
+
   /** If you don't want to receive "not enough balance" notifications, set this to "true" **/
   "silent_mode": false,
 
