@@ -1,6 +1,6 @@
 {
   "name": "adamant-tradebot",
-  "version": "5.5.2",
+  "version": "5.5.3",
   "description": "ADAMANT Trading and Market-making bot",
   "main": "index.js",
   "scripts": {

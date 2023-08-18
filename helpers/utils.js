@@ -805,7 +805,7 @@ module.exports = {
         liquidity[key].amountTotalQuote = 0;
         liquidity[key].lowPrice = averagePrice * (1 - liquidity[key].spreadPercent/100);
         liquidity[key].highPrice = averagePrice * (1 + liquidity[key].spreadPercent/100);
-        liquidity[key].spread = averagePrice * liquidity[key].spreadPercent / 100;
+        liquidity[key].spread = liquidity[key].highPrice - liquidity[key].lowPrice;
         // average price is the same for any spread
       }
 
@@ -1326,31 +1326,49 @@ module.exports = {
   /**
    * Checks if order price is out of order book custom percent (as mm_liquiditySpreadPercent) spread
    * @param order Object of ordersDb
-   * @param orderBookInfo Object of utils.getOrderBookInfo()
+   * @param obInfo Object of utils.getOrderBookInfo()
    * @returns {Boolean}
    */
-  isOrderOutOfSpread(order, orderBookInfo) {
+  isOrderOutOfSpread(order, obInfo) {
     try {
-      const liqInfo = order.subPurpose === 'ss' ? orderBookInfo.liquidity.percentSpreadSupport : orderBookInfo.liquidity.percentCustom;
+      const outOfSpreadInfo = {
+        isOrderOutOfSpread: false,
+        isOrderOutOfMinMaxSpread: false,
+        isOrderOutOfInnerSpread: false,
+        isSsOrder: order.subPurpose === 'ss',
+        orderPrice: order.price,
+        minPrice: undefined,
+        maxPrice: undefined,
+        innerLowPrice: undefined,
+        innerHighPrice: undefined,
+        spreadPercent: tradeParams.mm_liquiditySpreadPercent,
+        spreadPercentMin: tradeParams.mm_liquiditySpreadPercentMin,
+      };
+
+      const liqInfo = outOfSpreadInfo.isSsOrder ? obInfo.liquidity.percentSpreadSupport : obInfo.liquidity.percentCustom;
       const roughness = liqInfo.spread * AVERAGE_SPREAD_DEVIATION;
 
       // First, check mm_liquiditySpreadPercent
-      const minPrice = liqInfo.lowPrice - roughness;
-      const maxPrice = liqInfo.highPrice + roughness;
-      if (order.price < minPrice || order.price > maxPrice) {
-        return true;
+      outOfSpreadInfo.minPrice = liqInfo.lowPrice - roughness;
+      outOfSpreadInfo.maxPrice = liqInfo.highPrice + roughness;
+      if (order.price < outOfSpreadInfo.minPrice || order.price > outOfSpreadInfo.maxPrice) {
+        outOfSpreadInfo.isOrderOutOfSpread = true;
+        outOfSpreadInfo.isOrderOutOfMinMaxSpread = true;
+        return outOfSpreadInfo;
       }
 
       // Second, check mm_liquiditySpreadPercentMin: 'depth' orders should be not close to mid of spread
-      if (order.subPurpose !== 'ss' && tradeParams.mm_liquiditySpreadPercentMin) {
-        const innerLowPrice = orderBookInfo.averagePrice * (1 - tradeParams.mm_liquiditySpreadPercentMin/100) + roughness;
-        const innerHighPrice = orderBookInfo.averagePrice * (1 + tradeParams.mm_liquiditySpreadPercentMin/100) - roughness;
-        if (order.price > innerLowPrice && order.price < innerHighPrice) {
-          return true;
+      if (!outOfSpreadInfo.isSsOrder && tradeParams.mm_liquiditySpreadPercentMin) {
+        outOfSpreadInfo.innerLowPrice = obInfo.averagePrice * (1 - tradeParams.mm_liquiditySpreadPercentMin/100) + roughness;
+        outOfSpreadInfo.innerHighPrice = obInfo.averagePrice * (1 + tradeParams.mm_liquiditySpreadPercentMin/100) - roughness;
+        if (order.price > outOfSpreadInfo.innerLowPrice && order.price < outOfSpreadInfo.innerHighPrice) {
+          outOfSpreadInfo.isOrderOutOfSpread = true;
+          outOfSpreadInfo.isOrderOutOfInnerSpread = true;
+          return outOfSpreadInfo;
         }
       }
 
-      return false;
+      return outOfSpreadInfo;
     } catch (e) {
       log.error(`Error in isOrderOutOfSpread() of ${this.getModuleName(module.id)} module: ${e}.`);
       return false;
