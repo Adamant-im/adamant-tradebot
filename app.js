@@ -4,6 +4,7 @@ const checker = require('./modules/checkerTransactions');
 const doClearDB = process.argv.includes('clear_db');
 const config = require('./modules/configReader');
 const txParser = require('./modules/incomingTxsParser');
+const { initApi } = require('./routes/init');
 
 // Socket connection
 const api = require('./modules/api');
@@ -12,8 +13,10 @@ api.socket.initSocket({ socket: config.socket, wsType: config.ws_type, onNewMess
 setTimeout(init, 5000);
 
 function init() {
-  require('./server');
   try {
+    if (config.api?.port) {
+      initApi();
+    }
     if (doClearDB) {
       console.log('Clearing database…');
       db.systemDb.db.drop();

@@ -138,9 +138,21 @@ module.exports = {
           const pw = require('./mm_price_watcher');
           reasonToClose = `It's out of ${pw.getPwRangeString()}`;
           reasonObject.isOutOfPwRange = true;
-        } else if (utils.isOrderOutOfSpread(order, orderBookInfo)) {
-          reasonToClose = `It's out of ±% spread.`;
-          reasonObject.isOutOfSpread = true;
+        } else {
+          const outOfSpreadInfo = utils.isOrderOutOfSpread(order, orderBookInfo);
+
+          if (outOfSpreadInfo?.isOrderOutOfSpread) {
+            const pairObj = orderUtils.parseMarket(order.pair);
+            const coin2Decimals = pairObj.coin2Decimals;
+
+            if (outOfSpreadInfo.isOrderOutOfMinMaxSpread) {
+              reasonToClose = `It's price ${outOfSpreadInfo.orderPrice.toFixed(coin2Decimals)} ${pairObj.coin2} out of ±${outOfSpreadInfo.spreadPercent}% spread: [${outOfSpreadInfo.minPrice}, ${outOfSpreadInfo.maxPrice}].`;
+            } else {
+              reasonToClose = `It's price ${outOfSpreadInfo.orderPrice.toFixed(coin2Decimals)} ${pairObj.coin2} in the ±${outOfSpreadInfo.spreadPercentMin}% disallowed inner spread: [${outOfSpreadInfo.innerLowPrice}, ${outOfSpreadInfo.innerHighPrice}].`;
+            }
+
+            reasonObject.isOutOfSpread = true;
+          }
         }
 
         if (reasonToClose) {

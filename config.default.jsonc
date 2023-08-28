@@ -45,7 +45,8 @@
   "exchanges": [
     "P2PB2B",
     "Azbit",
-    "StakeCube"
+    "StakeCube",
+    "Coinstore"
   ],
 
   /** Exchange to work with. Case insensitive. **/
@@ -91,6 +92,12 @@
   /** Slack keys for priority notifications **/
   "slack_priority": [],
 
+ /** Discord keys for notificationis and monitoring. Optional. **/
+ "discord_notify": ["https://discord.com/api/webhooks/..."],
+
+ /** Discord keys for priority notificatons. Optional. **/
+ "discord_notify_priority": [],
+
   /** If you don't want to receive "not enough balance" notifications, set this to "true" **/
   "silent_mode": false,
 
@@ -100,12 +107,23 @@
   **/
   "log_level": "log",
 
-  /**
-    Port for getting debug info.
-    Do not set for live bots, use only for debugging.
-    Allows to get DBs records like http://ip:port/db?tb=incomingTxsDb
-  **/
-  "debug_api": false,
+  "api": {
+    /** Port to listen on. Set 'false' to disable **/
+    "port": false,
+
+    /**
+      Enables health API
+      Allows to check if bot is running with http://ip:port/ping
+    **/
+    "health": false,
+
+    /**
+      Enables debug API
+      Do not set for live bots, use only for debugging.
+      Allows to get DBs records like http://ip:port/db?tb=incomingTxsDb
+    **/
+    "debug": false
+  },
 
   /** Minimal amount of USDT to confirm buy/sell/fill commands **/
   "amount_to_confirm_usd": 1000
