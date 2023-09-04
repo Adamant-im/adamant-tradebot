@@ -28,7 +28,15 @@ const httpErrorCodeDescriptions = {
   230030: 'Please operate after KYC certification',
 };
 
-const STATUS_CODE_OK = 200;
+const statusCodes = {
+  ok: 200,
+  zero: '0',
+};
+
+const versioning = {
+  v1: '/v1',
+  v2: '/v2',
+};
 
 module.exports = function() {
   let WEB_BASE = 'https://api.fameex.com';
@@ -53,7 +61,7 @@ module.exports = function() {
     const httpMessage = responseOrError?.statusText ?? responseOrError?.response?.statusText;
 
     const data = responseOrError?.data ?? responseOrError?.response?.data;
-    const success = httpCode === STATUS_CODE_OK && data.code === STATUS_CODE_OK;
+    const success = httpCode === statusCodes.ok && (data.code === statusCodes.ok || data.code === statusCodes.zero);
 
     const error = {
       code: data?.code ?? 'No error code',
@@ -74,7 +82,7 @@ module.exports = function() {
           data.fameexErrorInfo = fameexErrorInfo;
         }
 
-        if (httpCode === STATUS_CODE_OK) {
+        if (httpCode === statusCodes.ok) {
           log.log(`FameEX processed a request to ${url} with data ${reqParameters}, but with error: ${error.msg}. Resolving…`);
           resolve(data);
         } else {
