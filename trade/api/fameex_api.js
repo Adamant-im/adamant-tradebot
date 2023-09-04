@@ -241,6 +241,56 @@ module.exports = function() {
 
       return protectedRequest('post', `${versioning.v1}/api/spot/orderdetail`, data);
     },
+
+    /**
+     * Create order
+     * https://fameex-docs.github.io/docs/api/spot/en/#new-order
+     * @param {String} symbol For example, the name of the currency pair: "BTC-USDT"
+     * @param {Number} side Order Direction 1-Buy 2-Sell
+     * @param {Number} orderType Order Type 1-Limit Price 2-Market Price 3-Take Profit and Stop Loss 4-Tracking Order 5-Maker Only
+     * @param {String} amount Entrusted quantity (trading amount when buying at market price) (amount ≥ 1)
+     * @param {String} clientOid User-made order ID
+     * @param {String} price Commission price
+     * @param {String} triggerPrice Trigger price
+     * @param {String} backRatio Track the percentage of commissioned callbacks
+     * @return {Promise<Object>}
+     */
+    addOrder(
+        symbol,
+        side,
+        orderType,
+        amount,
+        clientOid,
+        price,
+        triggerPrice,
+        backRatio,
+    ) {
+      const data = {
+        symbol,
+        side,
+        orderType,
+        amount,
+      };
+
+      if (clientOid) {
+        data.clientOid = clientOid;
+      }
+
+      if (price) {
+        data.price = price;
+      }
+
+      if (triggerPrice) {
+        data.triggerPrice = triggerPrice;
+      }
+
+      if (backRatio) {
+        data.backRatio = backRatio;
+      }
+
+      return protectedRequest('post', `${versioning.v1}/api/spot/orders`, data);
+    },
+
     /**
      * All trading currencies supported by FameEX
      * https://fameex-docs.github.io/docs/api/spot/en/#get-all-transaction-currencies
