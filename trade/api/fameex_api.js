@@ -217,6 +217,30 @@ module.exports = function() {
     getBalances() {
       return protectedRequest('get', `${versioning.v1}/api/account/wallet`, {});
     },
+
+    /**
+     * Get order details
+     * https://fameex-docs.github.io/docs/api/spot/en/#get-order-details
+     * @param {String} symbol The name of the currency pair, such as "BTC-USDT"
+     * @param {String} orderId Order ID (orderId and clientOid must and can only be filled in)
+     * @param {String} clientOid User-made order ID (orderId and clientOid must be filled in only one)
+     * @return {Promise<Object>}
+     */
+    async getOrderDetails(symbol, orderId, clientOid) {
+      const data = {
+        symbol,
+      };
+
+      if (orderId) {
+        data.orderId = orderId;
+      }
+
+      if (clientOid) {
+        data.clientOid = clientOid;
+      }
+
+      return protectedRequest('post', `${versioning.v1}/api/spot/orderdetail`, data);
+    },
     /**
      * All trading currencies supported by FameEX
      * https://fameex-docs.github.io/docs/api/spot/en/#get-all-transaction-currencies
