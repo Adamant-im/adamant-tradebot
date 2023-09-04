@@ -63,9 +63,11 @@ module.exports = function() {
     const data = responseOrError?.data ?? responseOrError?.response?.data;
     const success = httpCode === statusCodes.ok && (data.code === statusCodes.ok || data.code === statusCodes.zero);
 
+    console.log({ data });
+
     const error = {
       code: data?.code ?? 'No error code',
-      msg: httpErrorCodeDescriptions[data?.code] ?? 'Unknown error',
+      msg: httpErrorCodeDescriptions[data?.code] ?? data?.msg ?? 'Unknown error',
     };
 
     const reqParameters = queryString || '{ No parameters }';
