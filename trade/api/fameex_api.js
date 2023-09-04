@@ -206,6 +206,15 @@ module.exports = function() {
         };
       }
     },
+
+    /**
+     * Get user assets balance
+     * https://fameex-docs.github.io/docs/api/spot/en/#get-wallet-info
+     * @return {Promise<Array>}
+     */
+    getBalances() {
+      return protectedRequest('get', `${versioning.v1}/api/account/wallet`, {});
+    },
     /**
      * All trading currencies supported by FameEX
      * https://fameex-docs.github.io/docs/api/spot/en/#get-all-transaction-currencies
