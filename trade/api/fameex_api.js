@@ -206,6 +206,24 @@ module.exports = function() {
         };
       }
     },
+    /**
+     * All trading currencies supported by FameEX
+     * https://fameex-docs.github.io/docs/api/spot/en/#get-all-transaction-currencies
+     * @return {Promise<Object>}
+     */
+    currencies() {
+      return protectedRequest('get', `${versioning.v1}/common/currencys`, {});
+    },
+
+    /**
+     * List currencies
+     * https://fameex-docs.github.io/docs/api/spot/en/#detailed-summary-for-each-currency
+     * @return {Promise<Object>}
+     */
+    currenciesPublic() {
+      return publicRequest('get', `${versioning.v2}/public/assets`, {});
+    },
+
   return EXCHANGE_API;
 };
 
