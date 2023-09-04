@@ -187,6 +187,26 @@ module.exports = function() {
         .update(timestamp + method + requestPath + payload)
         .digest('hex');
   };
+
+  const EXCHANGE_API = {
+    setConfig(apiServer, apiKey, secretKey, tradePwd, logger, publicOnly = false) {
+      if (apiServer) {
+        WEB_BASE = apiServer;
+      }
+
+      if (logger) {
+        log = logger;
+      }
+
+      if (!publicOnly) {
+        config = {
+          apiKey,
+          tradePwd,
+          secret_key: secretKey,
+        };
+      }
+    },
+  return EXCHANGE_API;
 };
 
 module.exports.axios = axios; // for setup axios mock adapter
