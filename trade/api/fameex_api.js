@@ -495,6 +495,21 @@ module.exports = function() {
       return publicRequest('get', `${versioning.v2}/public/assets`, {});
     },
 
+    /**
+     * Ticker for all trading pairs in the market
+     * https://fameex-docs.github.io/docs/api/spot/en/#24hr-ticker-price-change-statistics
+     * @param {String} symbol Name of the trading pair, example: "BTC-USDT"
+     * @return {Promise<Array>}
+    */
+    ticker(symbol) {
+      const params = {};
+
+      if (symbol) {
+        params.symbol = symbol;
+      }
+
+      return publicRequest('get', `/api${versioning.v2}/ticker/24hr`, params);
+    },
   return EXCHANGE_API;
 };
 
