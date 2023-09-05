@@ -554,6 +554,14 @@ module.exports = function() {
       return publicRequest('get', `/api/${versioning.v2}/trades`, params);
     },
 
+    /**
+     * Get all trading currency pairs
+     * https://fameex-docs.github.io/docs/api/spot/en/#get-all-trading-currency-pairs
+     * @return {Promise<Array>}
+     */
+    markets() {
+      return publicRequest('get', `${versioning.v1}/common/symbols`, {});
+    },
   };
 
   return EXCHANGE_API;
