@@ -510,6 +510,27 @@ module.exports = function() {
 
       return publicRequest('get', `/api${versioning.v2}/ticker/24hr`, params);
     },
+    /**
+     * Get the latest trades record
+     * https://fameex-docs.github.io/docs/api/spot/en/#recent-trades-list
+     * @param {String} symbol Name of the trading pair, example: BTC-USDT
+     * @param {Number} limit Default value is 100, max 100
+     * @return {Promise<Array>}
+     */
+    getTradesHistory(symbol, limit) {
+      const params = {
+        symbol,
+      };
+
+      if (limit) {
+        params.limit = limit;
+      }
+
+      return publicRequest('get', `/api/${versioning.v2}/trades`, params);
+    },
+
+  };
+
   return EXCHANGE_API;
 };
 
