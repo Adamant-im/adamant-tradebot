@@ -304,6 +304,81 @@ module.exports = function() {
     },
 
     /**
+     * Get transaction details
+     * https://fameex-docs.github.io/docs/api/spot/en/#get-transaction-details
+     * !NOT IMPLEMENTED!
+     * !This is a template for API, at the moment it is impossible to implement, due to problems on the FameEX side
+     * @param {String} base Transaction currency (uppercase, such as "BTC")
+     * @param {String} quote Denominated currency (uppercase, such as "USDT")
+     * @param {String} orderId Order ID
+     * @param {Number} side Order Direction 1-Buy 2-Sell
+     * @param {Number[]} orderTypes List of order types 1- limit price 2- market price 3- stop profit stop loss 4- tracking order 5- Maker only
+     * @param {Number} pageno Pagination, the first few pages (1 <= pageNum)
+     * @param {Number} pageSize Pagination, the number of pages (1 < pageSize <= 500)
+     * @param {Number} startTime Start timestamp, seconds
+     * @param {Number} endTime End timestamp, seconds
+     * @param {String} strategyId Strategy Id
+     * @param {int} strategyType Strategy type
+     * @return {Promise<Object>}
+     */
+    async getTransactionDetails(
+        base,
+        quote,
+        orderId,
+        side,
+        orderTypes,
+        pageno,
+        pageSize,
+        startTime,
+        endTime,
+        strategyId,
+        strategyType,
+    ) {
+      const data = {
+        pageno,
+        pageSize,
+      };
+
+      if (base) {
+        data.base = base;
+      }
+
+      if (quote) {
+        data.quote = quote;
+      }
+
+      if (orderId) {
+        data.orderId = orderId;
+      }
+
+      if (side) {
+        data.side = side;
+      }
+
+      if (orderTypes) {
+        data.orderTypes = orderTypes;
+      }
+
+      if (startTime) {
+        data.startTime = startTime;
+      }
+
+      if (endTime) {
+        data.endTime = endTime;
+      }
+
+      if (strategyId) {
+        data.strategyId = strategyId;
+      }
+
+      if (strategyType) {
+        data.strategyType = strategyType;
+      }
+
+      return protectedRequest('post', `${versioning.v1}/api/spot/fills`, data);
+    },
+
+    /**
      * Create order
      * https://fameex-docs.github.io/docs/api/spot/en/#new-order
      * @param {String} symbol For example, the name of the currency pair: "BTC-USDT"
