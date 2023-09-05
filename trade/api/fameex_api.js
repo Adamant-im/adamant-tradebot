@@ -105,7 +105,7 @@ module.exports = function() {
    * @param {String} type Request type: get, post, delete
    * @param {String} path Endpoint
    * @param {Object} data Request params
-   * @returns {*}
+   * @returns {Promise<any>}
    */
   function protectedRequest(type, path, data) {
     const url = `${WEB_BASE}${path}`;
@@ -158,7 +158,7 @@ module.exports = function() {
    * @param {String} type Request type: get, post, delete
    * @param {String} path Endpoint
    * @param {Object} data Request params
-   * @returns {*}
+   * @returns {Promise<any>}
    */
   function publicRequest(type, path, params) {
     const url = `${WEB_BASE}${path}`;
