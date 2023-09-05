@@ -90,6 +90,66 @@ module.exports = (
           });
     });
   }
+
+  /**
+   * Get info on all markets and store in module.exports.exchangeMarkets
+   * It's an internal function, not called outside of this module
+   * @param {String} pair In classic format as BTC/USDT. If markets are already cached, get info for the pair.
+   * @returns {Promise<unknown>|*}
+   */
+  function getMarkets(pair) {
+    const paramString = `pair: ${pair}`;
+
+    if (module.exports.gettingMarkets) return;
+    if (module.exports.exchangeMarkets) return module.exports.exchangeMarkets[pair];
+
+    module.exports.gettingMarkets = true;
+
+    return new Promise((resolve) => {
+      fameEXApiClient.markets().then((markets) => {
+        try {
+          const result = markets.data.reduce((acc, market) => {
+            const pair = deformatPairName(market.pair);
+
+            acc[pair.pairReadable] = {
+              pairReadable: pair.pairReadable,
+              pairPlain: pair.pairPlain,
+              coin1: pair.coin1,
+              coin2: pair.coin2,
+              coin1Decimals: market.amountPrecision,
+              coin2Decimals: market.pricePrecision,
+              coin1Precision: utils.getPrecision(market.amountPrecision),
+              coin2Precision: utils.getPrecision(market.pricePrecision),
+              coin1MinAmount: null,
+              coin1MaxAmount: null,
+              coin2MinPrice: null,
+              coin2MaxPrice: null,
+              minTrade: null,
+              status: null,
+            };
+
+            return acc;
+          }, {});
+
+          if (Object.keys(result).length > 0) {
+            module.exports.exchangeMarkets = result;
+            log.log(`Received info about ${Object.keys(result).length} markets on ${exchangeName} exchange.`);
+          }
+
+          module.exports.gettingMarkets = false;
+          resolve(result);
+        } catch (error) {
+          log.warn(`Error while processing getMarkets(${paramString}) request: ${error}`);
+          resolve(undefined);
+        }
+      }).catch((error) => {
+        log.warn(`API request getMarkets() of ${utils.getModuleName(module.id)} module failed. ${error}`);
+        resolve(undefined);
+      }).finally(() => {
+        module.exports.gettingMarkets = false;
+      });
+    });
+  }
 };
 /**
  * Returns network name in classic format
@@ -98,4 +158,22 @@ module.exports = (
  */
 function formatNetworkName(network) {
   return networks[network?.toUpperCase()]?.code ?? network;
+}
+
+/**
+ * Returns pair in classic format like BTC/USDT
+ * @param pair Pair in FameEX format BTC_USDT or BTC-USDT or BTC/USDT
+ * @returns {Object}
+ */
+function deformatPairName(pair) {
+  pair = pair?.toUpperCase();
+  const [coin1, coin2] = pair.split(/[\-\_\/]/);
+
+  return {
+    pair: `${coin1}/${coin2}`,
+    pairReadable: `${coin1}/${coin2}`,
+    pairPlain: `${coin1}_${coin2}`,
+    coin1,
+    coin2,
+  };
 }
