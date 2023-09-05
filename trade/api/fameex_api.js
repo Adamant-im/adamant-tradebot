@@ -518,6 +518,7 @@ module.exports = function() {
     /**
      * Ticker for all trading pairs in the market
      * https://fameex-docs.github.io/docs/api/spot/en/#24hr-ticker-price-change-statistics
+     * !Important! symbol param doesn't work right now
      * @param {String} symbol Name of the trading pair, example: "BTC-USDT"
      * @return {Promise<Array>}
     */
