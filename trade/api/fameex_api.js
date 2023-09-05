@@ -115,7 +115,11 @@ module.exports = function() {
 
     const timestamp = Date.now();
 
-    const signPayload = type === 'post' ? stringifiedData : '';
+    const signPayload = type === 'post' ?
+      stringifiedData :
+      bodyString.length ?
+        `?${bodyString}` :
+        '';
 
     const method = type.toUpperCase();
 
