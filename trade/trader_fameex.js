@@ -36,11 +36,13 @@ module.exports = (
         fameEXApiClient.currencies(),
         fameEXApiClient.currenciesWithNetwork(),
       ])
-          .then(([currencies, currenciesWithNetworks]) => {
+          .then(([currenciesData, currenciesWithNetworks]) => {
             try {
               const result = {};
 
-              const netowrksByCurrency = currenciesWithNetworks.list.reduce((acc, data) => {
+              const currencies = currenciesData.data;
+
+              const networksByCurrency = currenciesWithNetworks.data.list.reduce((acc, data) => {
                 const currencyNetworks = Object.keys(data.currencyDetail).map(formatNetworkName);
 
                 return acc.set(data.currency.toUpperCase(), currencyNetworks);
@@ -63,7 +65,7 @@ module.exports = (
                   exchangeAddress: undefined,
                   decimals: undefined,
                   precision: undefined,
-                  networks: netowrksByCurrency.get(currency.name.toUpperCase()),
+                  networks: networksByCurrency.get(currency.name.toUpperCase()),
                   defaultNetwork: undefined,
                   withdrawEnabled: currency.can_withdraw,
                   depositEnabled: currency.can_deposit,
