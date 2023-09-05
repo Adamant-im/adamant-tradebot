@@ -291,6 +291,56 @@ module.exports = function() {
       return protectedRequest('post', `${versioning.v1}/api/spot/orders`, data);
     },
 
+    // TODO: test some cases
+    /**
+     * Cancel order
+     * https://fameex-docs.github.io/docs/api/spot/en/#cancel-order
+     * @param {String} symbol For example, the name of the currency pair: "BTC-USDT"
+     * @param {String} orderId Order ID (orderId and clientOid must and can only be filled in)
+     * @param {String} clientOid User-made order ID (orderId and clientOid must be filled in only one)
+     * @return {Promise<Object>}
+     */
+    cancelOrder(symbol, orderId, clientOid) {
+      const data = {
+        symbol,
+      };
+
+      if (orderId) {
+        data.orderId = orderId;
+      }
+
+      if (clientOid) {
+        data.clientOid = clientOid;
+      }
+
+      return protectedRequest('post', `${versioning.v1}/api/spot/cancel_orders`, data);
+    },
+
+    // TODO: test some cases
+    /**
+     * Cancel all order for specific symbol
+     * https://coinstore-openapi.github.io/en/index.html#one-click-cancellation
+     * @param {String} symbol For example, the name of the currency pair: "BTC-USDT"
+     * @param {String[]} orderIds Order ID (orderId and clientOid must and can only be filled in)
+     * @param {String[]} clientOids User-made order ID (orderId and clientOid must be filled in only one)
+     * @return {Promise<Array>}
+     */
+    cancelAllOrders(symbol, orderIds, clientOids) {
+      const data = {
+        symbol,
+      };
+
+      if (orderIds?.length) {
+        data.orderIds = orderIds;
+      }
+
+      if (clientOids?.length) {
+        data.clientOids = clientOids;
+      }
+
+      return protectedRequest('post', `${versioning.v1}/api/spot/cancel_orders_all`, data);
+    },
+
     /**
      * All trading currencies supported by FameEX
      * https://fameex-docs.github.io/docs/api/spot/en/#get-all-transaction-currencies
