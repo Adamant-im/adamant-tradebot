@@ -502,7 +502,7 @@ module.exports = function() {
      * https://fameex-docs.github.io/docs/api/spot/en/#get-all-transaction-currencies
      * @return {Promise<Object>}
      */
-    currencies() {
+    currenciesWithNetwork() {
       return protectedRequest('get', `${versioning.v1}/common/currencys`, {});
     },
 
@@ -511,7 +511,7 @@ module.exports = function() {
      * https://fameex-docs.github.io/docs/api/spot/en/#detailed-summary-for-each-currency
      * @return {Promise<Object>}
      */
-    currenciesPublic() {
+    currencies() {
       return publicRequest('get', `${versioning.v2}/public/assets`, {});
     },
 
