@@ -478,6 +478,22 @@ module.exports = function() {
     },
 
     /**
+     * Get the deposit address
+     * https://fameex-docs.github.io/docs/api/spot/en/#get-the-deposit-address
+     * @param {String} coinType Currency type USDT
+     * @param {String} chainType Chain type ERC20
+     * @return {Promise<Object>}
+     */
+    getDepositAddress(coinType, chainType) {
+      const params = {
+        coinType,
+        chainType,
+      };
+
+      return protectedRequest('get', `${versioning.v1}/api/account/deposit/address`, params);
+    },
+
+    /**
      * All trading currencies supported by FameEX
      * https://fameex-docs.github.io/docs/api/spot/en/#get-all-transaction-currencies
      * @return {Promise<Object>}
