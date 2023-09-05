@@ -61,7 +61,8 @@ module.exports = function() {
     const httpMessage = responseOrError?.statusText ?? responseOrError?.response?.statusText;
 
     const data = responseOrError?.data ?? responseOrError?.response?.data;
-    const success = httpCode === statusCodes.ok && (data.code === statusCodes.ok || data.code === statusCodes.zero);
+    const success = httpCode === statusCodes.ok &&
+      (data.code === statusCodes.ok || data.code === statusCodes.zero || Array.isArray(data));
 
     console.log({ data });
 
