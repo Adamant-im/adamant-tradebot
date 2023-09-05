@@ -63,7 +63,7 @@ module.exports = (
                   exchangeAddress: undefined,
                   decimals: undefined,
                   precision: undefined,
-                  networks: netowrksByCurrency,
+                  networks: netowrksByCurrency.get(currency.name.toUpperCase()),
                   defaultNetwork: undefined,
                   withdrawEnabled: currency.can_withdraw,
                   depositEnabled: currency.can_deposit,
