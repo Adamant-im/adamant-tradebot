@@ -75,7 +75,7 @@ module.exports = function() {
 
     try {
       if (success) {
-        resolve(data.data);
+        resolve(data);
       } else {
         const fameexErrorInfo = `[${error.code}] ${trimAny(error.msg, ' .')}`;
 
