@@ -220,6 +220,66 @@ module.exports = function() {
     },
 
     /**
+     * Get a list of orders
+     * https://fameex-docs.github.io/docs/api/spot/en/#get-a-list-of-orders
+     * !NOT IMPLEMENTED!
+     * !This is a template for API, at the moment it is impossible to implement, due to problems on the FameEX side
+     * @param {String} base Transaction currency (uppercase, such as "BTC")
+     * @param {String} quote Denominated currency (uppercase, such as "USDT")
+     * @param {String} side Order Direction 1-Buy 2-Sell
+     * @param {Number[]} orderTypes List of order types 1-limit price 2-market price 3-stop profit stop loss 4-tracking order 5-Maker only
+     * @param {String} state Order status 7-uncompleted 8-completed 9-completed or partially cancelled
+     * @param {String} startTime Start timestamp, seconds
+     * @param {String} endTime End timestamp, seconds
+     * @param {String} pageno Pagination, the first few pages (1 <= pageNum)
+     * @param {String} pageSize Pagination, the number of pages (1 <= pageSize <=500)
+     * @param {String} strategyId Strategy Id
+     * @param {String} strategyType Strategy type
+     * @return {Promise<Array>}
+     */
+    getOrders(
+        base,
+        quote,
+        side,
+        orderTypes,
+        state,
+        startTime,
+        endTime,
+        pageno,
+        pageSize,
+        strategyId,
+        strategyType,
+    ) {
+      const data = {
+        base,
+        quote,
+        side,
+        orderTypes,
+        state,
+        startTime,
+        endTime,
+      };
+
+      if (pageno) {
+        data.pageno = pageno;
+      }
+
+      if (pageSize) {
+        data.pageSize = pageSize;
+      }
+
+      if (strategyId) {
+        data.strategyId = strategyId;
+      }
+
+      if (strategyType) {
+        data.strategyType = strategyType;
+      }
+
+      return protectedRequest('post', `${versioning.v1}/api/spot/orderlist`, data);
+    },
+
+    /**
      * Get order details
      * https://fameex-docs.github.io/docs/api/spot/en/#get-order-details
      * @param {String} symbol The name of the currency pair, such as "BTC-USDT"
