@@ -64,8 +64,6 @@ module.exports = function() {
     const success = httpCode === statusCodes.ok &&
       (data.code === statusCodes.ok || data.code === statusCodes.zero || Array.isArray(data));
 
-    console.log({ data });
-
     const error = {
       code: data?.code ?? 'No error code',
       msg: httpErrorCodeDescriptions[data?.code] ?? data?.msg ?? 'Unknown error',
