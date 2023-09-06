@@ -41,6 +41,11 @@ const orderSides = {
   sell: 2,
 };
 
+const systemToFameExOrderTypesMap = {
+  0: 2,
+  1: 1,
+};
+
 const orderMaxPageSize = 500;
 
 module.exports = (
@@ -477,6 +482,132 @@ module.exports = (
         log.warn(`Error while processing getOrderDetails(${paramString}) request results: ${JSON.stringify(order)}. ${error}`);
         return undefined;
       }
+    },
+
+    /**
+     * Places an order
+     * FameEX supports both limit and market orders
+     * Market Buy is only possible with quote coin amount specified
+     * Market Sell is only possible with base coin amount specified
+     * Limit Buy/Sell is only possible with base coin amount specified
+     * @param {String} side 'buy' or 'sell'
+     * @param {String} pair In classic format like BTC/USD
+     * @param {Number} price Order price
+     * @param {Number} coin1Amount Base coin amount !Provide coin1Amount only for Market Sell or Limit Buy/Sell
+     * @param {Number} limit 1 if order is limit (default), 0 in case of market order
+     * @param {Number} coin2Amount Quote coin amount !Provide coin2Amount only for Market Buy
+     * @returns {Promise<Object>|undefined}
+     */
+    async placeOrder(side, pair, price, coin1Amount, limit = 1, coin2Amount) {
+      const paramString = `side: ${side}, pair: ${pair}, price: ${price}, coin1Amount: ${coin1Amount}, limit: ${limit}, coin2Amount: ${coin2Amount}`;
+
+      const coinPair = formatPairName(pair);
+
+      const marketInfo = this.marketInfo(pair);
+
+      let message;
+
+      if (!marketInfo) {
+        message = `Unable to place an order on ${exchangeName} exchange. I don't have info about market ${pair}.`;
+        log.warn(message);
+        return {
+          message,
+        };
+      }
+
+      if (!limit && side === 'buy' && !coin2Amount) {
+        message = `Unable to place an order on ${exchangeName} exchange at Market buy. Quote amount ${marketInfo.coin2} is not provided.`;
+        log.warn(message);
+        return {
+          message,
+        };
+      }
+
+      if (!limit && side === 'sell' && !coin1Amount) {
+        message = `Unable to place an order on ${exchangeName} exchange at Market sell. Base amount ${marketInfo.coin1} is not provided.`;
+        log.warn(message);
+        return {
+          message,
+        };
+      }
+
+      if (limit && !coin1Amount) {
+        message = `Unable to place an order on ${exchangeName} exchange at Limit ${side}. Base amount ${marketInfo.coin1} is not provided.`;
+        log.warn(message);
+        return {
+          message,
+        };
+      }
+
+      if (coin1Amount) {
+        coin1Amount = (+coin1Amount).toFixed(this.marketInfo(pair).coin1Decimals);
+      }
+      if (coin2Amount) {
+        coin2Amount = (+coin2Amount).toFixed(this.marketInfo(pair).coin2Decimals);
+      }
+      if (price) {
+        price = (+price).toFixed(this.marketInfo(pair).coin2Decimals);
+      }
+
+      if ((limit || !limit && side === 'sell') && coin1Amount < marketInfo.coin1MinAmount) {
+        coin1Amount = coin1Amount ? coin1Amount : 0;
+        message = `Unable to place an order on ${exchangeName} exchange. Order amount ${coin1Amount} ${marketInfo.coin1} is less minimum ${marketInfo.coin1MinAmount} ${marketInfo.coin1} on ${pair} pair.`;
+        log.warn(message);
+        return {
+          message,
+        };
+      }
+
+      let output = '';
+
+      if (limit) {
+        if (coin2Amount) {
+          output = `${side} ${coin1Amount} ${coinPair.coin1} for ${coin2Amount} ${coinPair.coin2} at ${price} ${coinPair.coin2}.`;
+        } else {
+          output = `${side} ${coin1Amount} ${coinPair.coin1} at ${price} ${coinPair.coin2}.`;
+        }
+      } else {
+        output = `${side} ${coinPair.coin1} for ${coin1Amount} ${coinPair.coin2} at Market Price on ${pair} pair.`;
+      }
+
+      const order = {};
+      let orderId;
+      let errorMessage;
+
+      try {
+        const orderData = await fameEXApiClient.addOrder(
+            coinPair.pairDash,
+            orderSides[side],
+            systemToFameExOrderTypesMap[limit],
+            coin1Amount || coin2Amount,
+            String(price),
+        );
+
+        errorMessage = orderData?.msg;
+        orderId = orderData?.data?.orderId;
+      } catch (error) {
+        message = `API request addOrder(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${error}.`;
+        log.warn(message);
+        order.orderId = false;
+        order.message = message;
+
+        return order;
+      }
+
+      if (orderId) {
+        message = `Order placed to ${output} Order Id: ${orderId}.`;
+        log.info(message);
+        order.orderId = orderId;
+        order.message = message;
+      } else {
+        const details = errorMessage ? ` Details: ${utils.trimAny(errorMessage, ' .')}.` : ' { No details }.';
+        message = `Unable to place order to ${output}${details} Check parameters and balances.`;
+        log.warn(message);
+        order.orderId = false;
+        order.message = message;
+      }
+
+      return order;
     },
   };
 };
