@@ -109,7 +109,7 @@ module.exports = (
     const paramString = `pair: ${pair}`;
 
     if (module.exports.gettingMarkets) return;
-    if (module.exports.exchangeMarkets) return module.exports.exchangeMarkets[pair ? deformatPairName(pair).pairReadable : pair];
+    if (module.exports.exchangeMarkets) return module.exports.exchangeMarkets[pair ? formatPairName(pair).pairReadable : pair];
 
     module.exports.gettingMarkets = true;
 
@@ -117,7 +117,7 @@ module.exports = (
       fameEXApiClient.markets().then((markets) => {
         try {
           const result = markets.data.reduce((acc, market) => {
-            const pair = deformatPairName(market.pair);
+            const pair = formatPairName(market.pair);
 
             acc[pair.pairReadable] = {
               pairReadable: pair.pairReadable,
@@ -267,11 +267,11 @@ function formatNetworkName(network) {
 }
 
 /**
- * Returns pair in classic format like BTC/USDT
- * @param pair Pair in FameEX format BTC_USDT or BTC-USDT or BTC/USDT
- * @returns {Object}
+ * Returns pair in classic format BTC/USDT
+ * @param {String} pair Pair in FameEX format BTC_USDT or BTC-USDT or BTC/USDT
+ * @return {Object}
  */
-function deformatPairName(pair) {
+function formatPairName(pair) {
   pair = pair?.toUpperCase();
   const [coin1, coin2] = pair.split(/[\-\_\/]/);
 
