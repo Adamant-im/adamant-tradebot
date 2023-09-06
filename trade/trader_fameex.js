@@ -109,7 +109,7 @@ module.exports = (
     const paramString = `pair: ${pair}`;
 
     if (module.exports.gettingMarkets) return;
-    if (module.exports.exchangeMarkets) return module.exports.exchangeMarkets[pair];
+    if (module.exports.exchangeMarkets) return module.exports.exchangeMarkets[pair ? deformatPairName(pair).pairReadable : pair];
 
     module.exports.gettingMarkets = true;
 
