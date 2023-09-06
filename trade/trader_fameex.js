@@ -158,6 +158,46 @@ module.exports = (
       });
     });
   }
+
+  return {
+    getMarkets,
+    getCurrencies,
+
+    /**
+     * Getter for stored markets info
+     * @return {Object}
+     */
+    get markets() {
+      return module.exports.exchangeMarkets;
+    },
+
+    /**
+     * Getter for stored currencies info
+     * @return {Object}
+     */
+    get currencies() {
+      return module.exports.exchangeCurrencies;
+    },
+
+    /**
+     * Get info for a specific market
+     * @param pair In readable format as BTC/USDT or BTC-USDT or BTC_USDT
+     * @returns {Promise<*>|*}
+     */
+    marketInfo(pair) {
+      return getMarkets(pair);
+    },
+
+    /**
+     * Get info for a specific currency
+     * @param coin As BTC
+     * @returns {Promise<*>|*}
+     */
+    currencyInfo(coin) {
+      return getCurrencies(coin);
+    },
+
+  };
 };
 /**
  * Returns network name in classic format
