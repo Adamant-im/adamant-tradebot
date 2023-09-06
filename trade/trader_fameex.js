@@ -808,6 +808,44 @@ module.exports = (
       }
     },
 
+    /**
+     * Get deposit address for specific coin
+     * @param coin e.g. BTC
+     * @returns {Promise<[]|undefined>}
+     */
+    async getDepositAddress(coin) {
+      const paramString = `coin: ${coin}`;
+
+      const networks = (this.currencyInfo(coin)).networks;
+
+      let addresses;
+      try {
+        addresses = await Promise.all(networks.map(async (network) => {
+          return fameEXApiClient.getDepositAddress(coin, network);
+        }));
+      } catch (err) {
+        log.warn(`API request getDepositAddress(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
+        return undefined;
+      }
+
+      try {
+        const result = [];
+
+        addresses.forEach((address, idx) => {
+          if (address.code === successCode) {
+            result.push({
+              network: networks[idx],
+              address: address.data.address,
+            });
+          }
+        });
+
+        return result;
+      } catch (e) {
+        log.warn(`Error while processing getDepositAddress(${paramString}) request: ${e}`);
+        return undefined;
+      }
+    },
 
     async getFees(coinOrPair) {
       // Not available for FameEX
