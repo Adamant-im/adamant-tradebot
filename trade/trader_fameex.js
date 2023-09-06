@@ -736,11 +736,6 @@ module.exports = (
         return undefined;
       }
 
-      // return {
-      //   bids: book.data.bids,
-      //   asks: book.data.asks,
-      // };
-
       try {
         const result = {};
 
