@@ -218,6 +218,43 @@ module.exports = (
       };
     },
 
+    /**
+     * Get user balances
+     * @param {Boolean} nonzero Return only non-zero balances
+     * @returns {Promise<Array|undefined>}
+     */
+    async getBalances(nonzero = true) {
+      const paramString = `nonzero: ${nonzero}`;
+
+      let balances;
+
+      try {
+        balances = await fameEXApiClient.getBalances();
+      } catch (error) {
+        log.warn(`API request getBalances(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${error}`);
+        return undefined;
+      }
+
+      const spotWallet = balances.data.filter((wallet) => wallet.walletType === 'spot')[0].list;
+
+      try {
+        const result = spotWallet.map((crypto) => ({
+          code: crypto.currency.toUpperCase(),
+          free: +crypto.available,
+          freezed: +crypto.hold,
+          total: +crypto.total,
+        }));
+
+        if (nonzero) {
+          return result.filter((crypto) => crypto.free || crypto.freezed);
+        }
+
+        return result;
+      } catch (error) {
+        log.warn(`Error while processing getBalances(${paramString}) request results: ${JSON.stringify(balances)}. ${error}`);
+        return undefined;
+      }
+    },
   };
 };
 /**
