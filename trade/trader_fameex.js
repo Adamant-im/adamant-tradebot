@@ -610,6 +610,42 @@ module.exports = (
 
       return order;
     },
+
+    /**
+     * Cancel an order
+     * @param {String} orderId Example: '10918742125338689536'
+     * @param {String} side Not used for FameEX
+     * @param {String} pair In classic format as BTC/USDT
+     * @returns {Promise<Boolean|undefined>}
+     */
+    async cancelOrder(orderId, side, pair) {
+      const paramString = `orderId: ${orderId}, side: ${side}, pair: ${pair}`;
+      const coinPair = formatPairName(pair);
+
+      let order;
+
+      try {
+        order = await fameEXApiClient.cancelOrder(coinPair.pairDash, orderId);
+      } catch (error) {
+        log.warn(`API request cancelOrder(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${error}`);
+        return undefined;
+      }
+
+      try {
+        if (order.code === 200) {
+          log.log(`Cancelling order ${orderId} on ${pair} pair…`);
+          return true;
+        } else {
+          const errorMessage = order.fameexErrorInfo ?? 'No details';
+          log.log(`Unable to cancel order ${orderId} on ${pair} pair: ${errorMessage}.`);
+          return false;
+        }
+      } catch (error) {
+        log.warn(`Error while processing cancelOrder(${paramString}) request results: ${JSON.stringify(order)}. ${error}`);
+        return undefined;
+      }
+    },
+
   };
 };
 /**
