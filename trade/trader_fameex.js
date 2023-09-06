@@ -19,6 +19,13 @@ module.exports = (
 ) => {
   const fameEXApiClient = FameEXApi();
   fameEXApiClient.setConfig(apiServer, apiKey, secretKey, pwd, log, publicOnly);
+
+  // Fulfill markets and currencies on initialization
+  if (loadMarket) {
+    getCurrencies();
+    getMarkets();
+  }
+
   /**
    * Get info on all currencies
    * @param {String} coin
