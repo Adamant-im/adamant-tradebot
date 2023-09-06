@@ -318,3 +318,34 @@ function formatPairName(pair) {
     coin2,
   };
 }
+
+/**
+ * Returns system order status
+ * @param {String} orderState State in FameEX format
+ * @return {string}
+ */
+function formatOrderStatus(orderState) {
+  if (orderStates.new.includes(orderState)) {
+    return orderStatuses.new;
+  }
+  if (orderState === orderStates.partiallyFilled) {
+    return orderStatuses.partFilled;
+  }
+  if (orderState === orderStates.filled) {
+    return orderStatuses.filled;
+  }
+  if (orderStates.cancelled.includes(orderState)) {
+    return orderStatuses.cancelled;
+  }
+
+  return orderStatuses.unknown;
+}
+
+/**
+ * Returns system order type
+ * @param {Number} orderType Order type in FameEX format
+ * @return {string}
+ */
+function formatOrderType(orderType) {
+  return orderTypesMap[orderType] || 'unknown';
+}
