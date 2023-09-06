@@ -224,19 +224,15 @@ module.exports = function() {
     /**
      * Get a list of orders
      * https://fameex-docs.github.io/docs/api/spot/en/#get-a-list-of-orders
-     * !NOT IMPLEMENTED!
-     * !This is a template for API, at the moment it is impossible to implement, due to problems on the FameEX side
+     * !POSSIBLE IMPLEMENTATION ERRORS!
+     * !At the moment it is impossible to implement this functional correctly, due to problems on the FameEX side
      * @param {String} base Transaction currency (uppercase, such as "BTC")
      * @param {String} quote Denominated currency (uppercase, such as "USDT")
-     * @param {String} side Order Direction 1-Buy 2-Sell
+     * @param {Number} side Order Direction 1-Buy 2-Sell
      * @param {Number[]} orderTypes List of order types 1-limit price 2-market price 3-stop profit stop loss 4-tracking order 5-Maker only
-     * @param {String} state Order status 7-uncompleted 8-completed 9-completed or partially cancelled
-     * @param {String} startTime Start timestamp, seconds
-     * @param {String} endTime End timestamp, seconds
-     * @param {String} pageno Pagination, the first few pages (1 <= pageNum)
-     * @param {String} pageSize Pagination, the number of pages (1 <= pageSize <=500)
-     * @param {String} strategyId Strategy Id
-     * @param {String} strategyType Strategy type
+     * @param {Number} state Order status 7-uncompleted 8-completed 9-completed or partially cancelled
+     * @param {Number} pageNum Pagination, the first few pages (1 <= pageNum)
+     * @param {Number} pageSize Pagination, the number of pages (1 <= pageSize <=500)
      * @return {Promise<Array>}
      */
     getOrders(
@@ -245,12 +241,8 @@ module.exports = function() {
         side,
         orderTypes,
         state,
-        startTime,
-        endTime,
-        pageno,
+        pageNum,
         pageSize,
-        strategyId,
-        strategyType,
     ) {
       const data = {
         base,
@@ -258,25 +250,9 @@ module.exports = function() {
         side,
         orderTypes,
         state,
-        startTime,
-        endTime,
+        pageNum,
+        pageSize,
       };
-
-      if (pageno) {
-        data.pageno = pageno;
-      }
-
-      if (pageSize) {
-        data.pageSize = pageSize;
-      }
-
-      if (strategyId) {
-        data.strategyId = strategyId;
-      }
-
-      if (strategyType) {
-        data.strategyType = strategyType;
-      }
 
       return protectedRequest('post', `${versioning.v1}/api/spot/orderlist`, data);
     },
@@ -308,73 +284,31 @@ module.exports = function() {
     /**
      * Get transaction details
      * https://fameex-docs.github.io/docs/api/spot/en/#get-transaction-details
-     * !NOT IMPLEMENTED!
-     * !This is a template for API, at the moment it is impossible to implement, due to problems on the FameEX side
+     * !POSSIBLE IMPLEMENTATION ERRORS!
+     * !At the moment it is impossible to implement this functional correctly, due to problems on the FameEX side
      * @param {String} base Transaction currency (uppercase, such as "BTC")
      * @param {String} quote Denominated currency (uppercase, such as "USDT")
-     * @param {String} orderId Order ID
-     * @param {Number} side Order Direction 1-Buy 2-Sell
-     * @param {Number[]} orderTypes List of order types 1- limit price 2- market price 3- stop profit stop loss 4- tracking order 5- Maker only
-     * @param {Number} pageno Pagination, the first few pages (1 <= pageNum)
+     * @param {Number} pageNum Pagination, the first few pages (1 <= pageNum)
      * @param {Number} pageSize Pagination, the number of pages (1 < pageSize <= 500)
-     * @param {Number} startTime Start timestamp, seconds
-     * @param {Number} endTime End timestamp, seconds
-     * @param {String} strategyId Strategy Id
-     * @param {int} strategyType Strategy type
+     * @param {String} orderId Order ID
      * @return {Promise<Object>}
      */
     async getTransactionDetails(
         base,
         quote,
-        orderId,
-        side,
-        orderTypes,
-        pageno,
+        pageNum,
         pageSize,
-        startTime,
-        endTime,
-        strategyId,
-        strategyType,
+        orderId,
     ) {
       const data = {
-        pageno,
+        base,
+        quote,
+        pageNum,
         pageSize,
       };
 
-      if (base) {
-        data.base = base;
-      }
-
-      if (quote) {
-        data.quote = quote;
-      }
-
       if (orderId) {
         data.orderId = orderId;
-      }
-
-      if (side) {
-        data.side = side;
-      }
-
-      if (orderTypes) {
-        data.orderTypes = orderTypes;
-      }
-
-      if (startTime) {
-        data.startTime = startTime;
-      }
-
-      if (endTime) {
-        data.endTime = endTime;
-      }
-
-      if (strategyId) {
-        data.strategyId = strategyId;
-      }
-
-      if (strategyType) {
-        data.strategyType = strategyType;
       }
 
       return protectedRequest('post', `${versioning.v1}/api/spot/fills`, data);
