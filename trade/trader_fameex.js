@@ -830,6 +830,7 @@ function formatPairName(pair) {
     pair: `${coin1}/${coin2}`,
     pairReadable: `${coin1}/${coin2}`,
     pairPlain: `${coin1}_${coin2}`,
+    pairDash: `${coin1}-${coin2}`,
     coin1,
     coin2,
   };
