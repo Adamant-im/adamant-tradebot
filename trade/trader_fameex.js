@@ -261,6 +261,7 @@ module.exports = (
  * Returns network name in classic format
  * @param {String} network
  * @returns {String}
+ * @return {String}
  */
 function formatNetworkName(network) {
   return networks[network?.toUpperCase()]?.code ?? network;
