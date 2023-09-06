@@ -296,11 +296,9 @@ module.exports = (
      * !At the moment it is impossible to implement this functional correctly, due to problems on the FameEX side
      * @param {Object} coinPair Formatted coinPair
      * @param {Number} pageNum Pagination, the first few pages (1 <= pageNum)
-     * @param {Number} startTime Start timestamp, seconds
-     * @param {Number} endTime End timestamp, seconds
      * @returns {Promise<Array|undefined>}
      */
-    async getOpenOrdersPage(coinPair, pageNum = 1, startTime, endTime) {
+    async getOpenOrdersPage(coinPair, pageNum = 1) {
       const paramString = `pair: ${coinPair.pairReadable}`;
 
       let ordersData;
@@ -313,8 +311,6 @@ module.exports = (
               orderSides.buy,
               orderTypes,
               orderStates.uncompleted,
-              startTime,
-              endTime,
               pageNum,
               orderMaxPageSize,
           ),
@@ -324,8 +320,6 @@ module.exports = (
               orderSides.sell,
               orderTypes,
               orderStates.uncompleted,
-              startTime,
-              endTime,
               pageNum,
               orderMaxPageSize,
           ),
@@ -335,8 +329,6 @@ module.exports = (
               orderSides.buy,
               orderTypes,
               orderStates.completedOrCancelled,
-              startTime,
-              endTime,
               pageNum,
               orderMaxPageSize,
           ),
@@ -346,8 +338,6 @@ module.exports = (
               orderSides.sell,
               orderTypes,
               orderStates.completedOrCancelled,
-              startTime,
-              endTime,
               pageNum,
               orderMaxPageSize,
           ),
@@ -378,8 +368,6 @@ module.exports = (
               coinPair.coin2,
               1,
               1,
-              startTime,
-              endTime,
               order.orderId,
           )).data.trades?.[0];
 
@@ -415,8 +403,6 @@ module.exports = (
     async getOpenOrders(pair) {
       const allOrders = [];
       const coinPair = formatPairName(pair);
-      const startTime = Date.now();
-      const endTime = utils.getTomorrowTimestamp();
 
       let pageNum = 1;
 
@@ -425,8 +411,6 @@ module.exports = (
           coinPair.coin2,
           pageNum,
           1,
-          startTime,
-          endTime,
       )).data.total;
 
       do {
