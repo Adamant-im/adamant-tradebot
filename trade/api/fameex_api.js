@@ -373,13 +373,11 @@ module.exports = function() {
      * Cancel all order for specific symbol
      * https://coinstore-openapi.github.io/en/index.html#one-click-cancellation
      * @param {String} symbol For example, the name of the currency pair: "BTC-USDT"
-     * @param {String[]} orderIds Order ID | Example: ['10918742125338689536','10918742125338689536']
      * @return {Promise<Array>}
      */
-    cancelAllOrders(symbol, orderIds) {
+    cancelAllOrders(symbol) {
       const data = {
         symbol,
-        orderIds,
       };
 
       return protectedRequest('post', `${versioning.v1}/api/spot/cancel_orders_all`, data);
