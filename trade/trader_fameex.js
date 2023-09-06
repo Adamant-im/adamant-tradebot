@@ -646,6 +646,42 @@ module.exports = (
       }
     },
 
+    /**
+     * Cancel all order on specific pair
+     * @param pair In classic format as BTC/USDT
+     * @returns {Promise<Boolean|undefined>}
+     */
+    async cancelAllOrders(pair) {
+      const paramString = `pair: ${pair}`;
+      const coinPair = formatPairName(pair);
+
+      let orders;
+
+      try {
+        orders = await fameEXApiClient.cancelAllOrders(coinPair.pairDash);
+      } catch (error) {
+        log.warn(`API request cancelAllOrders(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${error}`);
+        return undefined;
+      }
+
+      try {
+        if (orders.code === 280033) {
+          log.log(`No active orders on ${coinPair.pairReadable} pair.`);
+          return true;
+        } else if (orders.code === 200) {
+          log.log(`Cancelling orders on ${coinPair.pairReadable} pair…`);
+          return true;
+        } else {
+          const errorMessage = order.fameexErrorInfo ?? 'No details';
+          log.log(`Unable to cancel orders on ${coinPair.pairReadable} pair: ${errorMessage}.`);
+          return false;
+        }
+      } catch (error) {
+        log.warn(`Error while processing cancelAllOrders(${paramString}) request result: ${JSON.stringify(orders)}. ${error}`);
+        return undefined;
+      }
+    },
+
   };
 };
 /**
