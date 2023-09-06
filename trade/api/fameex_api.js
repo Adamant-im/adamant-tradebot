@@ -23,6 +23,7 @@ const httpErrorCodeDescriptions = {
   112022: 'Signature timestamp error',
   112047: 'The spot API interface is temporarily inaccessible',
   112048: 'The futures API interface is temporarily inaccessible',
+  112400: 'Parameter error',
   280006: 'Parameter error',
   230030: 'Please operate after KYC certification',
   280033: 'There are no cancelable orders',
