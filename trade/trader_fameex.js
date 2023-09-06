@@ -771,6 +771,46 @@ module.exports = (
       }
     },
 
+    /**
+     * Get history of trades
+     * @param {String} pair In classic format as BTC/USDT
+     * @returns {Promise<Boolean|undefined>}
+     */
+    async getTradesHistory(pair) {
+      const paramString = `pair: ${pair}`;
+      const coinPair = formatPairName(pair);
+
+      let trades;
+
+      try {
+        trades = await fameEXApiClient.getTradesHistory(coinPair.pairDash);
+      } catch (error) {
+        log.warn(`API request getTradesHistory(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${error}`);
+        return undefined;
+      }
+
+      try {
+        const result = trades.map((trade) => ({
+          coin1Amount: +trade.base_volume, // amount in coin1
+          price: +trade.price, // trade price
+          coin2Amount: +trade.quote_volume, // quote in coin2
+          date: +trade.timestamp,
+          type: trade.type, // 'buy' or 'sell'
+          tradeId: trade.trade_id,
+        }));
+
+        // We need ascending sort order
+        result.sort((a, b) => {
+          return parseFloat(a.date) - parseFloat(b.date);
+        });
+
+        return result;
+      } catch (error) {
+        log.warn(`Error while processing getTradesHistory(${paramString}) request result: ${JSON.stringify(trades)}. ${error}`);
+        return undefined;
+      }
+    },
+
   };
 };
 /**
