@@ -289,6 +289,159 @@ module.exports = (
         return undefined;
       }
     },
+
+    /**
+     * Get one page of account open orders
+     * !POSSIBLE IMPLEMENTATION ERRORS!
+     * !At the moment it is impossible to implement this functional correctly, due to problems on the FameEX side
+     * @param {Object} coinPair Formatted coinPair
+     * @param {Number} pageNum Pagination, the first few pages (1 <= pageNum)
+     * @param {Number} startTime Start timestamp, seconds
+     * @param {Number} endTime End timestamp, seconds
+     * @returns {Promise<Array|undefined>}
+     */
+    async getOpenOrdersPage(coinPair, pageNum = 1, startTime, endTime) {
+      const paramString = `pair: ${coinPair.pairReadable}`;
+
+      let ordersData;
+
+      try {
+        ordersData = await Promise.all([
+          fameEXApiClient.getOrders(
+              coinPair.coin1,
+              coinPair.coin2,
+              orderSides.buy,
+              orderTypes,
+              orderStates.uncompleted,
+              startTime,
+              endTime,
+              pageNum,
+              orderMaxPageSize,
+          ),
+          fameEXApiClient.getOrders(
+              coinPair.coin1,
+              coinPair.coin2,
+              orderSides.sell,
+              orderTypes,
+              orderStates.uncompleted,
+              startTime,
+              endTime,
+              pageNum,
+              orderMaxPageSize,
+          ),
+          fameEXApiClient.getOrders(
+              coinPair.coin1,
+              coinPair.coin2,
+              orderSides.buy,
+              orderTypes,
+              orderStates.completedOrCancelled,
+              startTime,
+              endTime,
+              pageNum,
+              orderMaxPageSize,
+          ),
+          fameEXApiClient.getOrders(
+              coinPair.coin1,
+              coinPair.coin2,
+              orderSides.sell,
+              orderTypes,
+              orderStates.completedOrCancelled,
+              startTime,
+              endTime,
+              pageNum,
+              orderMaxPageSize,
+          ),
+        ]);
+      } catch (error) {
+        log.warn(`API request getOpenOrders(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${error}`);
+        return undefined;
+      }
+
+      const [
+        uncompletedOrdersBuy,
+        uncompletedOrdersSell,
+        completedOrCancelledOrdersBuy,
+        completedOrCancelledOrdersSell,
+      ] = ordersData;
+
+      const orders = [
+        ...uncompletedOrdersBuy.data.orders,
+        ...uncompletedOrdersSell.data.orders,
+        ...completedOrCancelledOrdersBuy.data.orders,
+        ...completedOrCancelledOrdersSell.data.orders,
+      ];
+
+      try {
+        const result = await Promise.all(orders.map(async (order) => {
+          const transactionDetails = (await fameEXApiClient.getTransactionDetails(
+              coinPair.coin1,
+              coinPair.coin2,
+              1,
+              1,
+              startTime,
+              endTime,
+              order.orderId,
+          )).data.trades?.[0];
+
+          return {
+            orderId: order.orderId,
+            symbol: coinPair.pairReadable,
+            symbolPlain: coinPair.pairPlain,
+            price: +transactionDetails.price,
+            side: order.side === orderSides.buy ? 'buy' : 'sell',
+            type: formatOrderType(order.orderType),
+            timestamp: order.createTime,
+            amount: +order.money,
+            amountExecuted: +order.filledAmount,
+            amountLeft: +order.filledAmount - +order.money,
+            status: formatOrderStatus(order.state),
+          };
+        }));
+
+        return result;
+      } catch (error) {
+        log.warn(`Error while processing getOpenOrders(${paramString}) request results: ${JSON.stringify(ordersData)}. ${error}`);
+        return undefined;
+      }
+    },
+
+    /**
+     * List of all account open orders
+     * !POSSIBLE IMPLEMENTATION ERRORS!
+     * !At the moment it is impossible to implement this functional correctly, due to problems on the FameEX side
+     * @param {String} pair In classic format as BTC/USDT
+     * @returns {Promise<Array|undefined>}
+     */
+    async getOpenOrders(pair) {
+      const allOrders = [];
+      const coinPair = formatPairName(pair);
+      const startTime = Date.now();
+      const endTime = utils.getTomorrowTimestamp();
+
+      let pageNum = 1;
+
+      const limit = (await fameEXApiClient.getTransactionDetails(
+          coinPair.coin1,
+          coinPair.coin2,
+          pageNum,
+          1,
+          startTime,
+          endTime,
+      )).data.total;
+
+      do {
+        const ordersInfo = await this.getOpenOrdersPage(coinPair, pageNum);
+
+        if (!ordersInfo) return undefined;
+
+        allOrders.push(...ordersInfo);
+
+        pageNum += 1;
+      } while (allOrders.length < limit);
+
+      return allOrders;
+    },
+
   };
 };
 /**
