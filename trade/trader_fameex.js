@@ -9,6 +9,40 @@ const networks = require('../helpers/cryptos/networks');
 const apiServer = 'https://api.fameex.com';
 const exchangeName = 'FameEX';
 
+const orderStates = {
+  new: [1, 2],
+  partiallyFilled: 3,
+  filled: 4,
+  cancelled: [5, 6],
+  uncompleted: 7,
+  completedOrCancelled: 9,
+};
+
+const orderStatuses = {
+  new: 'new',
+  partFilled: 'part_filled',
+  filled: 'filled',
+  cancelled: 'cancelled',
+  unknown: 'unknown',
+};
+
+const orderTypes = [1, 2, 3, 4, 5];
+
+const orderTypesMap = {
+  1: 'limit',
+  2: 'market',
+  3: 'take_profit_and_stop_loss',
+  4: 'tracking_order',
+  5: 'maker_only',
+};
+
+const orderSides = {
+  buy: 1,
+  sell: 2,
+};
+
+const orderMaxPageSize = 500;
+
 module.exports = (
     apiKey,
     secretKey,
