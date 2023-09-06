@@ -294,20 +294,20 @@ module.exports = (
      * Get one page of account open orders
      * !POSSIBLE IMPLEMENTATION ERRORS!
      * !At the moment it is impossible to implement this functional correctly, due to problems on the FameEX side
-     * @param {Object} coinPair Formatted coinPair
+     * @param {Object} pair Formatted coin pair
      * @param {Number} pageNum Pagination, the first few pages (1 <= pageNum)
      * @returns {Promise<Array|undefined>}
      */
-    async getOpenOrdersPage(coinPair, pageNum = 1) {
-      const paramString = `pair: ${coinPair.pairReadable}`;
+    async getOpenOrdersPage(pair, pageNum = 1) {
+      const paramString = `pair: ${pair.pairReadable}`;
 
       let ordersData;
 
       try {
         ordersData = await Promise.all([
           fameEXApiClient.getOrders(
-              coinPair.coin1,
-              coinPair.coin2,
+              pair.coin1,
+              pair.coin2,
               orderSides.buy,
               orderTypes,
               orderStates.uncompleted,
@@ -315,8 +315,8 @@ module.exports = (
               orderMaxPageSize,
           ),
           fameEXApiClient.getOrders(
-              coinPair.coin1,
-              coinPair.coin2,
+              pair.coin1,
+              pair.coin2,
               orderSides.sell,
               orderTypes,
               orderStates.uncompleted,
@@ -324,8 +324,8 @@ module.exports = (
               orderMaxPageSize,
           ),
           fameEXApiClient.getOrders(
-              coinPair.coin1,
-              coinPair.coin2,
+              pair.coin1,
+              pair.coin2,
               orderSides.buy,
               orderTypes,
               orderStates.completedOrCancelled,
@@ -333,8 +333,8 @@ module.exports = (
               orderMaxPageSize,
           ),
           fameEXApiClient.getOrders(
-              coinPair.coin1,
-              coinPair.coin2,
+              pair.coin1,
+              pair.coin2,
               orderSides.sell,
               orderTypes,
               orderStates.completedOrCancelled,
@@ -364,8 +364,8 @@ module.exports = (
       try {
         const result = await Promise.all(orders.map(async (order) => {
           const transactionDetails = (await fameEXApiClient.getTransactionDetails(
-              coinPair.coin1,
-              coinPair.coin2,
+              pair.coin1,
+              pair.coin2,
               1,
               1,
               order.orderId,
@@ -373,8 +373,8 @@ module.exports = (
 
           return {
             orderId: order.orderId,
-            symbol: coinPair.pairReadable,
-            symbolPlain: coinPair.pairPlain,
+            symbol: pair.pairReadable,
+            symbolPlain: pair.pairPlain,
             price: +transactionDetails.price,
             side: order.side === orderSides.buy ? 'buy' : 'sell',
             type: formatOrderType(order.orderType),
