@@ -352,7 +352,6 @@ module.exports = function() {
       return protectedRequest('post', `${versioning.v1}/api/spot/orders`, data);
     },
 
-    // TODO: test some cases
     /**
      * Cancel order
      * https://fameex-docs.github.io/docs/api/spot/en/#cancel-order
@@ -369,7 +368,6 @@ module.exports = function() {
       return protectedRequest('post', `${versioning.v1}/api/spot/cancel_orders`, data);
     },
 
-    // TODO: test some cases
     /**
      * Cancel all order for specific symbol
      * https://coinstore-openapi.github.io/en/index.html#one-click-cancellation

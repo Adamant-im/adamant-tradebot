@@ -238,7 +238,6 @@ module.exports = (
       return getCurrencies(coin);
     },
 
-    // TODO: test allowAmountForMarketBuy & amountForMarketOrderNecessary
     /**
      * Features available on FameEx exchange
      * @returns {Object}
