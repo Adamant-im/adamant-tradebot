@@ -197,6 +197,27 @@ module.exports = (
       return getCurrencies(coin);
     },
 
+    // TODO: test allowAmountForMarketBuy & amountForMarketOrderNecessary
+    /**
+     * Features available on FameEx exchange
+     * @returns {Object}
+     */
+    features() {
+      return {
+        getMarkets: true,
+        getCurrencies: true,
+        placeMarketOrder: true,
+        allowAmountForMarketBuy: false,
+        amountForMarketOrderNecessary: false,
+        getTradingFees: false,
+        getAccountTradeVolume: false,
+        selfTradeProhibited: false,
+        getFundHistory: true,
+        getFundHistoryImplemented: false,
+        supportCoinNetworks: true,
+      };
+    },
+
   };
 };
 /**
