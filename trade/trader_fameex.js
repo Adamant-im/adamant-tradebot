@@ -718,6 +718,59 @@ module.exports = (
       }
     },
 
+    /**
+     * Get orderbook on a specific pair
+     * @param pair In classic format as BTC/USDT
+     * @returns {Promise<Object|undefined>}
+     */
+    async getOrderBook(pair) {
+      const paramString = `pair: ${pair}`;
+      const coinPair = formatPairName(pair);
+
+      let book;
+
+      try {
+        book = await fameEXApiClient.orderBook(coinPair.pairPlain);
+      } catch (error) {
+        log.warn(`API request getOrderBook(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${error}`);
+        return undefined;
+      }
+
+      // return {
+      //   bids: book.data.bids,
+      //   asks: book.data.asks,
+      // };
+
+      try {
+        const result = {};
+
+        result.asks = book.data.asks.map((ask) => ({
+          amount: +ask[1],
+          price: +ask[0],
+          count: 1,
+          type: 'ask-sell-right',
+        }));
+        result.asks.sort((a, b) => {
+          return parseFloat(a.price) - parseFloat(b.price);
+        });
+
+        result.bids = book.data.bids.map((bid) => ({
+          amount: +bid[1],
+          price: +bid[0],
+          count: 1,
+          type: 'bid-buy-left',
+        }));
+        result.bids.sort((a, b) => {
+          return parseFloat(b.price) - parseFloat(a.price);
+        });
+
+        return result;
+      } catch (error) {
+        log.warn(`Error while processing getOrderBook(${paramString}) request result: ${JSON.stringify(book)}. ${error}`);
+        return undefined;
+      }
+    },
+
   };
 };
 /**
