@@ -275,22 +275,14 @@ module.exports = function() {
      * Get order details
      * https://fameex-docs.github.io/docs/api/spot/en/#get-order-details
      * @param {String} symbol The name of the currency pair, such as "BTC-USDT"
-     * @param {String} orderId Order ID (orderId and clientOid must and can only be filled in)
-     * @param {String} clientOid User-made order ID (orderId and clientOid must be filled in only one)
+     * @param {String} orderId Order ID | Example: '10918742125338689536'
      * @return {Promise<Object>}
      */
-    async getOrderDetails(symbol, orderId, clientOid) {
+    async getOrderDetails(symbol, orderId) {
       const data = {
         symbol,
+        orderId,
       };
-
-      if (orderId) {
-        data.orderId = orderId;
-      }
-
-      if (clientOid) {
-        data.clientOid = clientOid;
-      }
 
       return protectedRequest('post', `${versioning.v1}/api/spot/orderdetail`, data);
     },
@@ -364,22 +356,14 @@ module.exports = function() {
      * Cancel order
      * https://fameex-docs.github.io/docs/api/spot/en/#cancel-order
      * @param {String} symbol For example, the name of the currency pair: "BTC-USDT"
-     * @param {String} orderId Order ID (orderId and clientOid must and can only be filled in)
-     * @param {String} clientOid User-made order ID (orderId and clientOid must be filled in only one)
+     * @param {String} orderId Order ID | Example: '10918742125338689536'
      * @return {Promise<Object>}
      */
-    cancelOrder(symbol, orderId, clientOid) {
+    cancelOrder(symbol, orderId) {
       const data = {
         symbol,
+        orderId,
       };
-
-      if (orderId) {
-        data.orderId = orderId;
-      }
-
-      if (clientOid) {
-        data.clientOid = clientOid;
-      }
 
       return protectedRequest('post', `${versioning.v1}/api/spot/cancel_orders`, data);
     },
@@ -389,22 +373,14 @@ module.exports = function() {
      * Cancel all order for specific symbol
      * https://coinstore-openapi.github.io/en/index.html#one-click-cancellation
      * @param {String} symbol For example, the name of the currency pair: "BTC-USDT"
-     * @param {String[]} orderIds Order ID (orderId and clientOid must and can only be filled in)
-     * @param {String[]} clientOids User-made order ID (orderId and clientOid must be filled in only one)
+     * @param {String[]} orderIds Order ID | Example: ['10918742125338689536','10918742125338689536']
      * @return {Promise<Array>}
      */
-    cancelAllOrders(symbol, orderIds, clientOids) {
+    cancelAllOrders(symbol, orderIds) {
       const data = {
         symbol,
+        orderIds,
       };
-
-      if (orderIds?.length) {
-        data.orderIds = orderIds;
-      }
-
-      if (clientOids?.length) {
-        data.clientOids = clientOids;
-      }
 
       return protectedRequest('post', `${versioning.v1}/api/spot/cancel_orders_all`, data);
     },
