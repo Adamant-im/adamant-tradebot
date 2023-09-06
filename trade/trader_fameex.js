@@ -94,8 +94,7 @@ module.exports = (
   }
 
   /**
-   * Get info on all markets and store in module.exports.exchangeMarkets
-   * It's an internal function, not called outside of this module
+   * Get info on all markets
    * @param {String} pair In classic format as BTC/USDT. If markets are already cached, get info for the pair.
    * @returns {Promise<unknown>|*}
    */
