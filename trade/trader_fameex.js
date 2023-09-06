@@ -682,6 +682,42 @@ module.exports = (
       }
     },
 
+    /**
+     * Get info on trade pair
+     * @param pair In classic format as BTC/USDT
+     * @returns {Promise<Object|undefined>}
+     */
+    async getRates(pair) {
+      const paramString = `pair: ${pair}`;
+      const coinPair = formatPairName(pair);
+
+      let ticker;
+
+      try {
+        ticker = await fameEXApiClient.ticker();
+      } catch (error) {
+        log.warn(`API request getRates(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${error}`);
+        return undefined;
+      }
+
+      try {
+        ticker = ticker.find((t) => t.trading_pairs === coinPair.pairDash);
+
+        return {
+          ask: +ticker.lowest_ask,
+          bid: +ticker.highest_bid,
+          last: +ticker.last_price,
+          volume: +ticker.base_volume,
+          volumeInCoin2: +ticker.quote_volume,
+          high: +ticker.highest_price_24h,
+          low: +ticker.lowest_price_24h,
+        };
+      } catch (error) {
+        log.warn(`Error while processing getRates(${paramString}) request result: ${JSON.stringify(ticker)}. ${error}`);
+        return undefined;
+      }
+    },
+
   };
 };
 /**
