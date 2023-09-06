@@ -167,7 +167,7 @@ module.exports = (
               coin2Decimals: market.pricePrecision,
               coin1Precision: utils.getPrecision(market.amountPrecision),
               coin2Precision: utils.getPrecision(market.pricePrecision),
-              coin1MinAmount: null,
+              coin1MinAmount: market.permitAmount,
               coin1MaxAmount: null,
               coin2MinPrice: null,
               coin2MaxPrice: null,
@@ -490,6 +490,7 @@ module.exports = (
      * Market Buy is only possible with quote coin amount specified
      * Market Sell is only possible with base coin amount specified
      * Limit Buy/Sell is only possible with base coin amount specified
+     * In FameEX API amount param can be a Base or Quote based on the order type
      * @param {String} side 'buy' or 'sell'
      * @param {String} pair In classic format like BTC/USD
      * @param {Number} price Order price
