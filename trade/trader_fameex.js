@@ -806,8 +806,13 @@ module.exports = (
       }
     },
 
+
+    async getFees(coinOrPair) {
+      // Not available for FameEX
+    },
   };
 };
+
 /**
  * Returns network name in classic format
  * @param {String} network
