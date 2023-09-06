@@ -48,6 +48,8 @@ const systemToFameExOrderTypesMap = {
 
 const orderMaxPageSize = 500;
 
+const successCode = 200;
+
 module.exports = (
     apiKey,
     secretKey,
@@ -632,7 +634,7 @@ module.exports = (
       }
 
       try {
-        if (order.code === 200) {
+        if (order.code === successCode) {
           log.log(`Cancelling order ${orderId} on ${pair} pair…`);
           return true;
         } else {
@@ -668,7 +670,7 @@ module.exports = (
         if (orders.code === 280033) {
           log.log(`No active orders on ${coinPair.pairReadable} pair.`);
           return true;
-        } else if (orders.code === 200) {
+        } else if (orders.code === successCode) {
           log.log(`Cancelling orders on ${coinPair.pairReadable} pair…`);
           return true;
         } else {
