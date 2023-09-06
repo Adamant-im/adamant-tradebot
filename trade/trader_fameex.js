@@ -426,6 +426,58 @@ module.exports = (
       return allOrders;
     },
 
+    /**
+     * Get specific order details
+     * What's important is to understand the order was filled or closed by other reason
+     * status: unknown, new, filled, part_filled, cancelled
+     * @param {String} orderId Example: '10918742125338689536'
+     * @param {String} pair In classic format as BTC/USDT
+     * @returns {Promise<Object|undefined>}
+     */
+    async getOrderDetails(orderId, pair) {
+      const paramString = `orderId: ${orderId}, pair: ${pair}`;
+      const coinPair = formatPairName(pair);
+
+      let order;
+
+      try {
+        order = await fameEXApiClient.getOrderDetails(coinPair.pairDash, orderId);
+      } catch (error) {
+        log.warn(`API request getOrderDetails(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${error}`);
+        return undefined;
+      }
+
+      try {
+        const transactionDetails = (await fameEXApiClient.getTransactionDetails(
+            coinPair.coin1,
+            coinPair.coin2,
+            1,
+            1,
+            orderId,
+        )).data.trades?.[0];
+
+        return {
+          orderId: order.data.orderId,
+          tradesCount: undefined, // FameEX doesn't provide trades
+          price: +transactionDetails.price,
+          side: order.data.side === orderSides.buy ? 'buy' : 'sell',
+          type: formatOrderType(order.data.orderType),
+          amount: +order.data.money,
+          volume: +order.data.money * +order.data.triggerPrice,
+          pairPlain: coinPair.pairPlain,
+          pairReadable: coinPair.pairReadable,
+          totalFeeInCoin2: +order.data.filledFee,
+          amountExecuted: +order.data.filledAmount,
+          volumeExecuted: +order.data.filledMoney,
+          timestamp: order.data.createTime,
+          updateTimestamp: order.data.updateTime,
+          status: formatOrderStatus(order.data.state),
+        };
+      } catch (error) {
+        log.warn(`Error while processing getOrderDetails(${paramString}) request results: ${JSON.stringify(order)}. ${error}`);
+        return undefined;
+      }
+    },
   };
 };
 /**
