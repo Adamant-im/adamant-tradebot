@@ -569,7 +569,11 @@ module.exports = (
           output = `${side} ${coin1Amount} ${coinPair.coin1} at ${price} ${coinPair.coin2}.`;
         }
       } else {
-        output = `${side} ${coinPair.coin1} for ${coin1Amount} ${coinPair.coin2} at Market Price on ${pair} pair.`;
+        if (coin2Amount) {
+          output = `${side} ${coinPair.coin1} for ${coin2Amount} ${coinPair.coin2} at Market Price on ${pair} pair.`;
+        } else {
+          output = `${side} ${coin1Amount} ${coinPair.coin1} at Market Price on ${pair} pair.`;
+        }
       }
 
       const order = {};
@@ -582,7 +586,7 @@ module.exports = (
             orderSides[side],
             systemToFameExOrderTypesMap[limit],
             coin1Amount || coin2Amount,
-            String(price),
+            price !== null ? String(price) : null,
         );
 
         errorMessage = orderData?.msg;
