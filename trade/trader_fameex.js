@@ -353,6 +353,20 @@ module.exports = (
         return undefined;
       }
 
+      let transactionDetails;
+
+      try {
+        transactionDetails = await fameEXApiClient.getTransactionDetails(
+            pair.coin1,
+            pair.coin2,
+            pageNum,
+            orderMaxPageSize,
+        );
+      } catch (error) {
+        log.warn(`API request getTransactionDetails(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${error}`);
+        return undefined;
+      }
+
       const [
         uncompletedOrdersBuy,
         uncompletedOrdersSell,
@@ -367,34 +381,83 @@ module.exports = (
         ...completedOrCancelledOrdersSell.data.orders,
       ];
 
-      try {
-        const result = await Promise.all(orders.map(async (order) => {
-          const transactionDetails = (await fameEXApiClient.getTransactionDetails(
-              pair.coin1,
-              pair.coin2,
-              1,
-              1,
-              order.orderId,
-          )).data.trades?.[0];
+      const transactionPriceByOrder = transactionDetails.data.trades?.reduce((acc, data) =>
+        acc.set(data.orderId, data.price), new Map());
 
-          return {
-            orderId: order.orderId,
-            symbol: pair.pairReadable,
-            symbolPlain: pair.pairPlain,
-            price: +transactionDetails.price,
-            side: order.side === orderSides.buy ? 'buy' : 'sell',
-            type: formatOrderType(order.orderType),
-            timestamp: order.createTime,
-            amount: +order.money,
-            amountExecuted: +order.filledAmount,
-            amountLeft: +order.filledAmount - +order.money,
-            status: formatOrderStatus(order.state),
-          };
+      try {
+        const result = orders.map((order) => ({
+          orderId: order.orderId,
+          symbol: pair.pairReadable,
+          symbolPlain: pair.pairPlain,
+          price: +transactionPriceByOrder.get(order.orderId),
+          side: order.side === orderSides.buy ? 'buy' : 'sell',
+          type: formatOrderType(order.orderType),
+          timestamp: order.createTime,
+          amount: +order.money,
+          amountExecuted: +order.filledAmount,
+          amountLeft: +order.filledAmount - +order.money,
+          status: formatOrderStatus(order.state),
         }));
 
         return result;
       } catch (error) {
         log.warn(`Error while processing getOpenOrders(${paramString}) request results: ${JSON.stringify(ordersData)}. ${error}`);
+        return undefined;
+      }
+    },
+
+    /**
+     * Function to get number of user orders
+     * !POSSIBLE IMPLEMENTATION ERRORS!
+     * !At the moment it is impossible to implement this functional correctly, due to problems on the FameEX side
+     * It is not possible to get the number of all orders from one API, and getTransactionDetails() returns duplicates
+     * @param {Object} pair Formatted coin pair
+     * @returns {Promise<Array|undefined>}
+     */
+    async getNumberOfCurrentOrders(pair) {
+      try {
+        const ordersData = await Promise.all([
+          fameEXApiClient.getOrders(
+              pair.coin1,
+              pair.coin2,
+              orderSides.buy,
+              orderTypes,
+              orderStates.uncompleted,
+              1,
+              1,
+          ),
+          fameEXApiClient.getOrders(
+              pair.coin1,
+              pair.coin2,
+              orderSides.sell,
+              orderTypes,
+              orderStates.uncompleted,
+              1,
+              1,
+          ),
+          fameEXApiClient.getOrders(
+              pair.coin1,
+              pair.coin2,
+              orderSides.buy,
+              orderTypes,
+              orderStates.completedOrCancelled,
+              1,
+              1,
+          ),
+          fameEXApiClient.getOrders(
+              pair.coin1,
+              pair.coin2,
+              orderSides.sell,
+              orderTypes,
+              orderStates.completedOrCancelled,
+              1,
+              1,
+          ),
+        ]);
+
+        return ordersData.reduce((acc, orderData) => acc += orderData?.data?.total, 0);
+      } catch (error) {
+        log.warn(`API request getOpenOrders(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${error}`);
         return undefined;
       }
     },
@@ -412,12 +475,7 @@ module.exports = (
 
       let pageNum = 1;
 
-      const limit = (await fameEXApiClient.getTransactionDetails(
-          coinPair.coin1,
-          coinPair.coin2,
-          pageNum,
-          1,
-      )).data.total;
+      const limit = await this.getNumberOfCurrentOrders(coinPair);
 
       do {
         const ordersInfo = await this.getOpenOrdersPage(coinPair, pageNum);

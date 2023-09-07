@@ -99,7 +99,7 @@ module.exports = function() {
         }
 
         if (httpCode === statusCodes.ok && !temporaryErrorsCodes.includes(data?.code)) {
-          log.log(`FameEX processed a request to ${url} with data ${reqParameters}, but with error: ${error.msg}. Resolving…`);
+          log.log(`FameEX processed a request to ${url} with data ${reqParameters}, but with error: [${error.code}] ${error.msg}. Resolving…`);
           resolve(data);
         } else {
           log.warn(`Request to ${url} with data ${reqParameters} failed. details: ${errorMessage}. Rejecting…`);
