@@ -10,49 +10,6 @@ const {
  * Docs: https://fameex-docs.github.io/docs/api/spot/en/#introduction
  */
 
-// Error codes: https://fameex-docs.github.io/docs/api/spot/en/#error-message
-const httpErrorCodeDescriptions = {
-  112002: 'API single key traffic exceeds limit',
-  112005: 'API request frequency exceeded',
-  112009: 'The number of API-Key creation exceeds the limit (a single user can create up to 5 APIs)',
-  112010: 'API-Key is invalid (the time limit for a single Key is 60 natural days)',
-  112011: 'API request IP access is restricted (the bound IP is inconsistent with the request IP)',
-  112015: 'Signature error',
-  112020: 'Wrong signature',
-  112021: 'Wrong signature version',
-  112022: 'Signature timestamp error',
-  112047: 'The spot API interface is temporarily inaccessible',
-  112048: 'The futures API interface is temporarily inaccessible',
-  112400: 'Parameter error',
-  280006: 'Parameter error',
-  230030: 'Please operate after KYC certification',
-  280033: 'There are no cancelable orders',
-};
-
-const temporaryErrorsCodes = [
-  112002,
-  112005,
-  112009,
-  112010,
-  112015,
-  112020,
-  112021,
-  112022,
-  112047,
-  112048,
-  230030,
-];
-
-const statusCodes = {
-  ok: 200,
-  zero: '0',
-};
-
-const versioning = {
-  v1: '/v1',
-  v2: '/v2',
-};
-
 module.exports = function() {
   let WEB_BASE = 'https://api.fameex.com';
   let config = {
@@ -61,6 +18,49 @@ module.exports = function() {
     tradePwd: '',
   };
   let log = {};
+
+  // Error codes: https://fameex-docs.github.io/docs/api/spot/en/#error-message
+  const httpErrorCodeDescriptions = {
+    112002: 'API single key traffic exceeds limit',
+    112005: 'API request frequency exceeded',
+    112009: 'The number of API-Key creation exceeds the limit (a single user can create up to 5 APIs)',
+    112010: 'API-Key is invalid (the time limit for a single Key is 60 natural days)',
+    112011: 'API request IP access is restricted (the bound IP is inconsistent with the request IP)',
+    112015: 'Signature error',
+    112020: 'Wrong signature',
+    112021: 'Wrong signature version',
+    112022: 'Signature timestamp error',
+    112047: 'The spot API interface is temporarily inaccessible',
+    112048: 'The futures API interface is temporarily inaccessible',
+    112400: 'Parameter error',
+    280006: 'Parameter error',
+    230030: 'Please operate after KYC certification',
+    280033: 'There are no cancelable orders',
+  };
+
+  const temporaryErrorsCodes = [
+    112002,
+    112005,
+    112009,
+    112010,
+    112015,
+    112020,
+    112021,
+    112022,
+    112047,
+    112048,
+    230030,
+  ];
+
+  const statusCodes = {
+    ok: 200,
+    zero: '0',
+  };
+
+  const versioning = {
+    v1: '/v1',
+    v2: '/v2',
+  };
 
   /**
    * Handles response from API
