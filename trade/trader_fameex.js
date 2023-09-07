@@ -877,7 +877,7 @@ module.exports = (
     async getDepositAddress(coin) {
       const paramString = `coin: ${coin}`;
 
-      const networks = (this.currencyInfo(coin)).networks;
+      const networks = (this.currencyInfo(coin))?.networks || [];
 
       let addresses;
       try {
