@@ -8,8 +8,18 @@ const {
 
 /**
  * Docs: https://fameex-docs.github.io/docs/api/spot/en/#introduction
+ * !WARNING!
+ * It should be noted that some methods may cause problems because the documentation is not up to date:
+ *   - some of the methods do not exist anymore;
+ *   - there are no descriptions for many error codes;
+ *   - parameters, their types and their mandatory values do not correspond to reality;
+ *   - also some methods return an invalid data set.
+ *
+ * Several problematic APIs:
+ *   - `v1/api/spot/fills` duplicates orders, because of which their number does not correspond to reality, should use `v1/api/spot/orderlist`;
+ *   - `v1/api/spot/orderlist` pageno parameter does not exist, instead you should send pageNum, startTime and endTime are not mandatory, but pageSize and pageNum are mandatory, in addition pageNum, pageSize, side and state are numeric values, not strings as specified in the documentation;
+ *   - `v1/api/orders_pending` no longer exists.
  */
-
 module.exports = function() {
   let WEB_BASE = 'https://api.fameex.com';
   let config = {
