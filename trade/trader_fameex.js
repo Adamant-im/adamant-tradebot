@@ -512,31 +512,37 @@ module.exports = (
       }
 
       try {
-        const transactionDetails = (await fameEXApiClient.getTransactionDetails(
-            coinPair.coin1,
-            coinPair.coin2,
-            1,
-            1,
-            orderId,
-        )).data.trades?.[0];
+        if (order.code === successCode) {
+          const transactionDetails = (await fameEXApiClient.getTransactionDetails(
+              coinPair.coin1,
+              coinPair.coin2,
+              1,
+              1,
+              orderId,
+          )).data.trades?.[0];
 
-        return {
-          orderId: order.data.orderId,
-          tradesCount: undefined, // FameEX doesn't provide trades
-          price: +transactionDetails.price,
-          side: order.data.side === orderSides.buy ? 'buy' : 'sell',
-          type: formatOrderType(order.data.orderType),
-          amount: +order.data.money,
-          volume: +order.data.money * +order.data.triggerPrice,
-          pairPlain: coinPair.pairPlain,
-          pairReadable: coinPair.pairReadable,
-          totalFeeInCoin2: +order.data.filledFee,
-          amountExecuted: +order.data.filledAmount,
-          volumeExecuted: +order.data.filledMoney,
-          timestamp: order.data.createTime,
-          updateTimestamp: order.data.updateTime,
-          status: formatOrderStatus(order.data.state),
-        };
+          return {
+            orderId: order.data.orderId,
+            tradesCount: undefined, // FameEX doesn't provide trades
+            price: +transactionDetails.price,
+            side: order.data.side === orderSides.buy ? 'buy' : 'sell',
+            type: formatOrderType(order.data.orderType),
+            amount: +order.data.money,
+            volume: +order.data.money * +order.data.triggerPrice,
+            pairPlain: coinPair.pairPlain,
+            pairReadable: coinPair.pairReadable,
+            totalFeeInCoin2: +order.data.filledFee,
+            amountExecuted: +order.data.filledAmount,
+            volumeExecuted: +order.data.filledMoney,
+            timestamp: order.data.createTime,
+            updateTimestamp: order.data.updateTime,
+            status: formatOrderStatus(order.data.state),
+          };
+        } else {
+          const errorMessage = order.fameexErrorInfo ?? 'No details';
+          log.log(`Unable to get order ${orderId} details ${pair} pair: ${errorMessage}.`);
+          return undefined;
+        }
       } catch (error) {
         log.warn(`Error while processing getOrderDetails(${paramString}) request results: ${JSON.stringify(order)}. ${error}`);
         return undefined;
@@ -735,7 +741,7 @@ module.exports = (
           log.log(`Cancelling orders on ${coinPair.pairReadable} pair…`);
           return true;
         } else {
-          const errorMessage = order.fameexErrorInfo ?? 'No details';
+          const errorMessage = orders.fameexErrorInfo ?? 'No details';
           log.log(`Unable to cancel orders on ${coinPair.pairReadable} pair: ${errorMessage}.`);
           return false;
         }
