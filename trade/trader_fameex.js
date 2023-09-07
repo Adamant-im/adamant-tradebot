@@ -247,7 +247,7 @@ module.exports = (
         getMarkets: true,
         getCurrencies: true,
         placeMarketOrder: true,
-        allowAmountForMarketBuy: false,
+        allowAmountForMarketBuy: true,
         amountForMarketOrderNecessary: false,
         getTradingFees: false,
         getAccountTradeVolume: false,
