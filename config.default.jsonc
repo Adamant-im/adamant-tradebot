@@ -46,7 +46,8 @@
     "P2PB2B",
     "Azbit",
     "StakeCube",
-    "Coinstore"
+    "Coinstore",
+    "FameEX"
   ],
 
   /** Exchange to work with. Case insensitive. **/
