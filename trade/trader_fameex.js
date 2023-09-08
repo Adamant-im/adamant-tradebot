@@ -91,7 +91,18 @@ module.exports = (
               const currencies = currenciesData.data;
 
               const networksByCurrency = currenciesWithNetworks.data.list.reduce((acc, data) => {
-                const currencyNetworks = Object.keys(data.currencyDetail).map(formatNetworkName);
+                const currencyNetworks = {};
+
+                for (const netData of Object.values(data.currencyDetail)) {
+                  currencyNetworks[formatNetworkName(netData.chainType)] = {
+                    id: netData.id.toString(),
+                    chainName: netData.chainType,
+                    status: netData.currencyRecharge.state === 1 && netData.currencyWithdraw.state === 1,
+                    withdrawalFee: +netData.currencyWithdraw.feewithdraw,
+                    minWithdraw: +netData.onceminwithdraw,
+                    confirmations: +netData.blockConfirmNumber,
+                  };
+                }
 
                 return acc.set(data.currency.toUpperCase(), currencyNetworks);
               }, new Map());
@@ -759,7 +770,7 @@ module.exports = (
     async getDepositAddress(coin) {
       const paramString = `coin: ${coin}`;
 
-      const networks = (this.currencyInfo(coin))?.networks || [];
+      const networks = Object.keys((this.currencyInfo(coin))?.networks || {});
 
       let addresses;
       try {
