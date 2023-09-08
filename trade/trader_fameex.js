@@ -796,7 +796,7 @@ module.exports = (
           return fameEXApiClient.getDepositAddress(coin, network);
         }));
       } catch (error) {
-        log.warn(`API request getDepositAddress(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
+        log.warn(`API request getDepositAddress(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${error}`);
         return undefined;
       }
 
