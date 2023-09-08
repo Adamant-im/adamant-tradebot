@@ -428,8 +428,8 @@ module.exports = (
             totalFeeInCoin2: +order.data.filledFee,
             amountExecuted: +order.data.filledAmount,
             volumeExecuted: +order.data.filledMoney,
-            timestamp: order.data.createTime,
-            updateTimestamp: order.data.updateTime,
+            timestamp: order.data.createTime * 1000,
+            updateTimestamp: order.data.updateTime * 1000,
             status: formatOrderStatus(order.data.state),
           };
         } else {
