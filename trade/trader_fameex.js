@@ -349,7 +349,7 @@ module.exports = (
             symbolPlain: pair.pairPlain,
             price: +order.price,
             side: order.side === orderSides.buy ? 'buy' : 'sell',
-            type: formatOrderType(order.orderType),
+            type: orderTypesMap[order.orderType] || 'unknown',
             timestamp: order.createTime,
             amount: +order.amount,
             amountExecuted: +order.filledAmount,
@@ -420,7 +420,7 @@ module.exports = (
             tradesCount: undefined, // FameEX doesn't provide trades
             price: +order.data.price,
             side: order.data.side === orderSides.buy ? 'buy' : 'sell',
-            type: formatOrderType(order.data.orderType),
+            type: orderTypesMap[order.data.orderType] || 'unknown',
             amount: +order.data.amount,
             volume: +order.data.amount * +order.data.triggerPrice,
             pairPlain: pairNames.pairPlain,
@@ -869,13 +869,4 @@ function formatOrderStatus(orderState) {
   }
 
   return orderStatuses.unknown;
-}
-
-/**
- * Returns system order type
- * @param {Number} orderType Order type in FameEX format
- * @return {string}
- */
-function formatOrderType(orderType) {
-  return orderTypesMap[orderType] || 'unknown';
 }
