@@ -99,8 +99,8 @@ module.exports = (
                     chainName: netData.chainType,
                     status: netData.currencyRecharge.state === 1 && netData.currencyWithdraw.state === 1,
                     withdrawalFee: +netData.currencyWithdraw.feewithdraw,
-                    minWithdraw: +netData.onceminwithdraw,
-                    confirmations: +netData.blockConfirmNumber,
+                    minWithdraw: +netData.currencyWithdraw.onceminwithdraw,
+                    confirmations: +netData.currencyRecharge.blockConfirmNumber,
                   };
                 }
 
