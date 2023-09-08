@@ -157,10 +157,12 @@ module.exports = (
     return new Promise((resolve) => {
       fameEXApiClient.markets().then((markets) => {
         try {
-          const result = markets.data.reduce((acc, market) => {
+          const result = {};
+
+          markets?.data?.forEach((market) => {
             const pair = formatPairName(market.pair);
 
-            acc[pair.pairReadable] = {
+            result[pair.pairReadable] = {
               pairReadable: pair.pairReadable,
               pairPlain: pair.pairPlain,
               coin1: pair.coin1,
@@ -176,9 +178,7 @@ module.exports = (
               minTrade: null,
               status: null,
             };
-
-            return acc;
-          }, {});
+          });
 
           if (Object.keys(result).length > 0) {
             module.exports.exchangeMarkets = result;
