@@ -87,7 +87,8 @@ module.exports = function() {
 
     const data = responseOrError?.data ?? responseOrError?.response?.data;
     const success = httpCode === statusCodes.ok &&
-      (data.code === statusCodes.ok || data.code === statusCodes.zero || Array.isArray(data));
+      (data.code === statusCodes.ok || (data.code === statusCodes.zero) || Array.isArray(data)) &&
+      data.data?.timestamp !== 0;
 
     const error = {
       code: data?.code ?? 'No error code',
@@ -108,7 +109,7 @@ module.exports = function() {
           data.fameexErrorInfo = fameexErrorInfo;
         }
 
-        if (httpCode === statusCodes.ok && !temporaryErrorsCodes.includes(data?.code)) {
+        if (httpCode === statusCodes.ok && !temporaryErrorsCodes.includes(data?.code) && data.data?.timestamp !== 0) {
           log.log(`FameEX processed a request to ${url} with data ${reqParameters}, but with error: [${error.code}] ${error.msg}. Resolving…`);
           resolve(data);
         } else {
