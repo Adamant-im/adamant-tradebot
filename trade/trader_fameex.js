@@ -171,13 +171,13 @@ module.exports = (
           const result = {};
 
           markets?.data?.forEach((market) => {
-            const pair = formatPairName(market.pair);
+            const pairNames = formatPairName(market.pair);
 
-            result[pair.pairPlain] = {
-              pairReadable: pair.pairReadable,
-              pairPlain: pair.pairPlain,
-              coin1: pair.coin1,
-              coin2: pair.coin2,
+            result[pairNames.pairPlain] = {
+              pairReadable: pairNames.pairReadable,
+              pairPlain: pairNames.pairPlain,
+              coin1: pairNames.coin1,
+              coin2: pairNames.coin2,
               coin1Decimals: market.amountPrecision,
               coin2Decimals: market.pricePrecision,
               coin1Precision: utils.getPrecision(market.amountPrecision),
@@ -370,13 +370,13 @@ module.exports = (
      */
     async getOpenOrders(pair) {
       const allOrders = [];
-      const coinPair = formatPairName(pair);
+      const pairNames = formatPairName(pair);
 
       let ordersInfo;
       let pageNum = 1;
 
       do {
-        ordersInfo = await this.getOpenOrdersPage(coinPair, pageNum);
+        ordersInfo = await this.getOpenOrdersPage(pairNames, pageNum);
 
         if (!ordersInfo) return undefined;
 
@@ -398,12 +398,12 @@ module.exports = (
      */
     async getOrderDetails(orderId, pair) {
       const paramString = `orderId: ${orderId}, pair: ${pair}`;
-      const coinPair = formatPairName(pair);
+      const pairNames = formatPairName(pair);
 
       let order;
 
       try {
-        order = await fameEXApiClient.getOrderDetails(coinPair.pairDash, orderId);
+        order = await fameEXApiClient.getOrderDetails(pairNames.pairDash, orderId);
       } catch (error) {
         log.warn(`API request getOrderDetails(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${error}`);
         return undefined;
@@ -419,8 +419,8 @@ module.exports = (
             type: formatOrderType(order.data.orderType),
             amount: +order.data.money,
             volume: +order.data.money * +order.data.triggerPrice,
-            pairPlain: coinPair.pairPlain,
-            pairReadable: coinPair.pairReadable,
+            pairPlain: pairNames.pairPlain,
+            pairReadable: pairNames.pairReadable,
             totalFeeInCoin2: +order.data.filledFee,
             amountExecuted: +order.data.filledAmount,
             volumeExecuted: +order.data.filledMoney,
@@ -457,7 +457,7 @@ module.exports = (
     async placeOrder(side, pair, price, coin1Amount, limit = 1, coin2Amount) {
       const paramString = `side: ${side}, pair: ${pair}, price: ${price}, coin1Amount: ${coin1Amount}, limit: ${limit}, coin2Amount: ${coin2Amount}`;
 
-      const coinPair = formatPairName(pair);
+      const pairNames = formatPairName(pair);
 
       const marketInfo = this.marketInfo(pair);
 
@@ -502,15 +502,15 @@ module.exports = (
 
       if (limit) {
         if (coin2Amount) {
-          output = `${side} ${coin1Amount} ${coinPair.coin1} for ${coin2Amount} ${coinPair.coin2} at ${price} ${coinPair.coin2}.`;
+          output = `${side} ${coin1Amount} ${pairNames.coin1} for ${coin2Amount} ${pairNames.coin2} at ${price} ${pairNames.coin2}.`;
         } else {
-          output = `${side} ${coin1Amount} ${coinPair.coin1} at ${price} ${coinPair.coin2}.`;
+          output = `${side} ${coin1Amount} ${pairNames.coin1} at ${price} ${pairNames.coin2}.`;
         }
       } else {
         if (coin2Amount) {
-          output = `${side} ${coinPair.coin1} for ${coin2Amount} ${coinPair.coin2} at Market Price on ${pair} pair.`;
+          output = `${side} ${pairNames.coin1} for ${coin2Amount} ${pairNames.coin2} at Market Price on ${pair} pair.`;
         } else {
-          output = `${side} ${coin1Amount} ${coinPair.coin1} at Market Price on ${pair} pair.`;
+          output = `${side} ${coin1Amount} ${pairNames.coin1} at Market Price on ${pair} pair.`;
         }
       }
 
@@ -520,7 +520,7 @@ module.exports = (
 
       try {
         const response = await fameEXApiClient.addOrder(
-            coinPair.pairDash,
+            pairNames.pairDash,
             coin1Amount,
             coin2Amount,
             price,
@@ -564,12 +564,12 @@ module.exports = (
      */
     async cancelOrder(orderId, side, pair) {
       const paramString = `orderId: ${orderId}, side: ${side}, pair: ${pair}`;
-      const coinPair = formatPairName(pair);
+      const pairNames = formatPairName(pair);
 
       let order;
 
       try {
-        order = await fameEXApiClient.cancelOrder(coinPair.pairDash, orderId);
+        order = await fameEXApiClient.cancelOrder(pairNames.pairDash, orderId);
       } catch (error) {
         log.warn(`API request cancelOrder(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${error}`);
         return undefined;
@@ -597,12 +597,12 @@ module.exports = (
      */
     async cancelAllOrders(pair) {
       const paramString = `pair: ${pair}`;
-      const coinPair = formatPairName(pair);
+      const pairNames = formatPairName(pair);
 
       let orders;
 
       try {
-        orders = await fameEXApiClient.cancelAllOrders(coinPair.pairDash);
+        orders = await fameEXApiClient.cancelAllOrders(pairNames.pairDash);
       } catch (error) {
         log.warn(`API request cancelAllOrders(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${error}`);
         return undefined;
@@ -610,14 +610,14 @@ module.exports = (
 
       try {
         if (orders.code === 280033) {
-          log.log(`No active orders on ${coinPair.pairReadable} pair.`);
+          log.log(`No active orders on ${pairNames.pairReadable} pair.`);
           return true;
         } else if (orders.code === successCode) {
-          log.log(`Cancelling orders on ${coinPair.pairReadable} pair…`);
+          log.log(`Cancelling orders on ${pairNames.pairReadable} pair…`);
           return true;
         } else {
           const errorMessage = orders.fameexErrorInfo ?? 'No details';
-          log.log(`Unable to cancel orders on ${coinPair.pairReadable} pair: ${errorMessage}.`);
+          log.log(`Unable to cancel orders on ${pairNames.pairReadable} pair: ${errorMessage}.`);
           return false;
         }
       } catch (error) {
@@ -633,7 +633,7 @@ module.exports = (
      */
     async getRates(pair) {
       const paramString = `pair: ${pair}`;
-      const coinPair = formatPairName(pair);
+      const pairNames = formatPairName(pair);
 
       let ticker;
 
@@ -645,7 +645,7 @@ module.exports = (
       }
 
       try {
-        ticker = ticker.find((t) => t.trading_pairs === coinPair.pairDash);
+        ticker = ticker.find((t) => t.trading_pairs === pairNames.pairDash);
 
         if (ticker) {
           return {
@@ -674,12 +674,12 @@ module.exports = (
      */
     async getOrderBook(pair) {
       const paramString = `pair: ${pair}`;
-      const coinPair = formatPairName(pair);
+      const pairNames = formatPairName(pair);
 
       let book;
 
       try {
-        book = await fameEXApiClient.orderBook(coinPair.pairPlain);
+        book = await fameEXApiClient.orderBook(pairNames.pairPlain);
       } catch (error) {
         log.warn(`API request getOrderBook(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${error}`);
         return undefined;
@@ -722,12 +722,12 @@ module.exports = (
      */
     async getTradesHistory(pair) {
       const paramString = `pair: ${pair}`;
-      const coinPair = formatPairName(pair);
+      const pairNames = formatPairName(pair);
 
       let trades;
 
       try {
-        trades = await fameEXApiClient.getTradesHistory(coinPair.pairDash);
+        trades = await fameEXApiClient.getTradesHistory(pairNames.pairDash);
       } catch (error) {
         log.warn(`API request getTradesHistory(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${error}`);
         return undefined;
