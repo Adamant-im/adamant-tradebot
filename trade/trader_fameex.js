@@ -818,10 +818,6 @@ module.exports = (
         return undefined;
       }
     },
-
-    async getFees(coinOrPair) {
-      // Not available for FameEX
-    },
   };
 };
 
