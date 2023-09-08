@@ -46,7 +46,7 @@ const systemToFameExOrderTypesMap = {
   1: 1,
 };
 
-const orderMaxPageSize = 500;
+const ordersMaxPageSize = 500;
 
 const successCode = 200;
 
@@ -316,7 +316,7 @@ module.exports = (
             orderTypes,
             orderStates.uncompleted,
             pageNum,
-            orderMaxPageSize,
+            ordersMaxPageSize,
         );
       } catch (error) {
         log.warn(`API request getOpenOrders(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${error}`);
@@ -348,31 +348,6 @@ module.exports = (
     },
 
     /**
-     * Function to get number of user orders
-     * !POSSIBLE IMPLEMENTATION ERRORS!
-     * !At the moment it is impossible to implement this functional correctly, due to problems on the FameEX side
-     * @param {Object} pair Formatted coin pair
-     * @returns {Promise<Array|undefined>}
-     */
-    async getNumberOfCurrentOrders(pair) {
-      try {
-        const ordersData = await fameEXApiClient.getOrders(
-            pair.coin1,
-            pair.coin2,
-            orderTypes,
-            orderStates.uncompleted,
-            1,
-            1,
-        );
-
-        return ordersData?.data?.total || 0;
-      } catch (error) {
-        log.warn(`API request getOpenOrders(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${error}`);
-        return undefined;
-      }
-    },
-
-    /**
      * List of all account open orders
      * !POSSIBLE IMPLEMENTATION ERRORS!
      * !At the moment it is impossible to implement this functional correctly, due to problems on the FameEX side
@@ -383,19 +358,18 @@ module.exports = (
       const allOrders = [];
       const coinPair = formatPairName(pair);
 
+      let ordersInfo;
       let pageNum = 1;
 
-      const limit = await this.getNumberOfCurrentOrders(coinPair);
-
       do {
-        const ordersInfo = await this.getOpenOrdersPage(coinPair, pageNum);
+        ordersInfo = await this.getOpenOrdersPage(coinPair, pageNum);
 
         if (!ordersInfo) return undefined;
 
         allOrders.push(...ordersInfo);
 
         pageNum += 1;
-      } while (allOrders.length < limit);
+      } while (ordersInfo.length === ordersMaxPageSize);
 
       return allOrders;
     },
