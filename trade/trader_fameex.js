@@ -813,8 +813,8 @@ module.exports = (
         });
 
         return result;
-      } catch (e) {
-        log.warn(`Error while processing getDepositAddress(${paramString}) request: ${e}`);
+      } catch (error) {
+        log.warn(`Error while processing getDepositAddress(${paramString}) request: ${error}`);
         return undefined;
       }
     },
