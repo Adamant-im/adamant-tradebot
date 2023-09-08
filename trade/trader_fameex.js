@@ -400,7 +400,7 @@ module.exports = (
      * @param {String} pair In classic format as BTC/USDT
      * @returns {Promise<Object|undefined>}
      */
-    async getOrderDetails(orderId, pair) {
+    async getOrder(orderId, pair) {
       const paramString = `orderId: ${orderId}, pair: ${pair}`;
       const pairNames = formatPairName(pair);
 
