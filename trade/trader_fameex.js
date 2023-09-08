@@ -289,12 +289,15 @@ module.exports = (
       const spotWallet = balances.data.filter((wallet) => wallet.walletType === 'spot')[0].list;
 
       try {
-        const result = spotWallet.map((crypto) => ({
-          code: crypto.currency.toUpperCase(),
-          free: +crypto.available,
-          freezed: +crypto.hold,
-          total: +crypto.total,
-        }));
+        const result = [];
+        spotWallet.forEach((crypto) => {
+          result.push({
+            code: crypto.currency.toUpperCase(),
+            free: +crypto.available,
+            freezed: +crypto.hold,
+            total: +crypto.total,
+          });
+        });
 
         if (nonzero) {
           return result.filter((crypto) => crypto.free || crypto.freezed);
