@@ -162,9 +162,9 @@ module.exports = function() {
           'SignatureVersion': 'v1.0',
           'SignatureMethod': 'HmacSHA256',
           'Signature': sign,
-          'data': type === 'post' ? stringifiedData : undefined,
-          'params': type === 'post' ? undefined : data,
         },
+        data: type === 'post' ? stringifiedData : undefined,
+        params: type === 'post' ? undefined : data,
       };
 
       axios(httpOptions)
