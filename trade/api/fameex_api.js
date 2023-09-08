@@ -161,14 +161,10 @@ module.exports = function() {
           'SignatureVersion': 'v1.0',
           'SignatureMethod': 'HmacSHA256',
           'Signature': sign,
+          'data': type === 'post' ? stringifiedData : undefined,
+          'params': type === 'post' ? undefined : data,
         },
       };
-
-      if (type === 'post') {
-        httpOptions.data = stringifiedData;
-      } else {
-        httpOptions.params = data;
-      }
 
       axios(httpOptions)
           .then((response) => handleResponse(response, resolve, reject, bodyString, url))
