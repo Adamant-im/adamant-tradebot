@@ -161,7 +161,7 @@ module.exports = (
     const paramString = `pair: ${pair}`;
 
     if (module.exports.gettingMarkets) return;
-    if (module.exports.exchangeMarkets) return module.exports.exchangeMarkets[pair ? formatPairName(pair).pairReadable : pair];
+    if (module.exports.exchangeMarkets) return module.exports.exchangeMarkets[pair ? formatPairName(pair).pairPlain : pair];
 
     module.exports.gettingMarkets = true;
 
@@ -173,7 +173,7 @@ module.exports = (
           markets?.data?.forEach((market) => {
             const pair = formatPairName(market.pair);
 
-            result[pair.pairReadable] = {
+            result[pair.pairPlain] = {
               pairReadable: pair.pairReadable,
               pairPlain: pair.pairPlain,
               coin1: pair.coin1,
