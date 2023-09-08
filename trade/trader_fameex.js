@@ -471,6 +471,17 @@ module.exports = (
         };
       }
 
+      // for Limit orders, calculate coin1Amount if only coin2Amount is provided
+      if (!coin1Amount && coin2Amount && price) {
+        coin1Amount = coin2Amount / price;
+      }
+
+      // for Limit orders, calculate coin2Amount if only coin1Amount is provided
+      let coin2AmountCalculated;
+      if (!coin2Amount && coin1Amount && price) {
+        coin2AmountCalculated = coin1Amount * price;
+      }
+
       if (coin1Amount) {
         coin1Amount = (+coin1Amount).toFixed(this.marketInfo(pair).coin1Decimals);
       }
