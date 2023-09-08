@@ -259,7 +259,7 @@ module.exports = (
         getCurrencies: true,
         placeMarketOrder: true,
         allowAmountForMarketBuy: false,
-        amountForMarketOrderNecessary: false,
+        amountForMarketOrderNecessary: true,
         getTradingFees: false,
         getAccountTradeVolume: false,
         selfTradeProhibited: false,
@@ -465,14 +465,6 @@ module.exports = (
 
       if (!marketInfo) {
         message = `Unable to place an order on ${exchangeName} exchange. I don't have info about market ${pair}.`;
-        log.warn(message);
-        return {
-          message,
-        };
-      }
-
-      if (limit && !coin1Amount) {
-        message = `Unable to place an order on ${exchangeName} exchange at Limit ${side}. Base amount ${marketInfo.coin1} is not provided.`;
         log.warn(message);
         return {
           message,
