@@ -253,7 +253,6 @@ module.exports = function() {
      * !At the moment it is impossible to implement this functional correctly, due to problems on the FameEX side
      * @param {String} base Transaction currency (uppercase, such as "BTC")
      * @param {String} quote Denominated currency (uppercase, such as "USDT")
-     * @param {Number} side Order Direction 1-Buy 2-Sell
      * @param {Number[]} orderTypes List of order types 1-limit price 2-market price 3-stop profit stop loss 4-tracking order 5-Maker only
      * @param {Number} state Order status 7-uncompleted 8-completed 9-completed or partially cancelled
      * @param {Number} pageNum Pagination, the first few pages (1 <= pageNum)
@@ -263,7 +262,6 @@ module.exports = function() {
     getOrders(
         base,
         quote,
-        side,
         orderTypes,
         state,
         pageNum,
@@ -272,7 +270,6 @@ module.exports = function() {
       const data = {
         base,
         quote,
-        side,
         orderTypes,
         state,
         pageNum,
