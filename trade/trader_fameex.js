@@ -659,15 +659,20 @@ module.exports = (
       try {
         ticker = ticker.find((t) => t.trading_pairs === coinPair.pairDash);
 
-        return {
-          ask: +ticker.lowest_ask,
-          bid: +ticker.highest_bid,
-          last: +ticker.last_price,
-          volume: +ticker.base_volume,
-          volumeInCoin2: +ticker.quote_volume,
-          high: +ticker.highest_price_24h,
-          low: +ticker.lowest_price_24h,
-        };
+        if (ticker) {
+          return {
+            ask: +ticker.lowest_ask,
+            bid: +ticker.highest_bid,
+            last: +ticker.last_price,
+            volume: +ticker.base_volume,
+            volumeInCoin2: +ticker.quote_volume,
+            high: +ticker.highest_price_24h,
+            low: +ticker.lowest_price_24h,
+          };
+        }
+
+        log.warn(`Not found rates for ${paramString}.`);
+        return undefined;
       } catch (error) {
         log.warn(`Error while processing getRates(${paramString}) request result: ${JSON.stringify(ticker)}. ${error}`);
         return undefined;
