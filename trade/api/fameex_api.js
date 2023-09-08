@@ -280,7 +280,7 @@ module.exports = function() {
      * Get order details
      * https://fameex-docs.github.io/docs/api/spot/en/#get-order-details
      * @param {String} symbol The name of the currency pair, such as "BTC-USDT"
-     * @param {String} orderId Order ID | Example: '10918742125338689536'
+     * @param {String} orderId Example: '10918742125338689536'
      * @return {Promise<Object>}
      */
     async getOrderDetails(symbol, orderId) {
@@ -362,7 +362,7 @@ module.exports = function() {
      * Cancel order
      * https://fameex-docs.github.io/docs/api/spot/en/#cancel-order
      * @param {String} symbol In FameEX format as 'BTC-USDT'
-     * @param {String} orderId Order ID | Example: '10918742125338689536'
+     * @param {String} orderId Example: '10918742125338689536'
      * @return {Promise<Object>}
      */
     cancelOrder(symbol, orderId) {
