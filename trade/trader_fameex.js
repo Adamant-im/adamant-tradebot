@@ -340,19 +340,23 @@ module.exports = (
       const orders = ordersData?.data?.orders || [];
 
       try {
-        const result = orders.map((order) => ({
-          orderId: order.orderId,
-          symbol: pair.pairReadable,
-          symbolPlain: pair.pairPlain,
-          price: +order.price,
-          side: order.side === orderSides.buy ? 'buy' : 'sell',
-          type: formatOrderType(order.orderType),
-          timestamp: order.createTime,
-          amount: +order.money,
-          amountExecuted: +order.filledAmount,
-          amountLeft: +order.filledAmount - +order.money,
-          status: formatOrderStatus(order.state),
-        }));
+        const result = [];
+
+        orders.forEach((order) => {
+          result.push({
+            orderId: order.orderId,
+            symbol: pair.pairReadable,
+            symbolPlain: pair.pairPlain,
+            price: +order.price,
+            side: order.side === orderSides.buy ? 'buy' : 'sell',
+            type: formatOrderType(order.orderType),
+            timestamp: order.createTime,
+            amount: +order.money,
+            amountExecuted: +order.filledAmount,
+            amountLeft: +order.filledAmount - +order.money,
+            status: formatOrderStatus(order.state),
+          });
+        });
 
         return result;
       } catch (error) {
