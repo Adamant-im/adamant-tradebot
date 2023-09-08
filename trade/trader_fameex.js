@@ -746,14 +746,18 @@ module.exports = (
       }
 
       try {
-        const result = trades.map((trade) => ({
-          coin1Amount: +trade.base_volume, // amount in coin1
-          price: +trade.price, // trade price
-          coin2Amount: +trade.quote_volume, // quote in coin2
-          date: +trade.timestamp,
-          type: trade.type, // 'buy' or 'sell'
-          tradeId: trade.trade_id.toString(),
-        }));
+        const result = [];
+
+        trades.forEach((trade) => {
+          result.push({
+            coin1Amount: +trade.base_volume, // amount in coin1
+            price: +trade.price, // trade price
+            coin2Amount: +trade.quote_volume, // quote in coin2
+            date: +trade.timestamp,
+            type: trade.type, // 'buy' or 'sell'
+            tradeId: trade.trade_id.toString(),
+          });
+        });
 
         // We need ascending sort order
         result.sort((a, b) => {
