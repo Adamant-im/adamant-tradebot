@@ -90,10 +90,12 @@ module.exports = (
 
               const currencies = currenciesData.data;
 
-              const networksByCurrency = currenciesWithNetworks.data.list.reduce((acc, data) => {
+              const networksByCurrency = new Map();
+
+              for (const currencyWithNetwork of currenciesWithNetworks.data.list) {
                 const currencyNetworks = {};
 
-                for (const netData of Object.values(data.currencyDetail)) {
+                for (const netData of Object.values(currencyWithNetwork.currencyDetail)) {
                   currencyNetworks[formatNetworkName(netData.chainType)] = {
                     id: netData.id.toString(),
                     chainName: netData.chainType,
@@ -104,8 +106,8 @@ module.exports = (
                   };
                 }
 
-                return acc.set(data.currency.toUpperCase(), currencyNetworks);
-              }, new Map());
+                networksByCurrency.set(currencyWithNetwork.currency.toUpperCase(), currencyNetworks);
+              }
 
               for (const coin in currencies) {
                 // Returned data is not full and doesn't include decimals, precision, min amounts, etc
