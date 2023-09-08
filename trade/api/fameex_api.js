@@ -435,23 +435,17 @@ module.exports = function() {
     /**
      * Get depth data
      * https://fameex-docs.github.io/docs/api/spot/en/#full-depth-returned-for-a-given-market-pair
-     * @param {String} symbol A pair such as "BTC_USDT"
-     * @param {String} level eg: 3
-     * @param {String} depth Orders depth quantity: [0,5,10,20,50,100,500] Not defined or 0 = full order book Depth = 100 means 50 for each bid/ask side.
+     * @param {String} symbol In FameEX format as "BTC_USDT"
+     * @param {String} [level=0] eg: 3
+     * @param {String} [depth=0] Orders depth quantity: [0,5,10,20,50,100,500] Not defined or 0 = full order book Depth = 100 means 50 for each bid/ask side.
      * @return {Promise<Object>}
      */
-    orderBook(symbol, level, depth) {
+    orderBook(symbol, level = 0, depth = 0) {
       const params = {
         market_pair: symbol,
+        level,
+        depth,
       };
-
-      if (level) {
-        params.level = level;
-      }
-
-      if (depth) {
-        params.depth = depth;
-      }
 
       return publicRequest('get', `${versioning.v2}/public/orderbook/market_pair`, params);
     },
