@@ -781,7 +781,14 @@ module.exports = (
     async getDepositAddress(coin) {
       const paramString = `coin: ${coin}`;
 
-      const networks = Object.keys((this.currencyInfo(coin))?.networks || {});
+      const coinInfo = this.currencyInfo(coin);
+
+      if (!coinInfo) {
+        log.warn(`Unable to get deposit address for ${coin} on FameEX. I don't have info about coin ${coin}.`);
+        return undefined;
+      }
+
+      const networks = coinInfo.networks;
 
       let addresses;
       try {
