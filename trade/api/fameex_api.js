@@ -453,18 +453,15 @@ module.exports = function() {
     /**
      * Get the latest trades record
      * https://fameex-docs.github.io/docs/api/spot/en/#recent-trades-list
-     * @param {String} symbol Name of the trading pair, example: BTC-USDT
-     * @param {Number} limit Default value is 100, max 100
+     * @param {String} symbol In FameEX format as 'BTC-USDT'
+     * @param {Number} [limit=100] Default value is 100, max 100
      * @return {Promise<Array>}
      */
-    getTradesHistory(symbol, limit) {
+    getTradesHistory(symbol, limit = 100) {
       const params = {
         symbol,
+        limit,
       };
-
-      if (limit) {
-        params.limit = limit;
-      }
 
       return publicRequest('get', `/api/${versioning.v2}/trades`, params);
     },
