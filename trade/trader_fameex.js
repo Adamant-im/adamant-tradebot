@@ -1,6 +1,6 @@
 const FameEXApi = require('./api/fameex_api');
 const utils = require('../helpers/utils');
-const networks = require('../helpers/cryptos/networks');
+const networks = require('../helpers/networks');
 
 /**
  * API endpoints:
