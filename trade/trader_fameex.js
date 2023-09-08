@@ -519,7 +519,7 @@ module.exports = (
       let errorMessage;
 
       try {
-        const orderData = await fameEXApiClient.addOrder(
+        const response = await fameEXApiClient.addOrder(
             coinPair.pairDash,
             orderSides[side],
             systemToFameExOrderTypesMap[limit],
@@ -527,8 +527,8 @@ module.exports = (
             price !== null ? String(price) : null,
         );
 
-        errorMessage = orderData?.msg;
-        orderId = orderData?.data?.orderId;
+        errorMessage = response?.msg;
+        orderId = response?.data?.orderId;
       } catch (error) {
         message = `API request addOrder(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${error}.`;
         log.warn(message);
