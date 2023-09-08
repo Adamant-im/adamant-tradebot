@@ -416,7 +416,7 @@ module.exports = (
       try {
         if (order.code === successCode) {
           return {
-            orderId: order.data.orderId,
+            orderId: order.data.orderId.toString(),
             tradesCount: undefined, // FameEX doesn't provide trades
             price: +order.data.price,
             side: order.data.side === orderSides.buy ? 'buy' : 'sell',
