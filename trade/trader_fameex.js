@@ -492,9 +492,16 @@ module.exports = (
         price = (+price).toFixed(this.marketInfo(pair).coin2Decimals);
       }
 
-      if ((limit || !limit && side === 'sell') && coin1Amount < marketInfo.coin1MinAmount) {
-        coin1Amount = coin1Amount ? coin1Amount : 0;
+      if (coin1Amount < marketInfo.coin1MinAmount) {
         message = `Unable to place an order on ${exchangeName} exchange. Order amount ${coin1Amount} ${marketInfo.coin1} is less minimum ${marketInfo.coin1MinAmount} ${marketInfo.coin1} on ${pair} pair.`;
+        log.warn(message);
+        return {
+          message,
+        };
+      }
+
+      if (coin2Amount && coin2Amount < marketInfo.coin2MinAmount) { // coin2Amount may be null
+        message = `Unable to place an order on ${exchangeName} exchange. Order volume ${coin2Amount} ${marketInfo.coin2} is less minimum ${marketInfo.coin2MinAmount} ${marketInfo.coin2} on ${pair} pair.`;
         log.warn(message);
         return {
           message,
