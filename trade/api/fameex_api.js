@@ -328,7 +328,7 @@ module.exports = function() {
     /**
      * Create order
      * https://fameex-docs.github.io/docs/api/spot/en/#new-order
-     * @param {String} symbol For example, the name of the currency pair: "BTC-USDT"
+     * @param {String} symbol In FameEX format as 'BTC-USDT'
      * @param {String} amount Entrusted quantity (trading amount when buying at market price) (amount >= 1)
      * @param {String} quote Entrusted quantity (trading amount when buying at market price) (quote >= 1)
      * @param {String} price Commission price
@@ -361,7 +361,7 @@ module.exports = function() {
     /**
      * Cancel order
      * https://fameex-docs.github.io/docs/api/spot/en/#cancel-order
-     * @param {String} symbol For example, the name of the currency pair: "BTC-USDT"
+     * @param {String} symbol In FameEX format as 'BTC-USDT'
      * @param {String} orderId Order ID | Example: '10918742125338689536'
      * @return {Promise<Object>}
      */
@@ -377,7 +377,7 @@ module.exports = function() {
     /**
      * Cancel all order for specific symbol
      * https://coinstore-openapi.github.io/en/index.html#one-click-cancellation
-     * @param {String} symbol For example, the name of the currency pair: "BTC-USDT"
+     * @param {String} symbol In FameEX format as 'BTC-USDT'
      * @return {Promise<Array>}
      */
     cancelAllOrders(symbol) {
