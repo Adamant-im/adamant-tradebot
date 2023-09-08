@@ -434,8 +434,11 @@ module.exports = (
           };
         } else {
           const errorMessage = order.fameexErrorInfo ?? 'No details';
-          log.log(`Unable to get order ${orderId} details ${pair} pair: ${errorMessage}.`);
-          return undefined;
+          log.log(`Unable to get order ${orderId} details: ${JSON.stringify(errorMessage)}. Returning unknown order status.`);
+          return {
+            orderId,
+            status: 'unknown', // Order doesn't exist or Wrong orderId
+          };
         }
       } catch (error) {
         log.warn(`Error while processing getOrderDetails(${paramString}) request results: ${JSON.stringify(order)}. ${error}`);
