@@ -351,9 +351,9 @@ module.exports = (
             side: order.side === orderSides.buy ? 'buy' : 'sell',
             type: formatOrderType(order.orderType),
             timestamp: order.createTime,
-            amount: +order.money,
+            amount: +order.amount,
             amountExecuted: +order.filledAmount,
-            amountLeft: +order.filledAmount - +order.money,
+            amountLeft: +order.filledAmount - +order.amount,
             status: formatOrderStatus(order.state),
           });
         });
@@ -421,8 +421,8 @@ module.exports = (
             price: +order.data.price,
             side: order.data.side === orderSides.buy ? 'buy' : 'sell',
             type: formatOrderType(order.data.orderType),
-            amount: +order.data.money,
-            volume: +order.data.money * +order.data.triggerPrice,
+            amount: +order.data.amount,
+            volume: +order.data.amount * +order.data.triggerPrice,
             pairPlain: pairNames.pairPlain,
             pairReadable: pairNames.pairReadable,
             totalFeeInCoin2: +order.data.filledFee,
