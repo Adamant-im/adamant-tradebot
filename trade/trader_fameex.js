@@ -521,10 +521,11 @@ module.exports = (
       try {
         const response = await fameEXApiClient.addOrder(
             coinPair.pairDash,
+            coin1Amount,
+            coin2Amount,
+            price,
             orderSides[side],
             systemToFameExOrderTypesMap[limit],
-            coin1Amount || coin2Amount,
-            price !== null ? String(price) : null,
         );
 
         errorMessage = response?.msg;

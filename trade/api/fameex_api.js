@@ -329,28 +329,30 @@ module.exports = function() {
      * Create order
      * https://fameex-docs.github.io/docs/api/spot/en/#new-order
      * @param {String} symbol For example, the name of the currency pair: "BTC-USDT"
+     * @param {String} amount Entrusted quantity (trading amount when buying at market price) (amount >= 1)
+     * @param {String} quote Entrusted quantity (trading amount when buying at market price) (quote >= 1)
+     * @param {String} price Commission price
      * @param {Number} side Order Direction 1-Buy 2-Sell
      * @param {Number} orderType Order Type 1-Limit Price 2-Market Price 3-Take Profit and Stop Loss 4-Tracking Order 5-Maker Only
-     * @param {String} amount Entrusted quantity (trading amount when buying at market price) (amount >= 1)
-     * @param {String} price Commission price
      * @return {Promise<Object>}
      */
     addOrder(
         symbol,
+        amount,
+        quote,
+        price,
         side,
         orderType,
-        amount,
-        price,
     ) {
       const data = {
         symbol,
         side,
         orderType,
-        amount,
+        amount: amount || quote,
       };
 
-      if (price) {
-        data.price = price;
+      if (price !== null) {
+        data.price = String(price);
       }
 
       return protectedRequest('post', `${versioning.v1}/api/spot/orders`, data);
