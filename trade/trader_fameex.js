@@ -795,7 +795,7 @@ module.exports = (
         addresses = await Promise.all(networks.map(async (network) => {
           return fameEXApiClient.getDepositAddress(coin, network);
         }));
-      } catch (err) {
+      } catch (error) {
         log.warn(`API request getDepositAddress(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
         return undefined;
       }
