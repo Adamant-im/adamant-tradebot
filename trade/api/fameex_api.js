@@ -296,14 +296,7 @@ module.exports = function() {
      * @param {Number} orderType Order Type 1-Limit Price 2-Market Price 3-Take Profit and Stop Loss 4-Tracking Order 5-Maker Only
      * @return {Promise<Object>}
      */
-    addOrder(
-        symbol,
-        amount,
-        quote,
-        price,
-        side,
-        orderType,
-    ) {
+    addOrder(symbol, amount, quote, price, side, orderType) {
       const data = {
         symbol,
         side,
@@ -311,7 +304,7 @@ module.exports = function() {
         amount: amount || quote,
       };
 
-      if (price !== null) {
+      if (price) {
         data.price = String(price);
       }
 
