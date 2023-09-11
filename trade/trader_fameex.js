@@ -604,7 +604,7 @@ module.exports = (
         if (order.code === successCode) {
           log.log(`Cancelling order ${orderId} on ${pair} pair…`);
           return true;
-        } else {
+        } else { // Order already cancelled or doesn't exist or wrong orderId (same error code 280035)
           const errorMessage = order.fameexErrorInfo ?? 'No details';
           log.log(`Unable to cancel order ${orderId} on ${pair} pair: ${errorMessage}.`);
           return false;
@@ -672,20 +672,15 @@ module.exports = (
       try {
         ticker = ticker.find((t) => t.trading_pairs === pairNames.pairPlain);
 
-        if (ticker) {
-          return {
-            ask: +ticker.lowest_ask,
-            bid: +ticker.highest_bid,
-            last: +ticker.last_price,
-            volume: +ticker.base_volume,
-            volumeInCoin2: +ticker.quote_volume,
-            high: +ticker.highest_price_24h,
-            low: +ticker.lowest_price_24h,
-          };
-        }
-
-        log.warn(`Not found rates for ${paramString}.`);
-        return undefined;
+        return {
+          ask: +ticker.lowest_ask,
+          bid: +ticker.highest_bid,
+          last: +ticker.last_price,
+          volume: +ticker.base_volume,
+          volumeInCoin2: +ticker.quote_volume,
+          high: +ticker.highest_price_24h,
+          low: +ticker.lowest_price_24h,
+        };
       } catch (error) {
         log.warn(`Error while processing getRates(${paramString}) request result: ${JSON.stringify(ticker)}. ${error}`);
         return undefined;
