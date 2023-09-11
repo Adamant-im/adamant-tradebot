@@ -9,12 +9,15 @@ const networks = require('../helpers/networks');
 const apiServer = 'https://api.fameex.com';
 const exchangeName = 'FameEX';
 
-const orderStates = {
-  new: [1, 2],
+const fameEXOrderStates = {
+  // For spot/orderdetail (getOrderDetails)
+  new: [1, 2], // 1- Created 2- Waiting for Transaction
   partiallyFilled: 3,
   filled: 4,
-  cancelled: [5, 6],
+  cancelled: [5, 6], // 5- Partially Cancelled 6- Cancelled
+  // For /spot/orderlist (getOrders)
   uncompleted: 7,
+  completed: 8,
   completedOrCancelled: 9,
 };
 
@@ -26,9 +29,9 @@ const orderStatuses = {
   unknown: 'unknown',
 };
 
-const orderTypes = [1, 2, 3, 4, 5];
+const fameEXOrderTypes = [1, 2, 3, 4, 5];
 
-const orderTypesMap = {
+const fameEXOrderTypesMap = {
   1: 'limit',
   2: 'market',
   3: 'take_profit_and_stop_loss',
@@ -36,14 +39,14 @@ const orderTypesMap = {
   5: 'maker_only',
 };
 
-const orderSides = {
+const fameEXOrderSides = {
   buy: 1,
   sell: 2,
 };
 
-const systemToFameExOrderTypesMap = {
-  0: 2,
-  1: 1,
+const systemToFameEXOrderTypesMap = {
+  0: 2, // Sell order
+  1: 1, // Buy order
 };
 
 const ordersMaxPageSize = 500;
@@ -252,7 +255,7 @@ module.exports = (
     },
 
     /**
-     * Features available on FameEx exchange
+     * Features available on FameEX exchange
      * @returns {Object}
      */
     features() {
@@ -329,8 +332,8 @@ module.exports = (
         ordersData = await fameEXApiClient.getOrders(
             pair.coin1,
             pair.coin2,
-            orderTypes,
-            orderStates.uncompleted,
+            fameEXOrderTypes,
+            fameEXOrderStates.uncompleted,
             pageNum,
             ordersMaxPageSize,
         );
@@ -350,8 +353,8 @@ module.exports = (
             symbol: pair.pairReadable,
             symbolPlain: pair.pairPlain,
             price: +order.price,
-            side: order.side === orderSides.buy ? 'buy' : 'sell',
-            type: orderTypesMap[order.orderType] || 'unknown',
+            side: order.side === fameEXOrderSides.buy ? 'buy' : 'sell',
+            type: fameEXOrderTypesMap[order.orderType] || 'unknown',
             timestamp: order.createTime,
             amount: +order.amount,
             amountExecuted: +order.filledAmount,
@@ -421,8 +424,8 @@ module.exports = (
             orderId: order.data.orderId.toString(),
             tradesCount: undefined, // FameEX doesn't provide trades
             price: +order.data.price,
-            side: order.data.side === orderSides.buy ? 'buy' : 'sell',
-            type: orderTypesMap[order.data.orderType] || 'unknown',
+            side: order.data.side === fameEXOrderSides.buy ? 'buy' : 'sell',
+            type: fameEXOrderTypesMap[order.data.orderType] || 'unknown',
             amount: +order.data.amount,
             volume: +order.data.amount * +order.data.triggerPrice,
             pairPlain: pairNames.pairPlain,
@@ -543,8 +546,8 @@ module.exports = (
             coin1Amount,
             coin2Amount,
             price,
-            orderSides[side],
-            systemToFameExOrderTypesMap[limit],
+            fameEXOrderSides[side],
+            systemToFameEXOrderTypesMap[limit],
         );
 
         errorMessage = response?.msg;
@@ -860,16 +863,16 @@ function formatPairName(pair) {
  * @return {string}
  */
 function formatOrderStatus(orderState) {
-  if (orderStates.new.includes(orderState)) {
+  if (fameEXOrderStates.new.includes(orderState)) {
     return orderStatuses.new;
   }
-  if (orderState === orderStates.partiallyFilled) {
+  if (orderState === fameEXOrderStates.partiallyFilled) {
     return orderStatuses.partFilled;
   }
-  if (orderState === orderStates.filled) {
+  if (orderState === fameEXOrderStates.filled) {
     return orderStatuses.filled;
   }
-  if (orderStates.cancelled.includes(orderState)) {
+  if (fameEXOrderStates.cancelled.includes(orderState)) {
     return orderStatuses.cancelled;
   }
 
