@@ -356,7 +356,7 @@ module.exports = (
             price: +order.price,
             side: order.side === fameEXOrderSides.buy ? 'buy' : 'sell',
             type: fameEXOrderTypesMap[order.orderType] || 'unknown',
-            timestamp: order.createTime,
+            timestamp: order.createTime * 1000,
             amount: +order.amount,
             amountExecuted: +order.filledAmount,
             amountLeft: +order.amount - +order.filledAmount,
@@ -428,10 +428,10 @@ module.exports = (
             side: order.data.side === fameEXOrderSides.buy ? 'buy' : 'sell',
             type: fameEXOrderTypesMap[order.data.orderType] || 'unknown',
             amount: +order.data.amount,
-            volume: +order.data.amount * +order.data.triggerPrice,
+            volume: +order.data.money || +order.data.amount * +order.data.triggerPrice || +order.data.amount * +order.data.price,
             pairPlain: pairNames.pairPlain,
             pairReadable: pairNames.pairReadable,
-            totalFeeInCoin2: +order.data.filledFee,
+            totalFeeInCoin2: +order.data.filledFee * +order.data.price,
             amountExecuted: +order.data.filledAmount,
             volumeExecuted: +order.data.filledMoney,
             timestamp: order.data.createTime * 1000,
@@ -444,6 +444,8 @@ module.exports = (
           return {
             orderId,
             status: 'unknown', // Order doesn't exist or Wrong orderId
+            // WARN: In case if request details of just cancelled order, API returns { code: 280035, msg: 'fail' };
+            // It's the same error as when Order doesn't exist or Wrong orderId
           };
         }
       } catch (error) {
