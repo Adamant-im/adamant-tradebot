@@ -264,7 +264,7 @@ module.exports = (
         getCurrencies: true,
         placeMarketOrder: true,
         allowAmountForMarketBuy: false,
-        amountForMarketOrderNecessary: true,
+        amountForMarketOrderNecessary: false,
         getTradingFees: false,
         getAccountTradeVolume: false,
         selfTradeProhibited: false,
@@ -529,7 +529,7 @@ module.exports = (
         if (coin2Amount) {
           output = `${side} ${coin1Amount} ${pairNames.coin1} for ${coin2Amount} ${pairNames.coin2} at ${price} ${pairNames.coin2}.`;
         } else {
-          output = `${side} ${coin1Amount} ${pairNames.coin1} at ${price} ${pairNames.coin2}.`;
+          output = `${side} ${coin1Amount} ${pairNames.coin1} for ${coin2AmountCalculated} ${coinPair.coin2} at ${price} ${pairNames.coin2}.`;
         }
       } else {
         if (coin2Amount) {
