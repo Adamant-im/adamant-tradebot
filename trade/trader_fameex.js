@@ -291,10 +291,11 @@ module.exports = (
         return undefined;
       }
 
-      const spotWallet = balances.data.filter((wallet) => wallet.walletType === 'spot')[0].list;
-
       try {
+        const spotWallet = balances.data.filter((wallet) => wallet.walletType === 'spot')[0].list;
+
         const result = [];
+
         spotWallet.forEach((crypto) => {
           result.push({
             code: crypto.currency.toUpperCase(),
