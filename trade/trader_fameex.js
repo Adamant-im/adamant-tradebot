@@ -260,6 +260,7 @@ module.exports = (
      */
     features() {
       return {
+        getDepositAddress: true,
         getMarkets: true,
         getCurrencies: true,
         placeMarketOrder: true,
@@ -797,6 +798,8 @@ module.exports = (
         return undefined;
       }
 
+      console.log(coinInfo)
+
       const networks = coinInfo.networks;
 
       let addresses;
@@ -818,6 +821,8 @@ module.exports = (
               network: networks[idx],
               address: address.data.address,
             });
+          } else {
+            log.log(`Unable to get deposit address for ${coinInfo.symbol} on ${networks[idx]} chain. Probably, deposits are disabled.`);
           }
         });
 
