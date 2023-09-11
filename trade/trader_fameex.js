@@ -175,7 +175,7 @@ module.exports = (
         try {
           const result = {};
 
-          markets?.data?.forEach((market) => {
+          markets.data.forEach((market) => {
             const pairNames = formatPairName(market.pair);
 
             result[pairNames.pairPlain] = {
