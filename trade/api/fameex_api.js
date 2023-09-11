@@ -293,39 +293,6 @@ module.exports = function() {
     },
 
     /**
-     * Get transaction details
-     * https://fameex-docs.github.io/docs/api/spot/en/#get-transaction-details
-     * !POSSIBLE IMPLEMENTATION ERRORS!
-     * !At the moment it is impossible to implement this functional correctly, due to problems on the FameEX side
-     * @param {String} base Transaction currency (uppercase, such as "BTC")
-     * @param {String} quote Denominated currency (uppercase, such as "USDT")
-     * @param {Number} pageNum Pagination, the first few pages (1 <= pageNum)
-     * @param {Number} pageSize Pagination, the number of pages (1 < pageSize <= 500)
-     * @param {String} orderId Order ID
-     * @return {Promise<Object>}
-     */
-    async getTransactionDetails(
-        base,
-        quote,
-        pageNum,
-        pageSize,
-        orderId,
-    ) {
-      const data = {
-        base,
-        quote,
-        pageNum,
-        pageSize,
-      };
-
-      if (orderId) {
-        data.orderId = orderId;
-      }
-
-      return protectedRequest('post', `${versioning.v1}/api/spot/fills`, data);
-    },
-
-    /**
      * Create order
      * https://fameex-docs.github.io/docs/api/spot/en/#new-order
      * @param {String} symbol In FameEX format as 'BTC-USDT'
