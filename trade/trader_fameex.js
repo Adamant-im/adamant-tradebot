@@ -748,6 +748,9 @@ module.exports = (
 
       try {
         trades = await fameEXApiClient.getTradesHistory(pairNames.pairPlain);
+        if (trades?.length === 0) {
+          throw String('Trade history is empty, probably API error.');
+        }
       } catch (error) {
         log.warn(`API request getTradesHistory(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${error}`);
         return undefined;
