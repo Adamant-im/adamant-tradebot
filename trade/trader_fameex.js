@@ -343,9 +343,9 @@ module.exports = (
         return undefined;
       }
 
-      const orders = ordersData?.data?.orders || [];
-
       try {
+        const orders = ordersData.data.orders.filter((order) => order.accountType === 'spot') ;
+
         const result = [];
 
         orders.forEach((order) => {
@@ -359,7 +359,7 @@ module.exports = (
             timestamp: order.createTime,
             amount: +order.amount,
             amountExecuted: +order.filledAmount,
-            amountLeft: +order.filledAmount - +order.amount,
+            amountLeft: +order.amount - +order.filledAmount,
             status: formatOrderStatus(order.state),
           });
         });

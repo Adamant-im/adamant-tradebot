@@ -256,14 +256,7 @@ module.exports = function() {
      * @param {Number} pageSize Pagination, the number of pages (1 <= pageSize <=500)
      * @return {Promise<Array>}
      */
-    getOrders(
-        base,
-        quote,
-        orderTypes,
-        state,
-        pageNum,
-        pageSize,
-    ) {
+    getOrders(base, quote, orderTypes, state, pageNum, pageSize) {
       const data = {
         base,
         quote,
