@@ -283,7 +283,7 @@ module.exports = function() {
      * @param {String} orderId Example: '10918742125338689536'
      * @return {Promise<Object>}
      */
-    async getOrderDetails(symbol, orderId) {
+    async getOrder(symbol, orderId) {
       const data = {
         symbol,
         orderId,

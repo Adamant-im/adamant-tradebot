@@ -409,9 +409,9 @@ module.exports = (
       let order;
 
       try {
-        order = await fameEXApiClient.getOrderDetails(pairNames.pairDash, orderId);
+        order = await fameEXApiClient.getOrder(pairNames.pairDash, orderId);
       } catch (error) {
-        log.warn(`API request getOrderDetails(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${error}`);
+        log.warn(`API request getOrder(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${error}`);
         return undefined;
       }
 
@@ -443,7 +443,7 @@ module.exports = (
           };
         }
       } catch (error) {
-        log.warn(`Error while processing getOrderDetails(${paramString}) request results: ${JSON.stringify(order)}. ${error}`);
+        log.warn(`Error while processing getOrder(${paramString}) request results: ${JSON.stringify(order)}. ${error}`);
         return undefined;
       }
     },
