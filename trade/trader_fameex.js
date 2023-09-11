@@ -344,7 +344,7 @@ module.exports = (
       }
 
       try {
-        const orders = ordersData.data.orders.filter((order) => order.accountType === 'spot') ;
+        const orders = ordersData.data.orders.filter((order) => order.accountType === 'spot');
 
         const result = [];
 
@@ -406,14 +406,14 @@ module.exports = (
      * @param {String} pair In classic format as BTC/USDT
      * @returns {Promise<Object|undefined>}
      */
-    async getOrder(orderId, pair) {
+    async getOrderDetails(orderId, pair) {
       const paramString = `orderId: ${orderId}, pair: ${pair}`;
       const pairNames = formatPairName(pair);
 
       let order;
 
       try {
-        order = await fameEXApiClient.getOrder(pairNames.pairDash, orderId);
+        order = await fameEXApiClient.getOrder(pairNames.pairPlain, orderId);
       } catch (error) {
         log.warn(`API request getOrder(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${error}`);
         return undefined;
@@ -543,7 +543,7 @@ module.exports = (
 
       try {
         const response = await fameEXApiClient.addOrder(
-            pairNames.pairDash,
+            pairNames.pairPlain,
             coin1Amount,
             coin2Amount,
             price,
@@ -592,7 +592,7 @@ module.exports = (
       let order;
 
       try {
-        order = await fameEXApiClient.cancelOrder(pairNames.pairDash, orderId);
+        order = await fameEXApiClient.cancelOrder(pairNames.pairPlain, orderId);
       } catch (error) {
         log.warn(`API request cancelOrder(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${error}`);
         return undefined;
@@ -625,7 +625,7 @@ module.exports = (
       let orders;
 
       try {
-        orders = await fameEXApiClient.cancelAllOrders(pairNames.pairDash);
+        orders = await fameEXApiClient.cancelAllOrders(pairNames.pairPlain);
       } catch (error) {
         log.warn(`API request cancelAllOrders(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${error}`);
         return undefined;
@@ -668,7 +668,7 @@ module.exports = (
       }
 
       try {
-        ticker = ticker.find((t) => t.trading_pairs === pairNames.pairDash);
+        ticker = ticker.find((t) => t.trading_pairs === pairNames.pairPlain);
 
         if (ticker) {
           return {
@@ -750,7 +750,7 @@ module.exports = (
       let trades;
 
       try {
-        trades = await fameEXApiClient.getTradesHistory(pairNames.pairDash);
+        trades = await fameEXApiClient.getTradesHistory(pairNames.pairPlain);
       } catch (error) {
         log.warn(`API request getTradesHistory(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${error}`);
         return undefined;
@@ -841,8 +841,8 @@ function formatNetworkName(network) {
 
 /**
  * Returns pair in classic format BTC/USDT
- * @param {String} pair Pair in FameEX format BTC_USDT or BTC-USDT or BTC/USDT
- * @return {Object}
+ * @param {String} pair Pair in FameEX format like BTC-USDT
+ * @return {Object} pairReadable, pairPlain, coin1, coin2
  */
 function formatPairName(pair) {
   pair = pair?.toUpperCase();
@@ -851,8 +851,7 @@ function formatPairName(pair) {
   return {
     pair: `${coin1}/${coin2}`,
     pairReadable: `${coin1}/${coin2}`,
-    pairPlain: `${coin1}_${coin2}`,
-    pairDash: `${coin1}-${coin2}`,
+    pairPlain: `${coin1}-${coin2}`,
     coin1,
     coin2,
   };
