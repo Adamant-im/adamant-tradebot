@@ -99,6 +99,31 @@ const networks = {
     name: 'Omni',
     sampleAddress: '1JKhrVV9EsgSS5crXLBo9BRVXyuHjf2Tcp',
   },
+  'CFX': {
+    code: 'CFX',
+    name: 'Conflux',
+    sampleAddress: '0x40f8572D3Edd04C869ECBab246d6Aee37A5B9b29',
+  },
+  'FLOW': {
+    code: 'FLOW',
+    name: 'Flow',
+    sampleAddress: '0xbaf7ab7b36232a85',
+  },
+  'MINA': {
+    code: 'MINA',
+    name: 'Mina',
+    sampleAddress: '0x2f32359c958af5548e4c2c74587fef67477baff3',
+  },
+  'HARMONY': {
+    code: 'HARMONY',
+    name: 'Harmony',
+    sampleAddress: 'one1yxzn9gf28zdy4yhup30my2gp68qerx929rv2ns',
+  },
+  'XLM': {
+    code: 'XLM',
+    name: 'Stellar',
+    sampleAddress: 'GB5A3OA657UWF3BN7WU4XFFWT333HFP2KFK2OFAXPEL3BBGQ7QLRNASG',
+  },
 };
 
 module.exports = networks;
