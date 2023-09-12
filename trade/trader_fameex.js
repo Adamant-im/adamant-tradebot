@@ -802,7 +802,7 @@ module.exports = (
         return undefined;
       }
 
-      const networks = Object.keys(coinInfo.networks);
+      const networks = Object.values(coinInfo.networks).map((network) => network.chainName);
 
       let addresses;
       try {
