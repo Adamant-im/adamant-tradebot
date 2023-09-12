@@ -30,37 +30,64 @@ module.exports = function() {
   let log = {};
 
   // Error codes: https://fameex-docs.github.io/docs/api/spot/en/#error-message
-  const httpErrorCodeDescriptions = {
-    112002: 'API single key traffic exceeds limit',
-    112005: 'API request frequency exceeded',
-    112009: 'The number of API-Key creation exceeds the limit (a single user can create up to 5 APIs)',
-    112010: 'API-Key is invalid (the time limit for a single Key is 60 natural days)',
-    112011: 'API request IP access is restricted (the bound IP is inconsistent with the request IP)',
-    112015: 'Signature error',
-    112020: 'Wrong signature',
-    112021: 'Wrong signature version',
-    112022: 'Signature timestamp error',
-    112047: 'The spot API interface is temporarily inaccessible',
-    112048: 'The futures API interface is temporarily inaccessible',
-    112400: 'Parameter error',
-    280006: 'Parameter error',
-    230030: 'Please operate after KYC certification',
-    280033: 'There are no cancelable orders',
+  const fameEXErrorCodes = {
+    112002: {
+      description: 'API single key traffic exceeds limit',
+      isTemporary: true,
+    },
+    112005: {
+      description: 'API request frequency exceeded',
+      isTemporary: true,
+    },
+    112009: {
+      description: 'The number of API-Key creation exceeds the limit (a single user can create up to 5 APIs)',
+      isTemporary: true,
+    },
+    112010: {
+      description: 'API-Key is invalid (the time limit for a single Key is 60 natural days)',
+      isTemporary: true,
+    },
+    112011: {
+      description: 'API request IP access is restricted (the bound IP is inconsistent with the request IP)',
+    },
+    112015: {
+      description: 'Signature error',
+      isTemporary: true,
+    },
+    112020: {
+      description: 'Wrong signature',
+      isTemporary: true,
+    },
+    112021: {
+      description: 'Wrong signature version',
+      isTemporary: true,
+    },
+    112022: {
+      description: 'Signature timestamp error',
+      isTemporary: true,
+    },
+    112047: {
+      description: 'The spot API interface is temporarily inaccessible',
+      isTemporary: true,
+    },
+    112048: {
+      description: 'The futures API interface is temporarily inaccessible',
+      isTemporary: true,
+    },
+    112400: {
+      description: 'Parameter error',
+    },
+    280006: {
+      description: 'Parameter error',
+    },
+    230030: {
+      description: 'Please operate after KYC certification',
+      isTemporary: true,
+    },
+    280033: {
+      description: 'There are no cancelable orders',
+    },
   };
-
-  const temporaryErrorsCodes = [
-    112002,
-    112005,
-    112009,
-    112010,
-    112015,
-    112020,
-    112021,
-    112022,
-    112047,
-    112048,
-    230030,
-  ];
 
   const statusCodes = {
     ok: 200,
@@ -90,9 +117,11 @@ module.exports = function() {
       (data.code === statusCodes.ok || (data.code === statusCodes.zero) || Array.isArray(data)) &&
       data.data?.timestamp !== 0;
 
+    const fameEXError = fameEXErrorCodes[data?.code];
+
     const error = {
       code: data?.code ?? 'No error code',
-      msg: httpErrorCodeDescriptions[data?.code] ?? data?.msg ?? 'Unknown error',
+      msg: fameEXError?.description ?? data?.msg ?? 'Unknown error',
     };
 
     const reqParameters = queryString || '{ No parameters }';
@@ -109,7 +138,7 @@ module.exports = function() {
           data.fameexErrorInfo = fameexErrorInfo;
         }
 
-        if (httpCode === statusCodes.ok && !temporaryErrorsCodes.includes(data?.code) && data.data?.timestamp !== 0) {
+        if (httpCode === statusCodes.ok && !fameEXError?.isTemporary && data.data?.timestamp !== 0) {
           log.log(`FameEX processed a request to ${url} with data ${reqParameters}, but with error: [${error.code}] ${error.msg}. Resolving…`);
           resolve(data);
         } else {
