@@ -847,10 +847,8 @@ function formatNetworkName(network) {
     'POLYGON': networks['MATIC'].code,
     'AVAX-CCHAIN': networks['AVAX-C-CHAIN'].code,
     'AVAXC': networks['AVAX-C-CHAIN'].code,
-    'BSC': networks['BNB'].code,
+    'BSC': networks['BEP20'].code,
     'BCH': networks['BTC'].code,
-    'DOGE': networks['ERC20'].code,
-    'HARMONY': networks['ERC20'].code,
     'TRX': networks['TRC20'].code,
   };
 
