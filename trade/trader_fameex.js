@@ -109,16 +109,20 @@ module.exports = (
                   };
                 }
 
-                networksByCurrency.set(currencyWithNetwork.currency.toUpperCase(), currencyNetworks);
+                networksByCurrency.set(
+                    currencyWithNetwork.currency.toUpperCase(),
+                    { currencyNetworks, name: currencyWithNetwork.nameEn },
+                );
               }
 
               for (const coin in currencies) {
                 // Returned data is not full and doesn't include decimals, precision, min amounts, etc
                 const currency = currencies[coin];
+                const networkByCurrency = networksByCurrency.get(currency.name.toUpperCase());
 
                 result[currency.name.toUpperCase()] = {
                   symbol: currency.name.toUpperCase(),
-                  name: currency.name.toUpperCase(),
+                  name: networkByCurrency?.name || currency.name.toUpperCase(),
                   status: undefined,
                   comment: undefined,
                   confirmations: undefined,
@@ -129,7 +133,7 @@ module.exports = (
                   exchangeAddress: undefined,
                   decimals: undefined,
                   precision: undefined,
-                  networks: networksByCurrency.get(currency.name.toUpperCase()),
+                  networks: networkByCurrency?.currencyNetworks,
                   defaultNetwork: undefined,
                   withdrawEnabled: currency.can_withdraw,
                   depositEnabled: currency.can_deposit,
