@@ -843,7 +843,18 @@ module.exports = (
  * @return {String}
  */
 function formatNetworkName(network) {
-  return networks[network?.toUpperCase()]?.code ?? network;
+  const networksToSystemNameMap = {
+    'POLYGON': networks['MATIC'].code,
+    'AVAX-CCHAIN': networks['AVAX-C-CHAIN'].code,
+    'AVAXC': networks['AVAX-C-CHAIN'].code,
+    'BSC': networks['BNB'].code,
+    'BCH': networks['BTC'].code,
+    'DOGE': networks['ERC20'].code,
+    'HARMONY': networks['ERC20'].code,
+    'TRX': networks['TRC20'].code,
+  };
+
+  return networks[network?.toUpperCase()]?.code ?? networksToSystemNameMap[network?.toUpperCase()]?.code ?? network;
 }
 
 /**
