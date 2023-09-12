@@ -798,9 +798,7 @@ module.exports = (
         return undefined;
       }
 
-      console.log(coinInfo)
-
-      const networks = coinInfo.networks;
+      const networks = Object.keys(coinInfo.networks);
 
       let addresses;
       try {
