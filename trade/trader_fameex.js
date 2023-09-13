@@ -802,19 +802,19 @@ module.exports = (
         return undefined;
       }
 
-      const networks = Object.values(coinInfo.networks).map((network) => network.chainName);
-
-      let addresses;
       try {
-        addresses = await Promise.all(networks.map(async (network) => {
-          return fameEXApiClient.getDepositAddress(coin, network);
-        }));
-      } catch (error) {
-        log.warn(`API request getDepositAddress(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${error}`);
-        return undefined;
-      }
+        const networks = Object.values(coinInfo.networks).filter((network) => network.status).map((network) => network.chainName);
 
-      try {
+        let addresses;
+        try {
+          addresses = await Promise.all(networks.map(async (network) => {
+            return fameEXApiClient.getDepositAddress(coin, network);
+          }));
+        } catch (error) {
+          log.warn(`API request getDepositAddress(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${error}`);
+          return undefined;
+        }
+
         const result = [];
 
         addresses.forEach((address, idx) => {
@@ -824,7 +824,7 @@ module.exports = (
               address: address.data.address,
             });
           } else {
-            log.log(`Unable to get deposit address for ${coinInfo.symbol} on ${networks[idx]} chain. Probably, deposits are disabled.`);
+            log.warn(`Unable to get deposit address for ${coinInfo.symbol} on ${networks[idx]} chain.`);
           }
         });
 
