@@ -30,6 +30,7 @@ module.exports = function() {
   let log = {};
 
   // Error codes: https://fameex-docs.github.io/docs/api/spot/en/#error-message
+  // If error isTemporary, bot will reject a response and try again later
   const fameEXErrorCodes = {
     112002: {
       description: 'API single key traffic exceeds limit',
@@ -41,26 +42,21 @@ module.exports = function() {
     },
     112009: {
       description: 'The number of API-Key creation exceeds the limit (a single user can create up to 5 APIs)',
-      isTemporary: true,
     },
     112010: {
       description: 'API-Key is invalid (the time limit for a single Key is 60 natural days)',
-      isTemporary: true,
     },
     112011: {
       description: 'API request IP access is restricted (the bound IP is inconsistent with the request IP)',
     },
     112015: {
       description: 'Signature error',
-      isTemporary: true,
     },
     112020: {
       description: 'Wrong signature',
-      isTemporary: true,
     },
     112021: {
       description: 'Wrong signature version',
-      isTemporary: true,
     },
     112022: {
       description: 'Signature timestamp error',
@@ -82,7 +78,6 @@ module.exports = function() {
     },
     230030: {
       description: 'Please operate after KYC certification',
-      isTemporary: true,
     },
     280033: {
       description: 'There are no cancelable orders',
