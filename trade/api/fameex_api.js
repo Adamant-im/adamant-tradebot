@@ -418,7 +418,7 @@ module.exports = function() {
      * https://fameex-docs.github.io/docs/api/spot/en/#full-depth-returned-for-a-given-market-pair
      * @param {String} symbol In FameEX format as "BTC_USDT"
      * @param {String} [level=0] eg: 3
-     * @param {String} [depth=0] Orders depth quantity: [0,5,10,20,50,100,500] Not defined or 0 = full order book Depth = 100 means 50 for each bid/ask side.
+     * @param {String} [depth=500] Orders depth quantity: [0,5,10,20,50,100,500] Not defined or 0 = full order book Depth = 100 means 50 for each bid/ask side.
      * @return {Promise<Object>}
      */
     orderBook(symbol, level = 0, depth = 500) {
