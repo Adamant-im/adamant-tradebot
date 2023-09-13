@@ -358,7 +358,7 @@ module.exports = function() {
 
     /**
      * Cancel all order for specific symbol
-     * https://coinstore-openapi.github.io/en/index.html#one-click-cancellation
+     * https://fameex-docs.github.io/docs/api/spot/en/#batch-cancellation
      * @param {String} symbol In FameEX format as 'BTC-USDT'
      * @return {Promise<Array>}
      */
@@ -421,7 +421,7 @@ module.exports = function() {
      * @param {String} [depth=0] Orders depth quantity: [0,5,10,20,50,100,500] Not defined or 0 = full order book Depth = 100 means 50 for each bid/ask side.
      * @return {Promise<Object>}
      */
-    orderBook(symbol, level = 0, depth = 0) {
+    orderBook(symbol, level = 0, depth = 500) {
       const params = {
         market_pair: symbol,
         level,
