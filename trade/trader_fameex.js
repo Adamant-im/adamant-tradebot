@@ -803,7 +803,9 @@ module.exports = (
       }
 
       try {
-        const networks = Object.values(coinInfo.networks).filter((network) => network.status).map((network) => network.chainName);
+        const networks = coinInfo.networks ?
+            Object.values(coinInfo.networks).filter((network) => network.status).map((network) => network.chainName) :
+            [coinInfo.symbol];
 
         let addresses;
         try {
