@@ -839,7 +839,7 @@ module.exports = (
 
 /**
  * Returns network name in classic format
- * @param {String} network
+ * @param {String} network FameEX's network name (chainType)
  * @return {String}
  */
 function formatNetworkName(network) {
@@ -852,7 +852,8 @@ function formatNetworkName(network) {
     'TRX': networks['TRC20'].code,
   };
 
-  return networks[network?.toUpperCase()]?.code ?? networksToSystemNameMap[network?.toUpperCase()]?.code ?? network;
+  network = network?.toUpperCase();
+  return networks[network]?.code ?? networksToSystemNameMap[network] ?? network;
 }
 
 /**
