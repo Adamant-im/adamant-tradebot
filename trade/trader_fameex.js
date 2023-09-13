@@ -323,8 +323,6 @@ module.exports = (
 
     /**
      * Get one page of account open orders
-     * !POSSIBLE IMPLEMENTATION ERRORS!
-     * !At the moment it is impossible to implement this functional correctly, due to problems on the FameEX side
      * @param {Object} pair Formatted coin pair
      * @param {Number} pageNum Pagination, the first few pages (1 <= pageNum)
      * @returns {Promise<Array|undefined>}
@@ -378,8 +376,6 @@ module.exports = (
 
     /**
      * List of all account open orders
-     * !POSSIBLE IMPLEMENTATION ERRORS!
-     * !At the moment it is impossible to implement this functional correctly, due to problems on the FameEX side
      * @param {String} pair In classic format as BTC/USDT
      * @returns {Promise<Array|undefined>}
      */
