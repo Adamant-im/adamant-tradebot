@@ -123,11 +123,12 @@ module.exports = {
 
       let order1; let order2;
       const takerApi = traderapi;
+      const makerOrderType = orderUtils.crossType(type);
 
       if (priceReq.mmCurrentAction === 'executeInSpread') {
 
         // First, (maker) we place crossType-order using first account
-        order1 = await traderapi.placeOrder(orderUtils.crossType(type), config.pair, price, coin1Amount, 1, null);
+        order1 = await traderapi.placeOrder(makerOrderType, config.pair, price, coin1Amount, 1, null);
         if (order1 && order1.orderId) {
           const { ordersDb } = db;
           const order = new ordersDb({
@@ -136,7 +137,7 @@ module.exports = {
             date: utils.unixTimeStampMs(),
             purpose: 'mm', // Market making
             mmOrderAction: priceReq.mmCurrentAction, // executeInSpread or executeInOrderBook
-            type: orderUtils.crossType(type),
+            type: makerOrderType,
             targetType: type,
             exchange: config.exchange,
             pair: config.pair,
@@ -164,13 +165,21 @@ module.exports = {
               isExecuted: true,
               crossOrderId: order2.orderId,
             });
+
             await order.save();
 
+            const reasonToClose = `Make sure order2 (taker) matched and filled for executeInSpread mm-trade [cancel by orderId]`;
+            await orderCollector.clearOrderById(
+                order2.orderId, order.pair, type, this.readableModuleName, reasonToClose, undefined, takerApi);
           } else {
             await order.save();
+
             log.warn(`Market-making: Unable to execute taker cross-order for mm-order with params: id=${order1.orderId}, ${orderParamsString}. Action: executeInSpread. Check balances. Running order collector now.`);
-            await orderCollector.clearLocalOrders(['mm'], config.pair, undefined, undefined, undefined, 'Market-making');
           }
+
+          const reasonToClose = `Make sure order1 (maker) matched and filled for executeInSpread mm-trade`;
+          await orderCollector.clearOrderById(
+              order, order.pair, makerOrderType, this.readableModuleName, reasonToClose, undefined, traderapi);
         } else { // if order1
           log.warn(`Market-making: Unable to execute maker mm-order with params: ${orderParamsString}. Action: executeInSpread. No order id returned.`);
         }
@@ -207,6 +216,9 @@ module.exports = {
           output = `${type} ${coin1Amount.toFixed(coin1Decimals)} ${config.coin1} for ${coin2Amount.toFixed(coin2Decimals)} ${config.coin2} at ${price.toFixed(coin2Decimals)} ${config.coin2}`;
           log.info(`Market-making: Successfully executed mm-order to ${output}. Action: executeInOrderBook.`);
 
+          const reasonToClose = `Make sure order1 (maker) matched and filled for executeInOrderBook mm-trade`;
+          await orderCollector.clearOrderById(
+              order, order.pair, order.type, this.readableModuleName, reasonToClose, undefined, takerApi);
         } else { // if order1
           log.warn(`Market-making: Unable to execute mm-order with params: ${orderParamsString}. Action: executeInOrderBook. No order id returned.`);
         }
