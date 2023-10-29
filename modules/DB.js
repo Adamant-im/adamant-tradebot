@@ -26,7 +26,7 @@ mongoClient.connect()
       log.log(`${config.notifyName} successfully connected to 'tradebotdb' MongoDB.`);
     })
     .catch((error) => {
-      log.error(`Unable to connect to MongoDB, ` + error);
+      log.error(`Unable to connect to MongoDB: ${error}`);
       process.exit(-1);
     });
 

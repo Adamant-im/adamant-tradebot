@@ -188,7 +188,9 @@ module.exports = {
       adm = +adm;
       return adm;
 
-    } catch (e) { }
+    } catch (e) {
+      // Silent
+    }
   },
 
   /**
@@ -203,7 +205,9 @@ module.exports = {
       sats = +sats;
       return sats;
 
-    } catch (e) { }
+    } catch (e) {
+      // Silent
+    }
   },
 
   /**
@@ -382,7 +386,7 @@ module.exports = {
         case 'm':
           multiplier = 1000000;
           break;
-        case 'm':
+        case 'b':
           multiplier = 1000000000;
           break;
         default:
@@ -417,10 +421,14 @@ module.exports = {
   tryParseJSON(jsonString) {
     try {
       const o = JSON.parse(jsonString);
+
       if (o && typeof o === 'object') {
         return o;
       }
-    } catch (e) { }
+    } catch (e) {
+      // Silent
+    }
+
     return false;
   },
 
@@ -472,7 +480,7 @@ module.exports = {
    * @return {boolean} True, if arrays are equal
    */
   isArraysEqual(array1, array2) {
-    return array1.length === array2.length && array1.sort().every(function(value, index) {
+    return array1.length === array2.length && array1.sort().every((value, index) => {
       return value === array2.sort()[index];
     });
   },
@@ -686,7 +694,7 @@ module.exports = {
     if (!Array.isArray(arr) || arr.length === 0) return false;
     if (!maxLength) maxLength = arr.length - 1;
     const arrToCalc = arr.slice(0, maxLength);
-    arrToCalc.sort(function(a, b) {
+    arrToCalc.sort((a, b) => {
       return a - b;
     });
     const lowMiddle = Math.floor( (arrToCalc.length - 1) / 2);
@@ -1150,6 +1158,7 @@ module.exports = {
           t = liquidity['percent50'].amountBidsQuote;
         }
 
+        // eslint-disable-next-line no-unused-vars
         prev_c_c_m1 = c_c_m1;
         prev_c_t = c_t;
         prev_s = s;
@@ -1651,7 +1660,7 @@ module.exports = {
         if (Math.abs(deltaTotalUSD)> 0.01 || Math.abs(deltaTotalBTC > 0.00000009)) {
           output += `Total holdings ${signTotalUSD}${this.formatNumber(+deltaTotalUSD.toFixed(2), true)} _USD_ or ${signTotalBTC}${this.formatNumber(deltaTotalBTC.toFixed(8), true)} _BTC_`;
         } else {
-          output += `Total holdings ~ No changes`;
+          output += 'Total holdings ~ No changes';
         }
 
         if (Math.abs(deltaTotalNonCoin1USD) > 0.01 || Math.abs(deltaTotalNonCoin1BTC) > 0.00000009) {
@@ -1693,7 +1702,7 @@ module.exports = {
     // Store result as array of usual balance objects { code-free-freezed-total }
     const result = [];
     for (const code in sum['total']) {
-      result.push({ code: code, free: sum['free'][code], freezed: sum['freezed'][code], total: sum['total'][code] });
+      result.push({ code, free: sum['free'][code], freezed: sum['freezed'][code], total: sum['total'][code] });
     }
 
     // Clean up values where NaN, e.g., totalBTC.freezed = NaN

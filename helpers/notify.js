@@ -8,38 +8,22 @@ const {
   adamant_notify_priority = [],
   slack = [],
   slack_priority = [],
-  email_notify = [],
-  email_notify_priority = [],
-  email_notify_aggregate_min,
-  email_notify_enabled,
-  email_smtp = {},
-  telegram = [],
-  telegram_priority = [],
-  telegramBotToken,
   discord_notify = [],
   discord_notify_priority = [],
-  notifyName,
 } = config;
 
 const slackColors = {
-  'error': '#FF0000',
-  'warn': '#FFFF00',
-  'info': '#00FF00',
-  'log': '#FFFFFF',
-};
-
-const telegramColorPrefixes = {
-  'info': '🟩',
-  'warn': '🟨',
-  'error': '🟥',
-  'log': '⬜️',
+  error: '#FF0000',
+  warn: '#FFFF00',
+  info: '#00FF00',
+  log: '#FFFFFF',
 };
 
 const discordColors = {
-  'error': '16711680',
-  'warn': '16776960',
-  'info': '65280',
-  'log': '16777215',
+  error: '16711680',
+  warn: '16776960',
+  info: '65280',
+  log: '16777215',
 };
 
 /**
@@ -65,11 +49,11 @@ module.exports = (messageText, type, silent_mode = false, isPriority = false) =>
 
       if (slackKeys.length) {
         const params = {
-          'attachments': [{
-            'fallback': message,
-            'color': slackColors[type],
-            'text': makeBoldForSlack(message),
-            'mrkdwn_in': ['text'],
+          attachments: [{
+            fallback: message,
+            color: slackColors[type],
+            text: makeBoldForSlack(message),
+            mrkdwn_in: ['text'],
           }],
         };
 

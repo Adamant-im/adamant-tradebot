@@ -23,6 +23,8 @@ let lastNotifyPriceTimestamp = 0;
 
 const INTERVAL_MIN = 10000;
 const INTERVAL_MAX = 30000;
+const INTERVAL_MIN_SAME_EXCHANGE = 3000;
+const INTERVAL_MAX_SAME_EXCHANGE = 7000; // If we trade on the same exchange, let pw work more often to prevent arbitraging
 
 const LIFETIME_MIN = 2 * constants.MINUTE;
 const LIFETIME_MAX = 10 * constants.MINUTE; // Don't set Lifetime too long—not to freeze funds, orders can be big
@@ -203,7 +205,7 @@ module.exports = {
   setIsPriceActual(value, callerName) {
     let logString = `Price watcher: Manually set isPriceActual to ${value} by ${callerName}.`;
     if (!value) {
-      logString += ` This will force the bot to wait until pw range updated.`;
+      logString += ' This will force the bot to wait until pw range updated.';
     }
     log.log(logString);
     isPriceActual = value;
@@ -357,7 +359,7 @@ module.exports = {
             orderBookInfo.typeTargetPrice = orderType;
             orderBookInfo.amountTargetPrice = utils.randomValue(tradeParams.mm_minAmount, tradeParams.mm_maxAmount);
             orderBookInfo.amountTargetPriceQuote = orderBookInfo.amountTargetPrice * targetPrice;
-            placingInSpreadNote = `(After cancelling bot's orders, no orders to match; Placing order in spread) `;
+            placingInSpreadNote = '(After cancelling bot\'s orders, no orders to match; Placing order in spread) ';
           } else {
             const reliabilityKoef = utils.randomValue(1.05, 1.1);
             orderBookInfo.amountTargetPrice *= reliabilityKoef;
@@ -397,7 +399,7 @@ module.exports = {
       try {
         let reasonToClose = ''; const reasonObject = {};
         if (order.dateTill < utils.unixTimeStampMs()) {
-          reasonToClose = `It's expired.`;
+          reasonToClose = 'It\'s expired.';
           reasonObject.isExpired = true;
         }
 
@@ -471,15 +473,15 @@ module.exports = {
           date: utils.unixTimeStampMs(),
           dateTill: utils.unixTimeStampMs() + lifeTime,
           purpose: 'pw', // pw: price watcher order
-          type: type,
+          type,
           // targetType: type,
           exchange: config.exchange,
           pair: config.pair,
           coin1: config.coin1,
           coin2: config.coin2,
-          price: price,
-          coin1Amount: coin1Amount,
-          coin2Amount: coin2Amount,
+          price,
+          coin1Amount,
+          coin2Amount,
           LimitOrMarket: 1, // 1 for limit price. 0 for Market price.
           isProcessed: false,
           isExecuted: true,
@@ -544,7 +546,7 @@ async function isEnoughCoins(coin1, coin2, amount1, amount2, type, noCache = fal
         message: output,
       };
     } catch (e) {
-      log.warn(`Price watcher: Unable to process balances for placing pw-order: ` + e);
+      log.warn('Price watcher: Unable to process balances for placing pw-order: ' + e);
       return {
         result: false,
       };
@@ -662,7 +664,6 @@ async function setPriceRange() {
     let highPriceString;
     if (highPrice === Number.MAX_VALUE) {
       highPriceString = 'Infinity';
-      changedByStringHigh = '';
     } else {
       highPriceString = highPrice.toFixed(coin2Decimals);
     }
@@ -677,12 +678,12 @@ async function setPriceRange() {
 
       let changedByStringLow; let changedByStringHigh;
       if (deltaLowPercent < priceChangeNotifyPercent) {
-        changedByStringLow = `(no changes)`;
+        changedByStringLow = '(no changes)';
       } else {
         changedByStringLow = `(${directionLow} by ${deltaLowPercent.toFixed(0)}%)`;
       }
       if (deltaHighPercent < priceChangeNotifyPercent) {
-        changedByStringHigh = ` (no changes)`;
+        changedByStringHigh = ' (no changes)';
       } else {
         changedByStringHigh = ` (${directionHigh} by ${deltaHighPercent.toFixed(0)}%)`;
       }
@@ -760,7 +761,7 @@ function setPause() {
     pairInfoString = ` (watching same exchange pair ${tradeParams.mm_priceWatcherSource})`;
   } else {
     pause = utils.randomValue(INTERVAL_MIN, INTERVAL_MAX, true);
-    pairInfoString = ` (watching not the same exchange pair)`;
+    pairInfoString = ' (watching not the same exchange pair)';
   }
 
   if (tradeParams.mm_isActive && module.exports.getIsPriceWatcherEnabled()) {

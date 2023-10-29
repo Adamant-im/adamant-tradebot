@@ -81,18 +81,20 @@ module.exports = {
       }
 
       if (!setMinMaxAmounts(orderBookInfo)) {
-        log.warn(`Liquidity: Unable to calculate min-max amounts while placing liq-orders.`);
+        log.warn('Liquidity: Unable to calculate min-max amounts while placing liq-orders.');
         return;
       }
 
       liquidityOrders = await orderUtils.updateOrders(liquidityOrders, config.pair, utils.getModuleName(module.id) + ':liq-'); // update orders which partially filled or not found
       liquidityOrders = await this.closeLiquidityOrders(liquidityOrders, orderBookInfo); // close orders which expired or out of spread
 
-      let liqInfoString; let liqSsInfoString;
+      let liqInfoString;
 
       // 2. Place regular (depth) liq-orders
       const liquidityDepthOrders = liquidityOrders.filter((order) => order.subPurpose !== 'ss');
       const liquidityDepthStats = utils.getOrdersStats(liquidityDepthOrders);
+      let amountPlaced;
+
       do {
         amountPlaced = await this.placeLiquidityOrder(liquidityDepthStats.bidsTotalQuoteAmount, liquidityDepthStats.bidsCount, 'buy', orderBookInfo, 'depth');
         if (amountPlaced) {
@@ -100,6 +102,7 @@ module.exports = {
           liquidityDepthStats.bidsCount += 1;
         }
       } while (amountPlaced);
+
       do {
         amountPlaced = await this.placeLiquidityOrder(liquidityDepthStats.asksTotalAmount, liquidityDepthStats.asksCount, 'sell', orderBookInfo, 'depth');
         if (amountPlaced) {
@@ -132,7 +135,7 @@ module.exports = {
       try {
         let reasonToClose = ''; const reasonObject = {};
         if (order.dateTill < utils.unixTimeStampMs()) {
-          reasonToClose = `It's expired.`;
+          reasonToClose = 'It\'s expired.';
           reasonObject.isExpired = true;
         } else if (utils.isOrderOutOfPriceWatcherRange(order)) {
           const pw = require('./mm_price_watcher');
@@ -255,15 +258,15 @@ module.exports = {
           dateTill: utils.unixTimeStampMs() + lifeTime,
           purpose: 'liq', // liq: liquidity & spread
           subPurpose,
-          type: type,
+          type,
           // targetType: type,
           exchange: config.exchange,
           pair: config.pair,
           coin1: config.coin1,
           coin2: config.coin2,
-          price: price,
-          coin1Amount: coin1Amount,
-          coin2Amount: coin2Amount,
+          price,
+          coin1Amount,
+          coin2Amount,
           LimitOrMarket: 1, // 1 for limit price. 0 for Market price.
           isProcessed: false,
           isExecuted: false,
@@ -325,13 +328,13 @@ async function isEnoughCoins(coin1, coin2, amount1, amount2, type) {
         message: output,
       };
     } catch (e) {
-      log.warn(`Liquidity: Unable to process balances for placing liq-order: ` + e);
+      log.warn('Liquidity: Unable to process balances for placing liq-order: ' + e);
       return {
         result: false,
       };
     }
   } else {
-    log.warn(`Liquidity: Unable to get balances for placing liq-order.`);
+    log.warn('Liquidity: Unable to get balances for placing liq-order.');
     return {
       result: false,
     };
@@ -351,6 +354,7 @@ async function setPrice(type, orderBookInfo, subPurpose) {
   try {
     let output = '';
     let high; let low;
+    let targetPrice;
 
     /**
      * trendAveragePrice is a price between highestBid and lowestAsk (in spread)
@@ -429,7 +433,7 @@ async function setPrice(type, orderBookInfo, subPurpose) {
     }
 
     return {
-      price: price,
+      price,
     };
   } catch (e) {
     log.error(`Error in setPrice() of ${utils.getModuleName(module.id)} module: ` + e);

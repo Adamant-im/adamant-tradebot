@@ -129,7 +129,7 @@ module.exports = {
       try {
         let reasonToClose = ''; const reasonObject = {};
         if (order.dateTill < utils.unixTimeStampMs()) {
-          reasonToClose = `It's expired.`;
+          reasonToClose = 'It\'s expired.';
           reasonObject.isExpired = true;
         } else if (utils.isOrderOutOfPriceWatcherRange(order)) {
           const pw = require('./mm_price_watcher');
@@ -150,7 +150,7 @@ module.exports = {
       } catch (e) {
         log.error(`Error in closeOrderBookOrders() of ${utils.getModuleName(module.id)} module: ` + e);
       }
-    };
+    }
 
     return updatedObOrders;
   },
@@ -222,15 +222,15 @@ module.exports = {
           date: utils.unixTimeStampMs(),
           dateTill: utils.unixTimeStampMs() + lifeTime,
           purpose: 'ob', // ob: dynamic order book order
-          type: type,
+          type,
           // targetType: type,
           exchange: config.exchange,
           pair: config.pair,
           coin1: config.coin1,
           coin2: config.coin2,
-          price: price,
-          coin1Amount: coin1Amount,
-          coin2Amount: coin2Amount,
+          price,
+          coin1Amount,
+          coin2Amount,
           LimitOrMarket: 1, // 1 for limit price. 0 for Market price.
           isProcessed: false,
           isExecuted: false,
@@ -307,13 +307,13 @@ async function isEnoughCoins(coin1, coin2, amount1, amount2, type) {
       };
 
     } catch (e) {
-      log.warn(`Orderbook builder: Unable to process balances for placing ob-order: ` + e);
+      log.warn('Orderbook builder: Unable to process balances for placing ob-order: ' + e);
       return {
         result: false,
       };
     }
   } else {
-    log.warn(`Orderbook builder: Unable to get balances for placing ob-order.`);
+    log.warn('Orderbook builder: Unable to get balances for placing ob-order.');
     return {
       result: false,
     };

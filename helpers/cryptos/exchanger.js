@@ -17,10 +17,10 @@ module.exports = {
   async updateCryptoRates() {
     const url = config.infoservice + '/get';
     const rates = await axios.get(url, {})
-        .then(function(response) {
+        .then((response) => {
           return response.data ? response.data.result : undefined;
         })
-        .catch(function(error) {
+        .catch((error) => {
           log.warn(`Unable to fetch crypto rates in updateCryptoRates() of ${utils.getModuleName(module.id)} module. Request to ${url} failed with ${error.response ? error.response.status : undefined} status code, ${error.toString()}${error.response && error.response.data ? '. Message: ' + error.response.data.toString().trim() : ''}.`);
         });
 
@@ -86,7 +86,7 @@ module.exports = {
         if (this.isERC20(to)) {
           networkFee = this.convertCryptos('ETH', to, networkFee).outAmount;
         }
-      };
+      }
       const value = rate * +amount - networkFee;
       return {
         outAmount: +value.toFixed(constants.PRECISION_DECIMALS),

@@ -200,11 +200,11 @@ try {
   }
 
   if (!config.passPhrase) {
-    exit(`Bot's config is wrong. ADAMANT passPhrase is invalid.`);
+    exit('Bot\'s config is wrong. ADAMANT passPhrase is invalid.');
   }
 
   if (!config.node_ADM) {
-    exit(`Bot's config is wrong. ADM nodes are not set. Cannot start the Bot.`);
+    exit('Bot\'s config is wrong. ADM nodes are not set. Cannot start the Bot.');
   }
   let keyPair;
   try {

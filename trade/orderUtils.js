@@ -214,10 +214,10 @@ module.exports = {
         const order = new ordersDb({
           _id: orderReq.orderId,
           date: utils.unixTimeStampMs(),
-          purpose: purpose,
+          purpose,
           type: orderType,
           exchange: config.exchange,
-          pair: pair,
+          pair,
           coin1: pairObj.coin1,
           coin2: pairObj.coin2,
           price: limit ? price : 'Market',
@@ -234,7 +234,7 @@ module.exports = {
         });
         await order.save();
 
-        const limit_marketString = limit === 1 ? `at ${price.toFixed(pairObj.coin2Decimals)} ${pairObj.coin2}` : `at Market price`;
+        const limit_marketString = limit === 1 ? `at ${price.toFixed(pairObj.coin2Decimals)} ${pairObj.coin2}` : 'at Market price';
         const output = coin1Amount ?
           `${orderType} ${coin1Amount.toFixed(pairObj.coin1Decimals)} ${pairObj.coin1} ${limit_marketString}` :
           `${orderType} ${pairObj.coin1} for ${coin2Amount.toFixed(pairObj.coin2Decimals)} ${pairObj.coin2}`;

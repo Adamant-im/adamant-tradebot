@@ -331,6 +331,7 @@ module.exports = (
       // for Limit orders, calculate coin2Amount if only coin1Amount is provided
       let coin2AmountCalculated;
       if (!coin2Amount && coin1Amount && price) {
+        // eslint-disable-next-line no-unused-vars
         coin2AmountCalculated = coin1Amount * price;
       }
 

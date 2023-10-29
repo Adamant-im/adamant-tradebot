@@ -10,8 +10,8 @@ module.exports = function() {
   let WEB_BASE = ''; // To be set in setConfig()
   const WEB_BASE_PREFIX = '/api';
   let config = {
-    'apiKey': '',
-    'secret_key': '',
+    apiKey: '',
+    secret_key: '',
   };
   let log = {};
 
@@ -130,7 +130,7 @@ module.exports = function() {
 
     return new Promise((resolve, reject) => {
       const httpOptions = {
-        url: url,
+        url,
         method: 'get',
         timeout: 10000,
         headers: DEFAULT_HEADERS,
@@ -179,10 +179,10 @@ module.exports = function() {
 
     return new Promise((resolve, reject) => {
       const httpOptions = {
-        method: method,
-        url: url,
+        method,
+        url,
         timeout: 10000,
-        headers: headers,
+        headers,
         data,
       };
 
@@ -201,7 +201,7 @@ module.exports = function() {
   };
 
   const EXCHANGE_API = {
-    setConfig: function(apiServer, apiKey, secretKey, tradePwd, logger, publicOnly = false) {
+    setConfig(apiServer, apiKey, secretKey, tradePwd, logger, publicOnly = false) {
       if (apiServer) {
         WEB_BASE = apiServer + WEB_BASE_PREFIX;
       }
@@ -212,8 +212,8 @@ module.exports = function() {
 
       if (!publicOnly) {
         config = {
-          'apiKey': apiKey,
-          'secret_key': secretKey,
+          apiKey,
+          secret_key: secretKey,
         };
       }
     },
@@ -223,7 +223,7 @@ module.exports = function() {
      * @return {Object} { balances, balancesBlockedInOrder, balancesInCurrencyOfferingsVesting?, withdrawalLimits, currencies }
      * https://docs.azbit.com/docs/public-api/wallet#apiwalletsbalances
      */
-    getBalances: async function() {
+    async getBalances() {
       const data = {};
       return protectedRequest('/wallets/balances', data, 'get');
     },
@@ -236,7 +236,7 @@ module.exports = function() {
      * https://docs.azbit.com/docs/public-api/orders#apiuserorders
      *
      */
-    getOrders: function(pair, status) {
+    getOrders(pair, status) {
       const data = {};
 
       if (pair) data.currencyPairCode = pair;
@@ -255,11 +255,7 @@ module.exports = function() {
      * No deals: { deals: [], ... }
      * Cancelled order: { deals: [...], isCanceled: true, ... }
      */
-    getOrderDeals: function(orderId) {
-      const data = {
-        orderId,
-      };
-
+    getOrderDeals(orderId) {
       return protectedRequest(`/orders/${orderId}/deals`, {}, 'get');
     },
 
@@ -272,12 +268,12 @@ module.exports = function() {
      * @return {Object} Order GUID in case if success. Example: "e2cd407c-28c8-4768-bd73-cd7357fbccde".
      * https://docs.azbit.com/docs/public-api/orders#post
      */
-    addOrder: function(market, amount, price, side) {
+    addOrder(market, amount, price, side) {
       const data = {
-        side: side,
+        side,
         currencyPairCode: market,
-        amount: amount,
-        price: price,
+        amount,
+        price,
       };
 
       return protectedRequest('/orders', data, 'post');
@@ -289,7 +285,7 @@ module.exports = function() {
      * @return {Object} Success response with no data
      * https://docs.azbit.com/docs/public-api/orders#delete-1
      */
-    cancelOrder: function(orderId) {
+    cancelOrder(orderId) {
       return protectedRequest(`/orders/${orderId}`, {}, 'delete');
     },
 
@@ -299,7 +295,7 @@ module.exports = function() {
      * @returns {Object} Success response with no data. Never mind, if no success, no data as well. Same 200 status.
      * https://docs.azbit.com/docs/public-api/orders#delete
      */
-    cancelAllOrders: function(pair) {
+    cancelAllOrders(pair) {
       return protectedRequest(`/orders?currencyPairCode=${pair}`, {}, 'delete');
     },
 
@@ -309,7 +305,7 @@ module.exports = function() {
      * @return {Object}
      * https://docs.azbit.com/docs/public-api/tickers#apitickers
      */
-    ticker: function(pair) {
+    ticker(pair) {
       const data = {
         currencyPairCode: pair,
       };
@@ -324,7 +320,7 @@ module.exports = function() {
      * @return {Object}
      * https://docs.azbit.com/docs/public-api/orders#apiorderbook
      */
-    orderBook: function(pair) {
+    orderBook(pair) {
       const data = {
         currencyPairCode: pair,
       };
@@ -341,7 +337,7 @@ module.exports = function() {
      * @return {Object} Last trades
      * https://docs.azbit.com/docs/public-api/deals#apideals
      */
-    getTradesHistory: function(pair, pageSize = 200, pageNumber) {
+    getTradesHistory(pair, pageSize = 200, pageNumber) {
       const data = {
         pageSize,
         currencyPairCode: pair,
@@ -349,7 +345,7 @@ module.exports = function() {
 
       if (pageNumber) data.pageNumber = pageNumber;
 
-      return publicRequest(`/deals`, data);
+      return publicRequest('/deals', data);
     },
 
     /**
@@ -370,7 +366,7 @@ module.exports = function() {
      * @returns {Object}
      * https://docs.azbit.com/docs/public-api/wallet#apideposit-addresscurrencycode
      */
-    getDepositAddress: function(coin) {
+    getDepositAddress(coin) {
       return protectedRequest(`/deposit-address/${coin}`, {}, 'get');
     },
 
@@ -379,7 +375,7 @@ module.exports = function() {
      * @returns {Object}
      * https://docs.azbit.com/docs/public-api/currency#apicurrenciesusercommissions
      */
-    getFees: function() {
+    getFees() {
       return protectedRequest('/currencies/user/commissions', {}, 'get');
     },
 
@@ -388,7 +384,7 @@ module.exports = function() {
      * @returns {Object}
      * https://docs.azbit.com/docs/public-api/currency#apicurrenciespairs
      */
-    markets: async function() {
+    async markets() {
       const data = {};
       return publicRequest('/currencies/pairs', data);
     },

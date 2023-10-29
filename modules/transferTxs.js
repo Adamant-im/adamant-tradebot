@@ -5,7 +5,7 @@ const log = require('../helpers/log');
 
 module.exports = async (itx, tx) => {
 
-  const msgSendBack = `I got a transfer from you. Thanks, bro.`;
+  const msgSendBack = 'I got a transfer from you. Thanks, bro.';
   const msgNotify = `${config.notifyName} got a transfer transaction. Income ADAMANT Tx: https://explorer.adamant.im/tx/${tx.id}.`;
   const notifyType = 'log';
 

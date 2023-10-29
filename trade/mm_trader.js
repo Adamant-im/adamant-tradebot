@@ -73,8 +73,8 @@ module.exports = {
   */
   async executeMmOrder() {
     try {
-      coin1Decimals = orderUtils.parseMarket(config.pair).coin1Decimals;
-      coin2Decimals = orderUtils.parseMarket(config.pair).coin2Decimals;
+      const coin1Decimals = orderUtils.parseMarket(config.pair).coin1Decimals;
+      const coin2Decimals = orderUtils.parseMarket(config.pair).coin2Decimals;
 
       const type = setType();
       let coin1Amount = setAmount();
@@ -143,9 +143,9 @@ module.exports = {
             pair: config.pair,
             coin1: config.coin1,
             coin2: config.coin2,
-            price: price,
-            coin1Amount: coin1Amount,
-            coin2Amount: coin2Amount,
+            price,
+            coin1Amount,
+            coin2Amount,
             LimitOrMarket: 1, // 1 for limit price. 0 for Market price.
             isProcessed: false,
             isExecuted: false,
@@ -168,7 +168,7 @@ module.exports = {
 
             await order.save();
 
-            const reasonToClose = `Make sure order2 (taker) matched and filled for executeInSpread mm-trade [cancel by orderId]`;
+            const reasonToClose = 'Make sure order2 (taker) matched and filled for executeInSpread mm-trade [cancel by orderId]';
             await orderCollector.clearOrderById(
                 order2.orderId, order.pair, type, this.readableModuleName, reasonToClose, undefined, takerApi);
           } else {
@@ -177,7 +177,7 @@ module.exports = {
             log.warn(`Market-making: Unable to execute taker cross-order for mm-order with params: id=${order1.orderId}, ${orderParamsString}. Action: executeInSpread. Check balances. Running order collector now.`);
           }
 
-          const reasonToClose = `Make sure order1 (maker) matched and filled for executeInSpread mm-trade`;
+          const reasonToClose = 'Make sure order1 (maker) matched and filled for executeInSpread mm-trade';
           await orderCollector.clearOrderById(
               order, order.pair, makerOrderType, this.readableModuleName, reasonToClose, undefined, traderapi);
         } else { // if order1
@@ -196,15 +196,15 @@ module.exports = {
             date: utils.unixTimeStampMs(),
             purpose: 'mm', // Market making
             mmOrderAction: priceReq.mmCurrentAction, // executeInSpread or executeInOrderBook
-            type: type,
+            type,
             // targetType: type,
             exchange: config.exchange,
             pair: config.pair,
             coin1: config.coin1,
             coin2: config.coin2,
-            price: price,
-            coin1Amount: coin1Amount,
-            coin2Amount: coin2Amount,
+            price,
+            coin1Amount,
+            coin2Amount,
             LimitOrMarket: 1, // 1 for limit price. 0 for Market price.
             isProcessed: true,
             isExecuted: true,
@@ -216,7 +216,7 @@ module.exports = {
           output = `${type} ${coin1Amount.toFixed(coin1Decimals)} ${config.coin1} for ${coin2Amount.toFixed(coin2Decimals)} ${config.coin2} at ${price.toFixed(coin2Decimals)} ${config.coin2}`;
           log.info(`Market-making: Successfully executed mm-order to ${output}. Action: executeInOrderBook.`);
 
-          const reasonToClose = `Make sure order1 (maker) matched and filled for executeInOrderBook mm-trade`;
+          const reasonToClose = 'Make sure order1 (maker) matched and filled for executeInOrderBook mm-trade';
           await orderCollector.clearOrderById(
               order, order.pair, order.type, this.readableModuleName, reasonToClose, undefined, takerApi);
         } else { // if order1
@@ -357,7 +357,7 @@ async function isEnoughCoins(coin1, coin2, amount1, amount2, type, mmCurrentActi
       message: output,
     };
   } catch (e) {
-    log.warn(`Market-making: Unable to process balances for placing mm-order: ` + e);
+    log.warn('Market-making: Unable to process balances for placing mm-order: ' + e);
     return {
       result: false,
     };

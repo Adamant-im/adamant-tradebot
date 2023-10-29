@@ -10,8 +10,8 @@ module.exports = function() {
   let WEB_BASE = ''; // To be set in setConfig()
   const WEB_BASE_PREFIX = '/api/v2';
   let config = {
-    'apiKey': '',
-    'secret_key': '',
+    apiKey: '',
+    secret_key: '',
   };
   let log = {};
 
@@ -42,7 +42,7 @@ module.exports = function() {
     const p2bStatus = p2bData?.success;
     const p2bErrorCode = p2bData?.errorCode || p2bData?.status;
     const p2bErrorMessage = utils.trimAny(p2bData?.message || p2bData?.errors?.message?.[0], '. ');
-    const p2bErrorInfo = p2bErrorCode ? `[${p2bErrorCode}] ${utils.trimAny(p2bErrorMessage, ' .')}` : `[No error code]`;
+    const p2bErrorInfo = p2bErrorCode ? `[${p2bErrorCode}] ${utils.trimAny(p2bErrorMessage, ' .')}` : '[No error code]';
 
     const errorMessage = httpCode ? `${httpCode} ${httpMessage}, ${p2bErrorInfo}` : String(responseOrError);
     const reqParameters = queryString || bodyString || '{ No parameters }';
@@ -89,7 +89,7 @@ module.exports = function() {
 
     return new Promise((resolve, reject) => {
       const httpOptions = {
-        url: url,
+        url,
         method: 'get',
         timeout: 10000,
         headers: DEFAULT_HEADERS,
@@ -156,7 +156,7 @@ module.exports = function() {
   };
 
   const EXCHANGE_API = {
-    setConfig: function(apiServer, apiKey, secretKey, tradePwd, logger, publicOnly = false) {
+    setConfig(apiServer, apiKey, secretKey, tradePwd, logger, publicOnly = false) {
       if (apiServer) {
         WEB_BASE = apiServer + WEB_BASE_PREFIX;
       }
@@ -167,8 +167,8 @@ module.exports = function() {
 
       if (!publicOnly) {
         config = {
-          'apiKey': apiKey,
-          'secret_key': secretKey,
+          apiKey,
+          secret_key: secretKey,
         };
       }
     },
@@ -177,7 +177,7 @@ module.exports = function() {
      * List of user balances for all currencies
      * @return {Object}
      */
-    getBalances: function() {
+    getBalances() {
       const data = {};
       return protectedRequest('/account/balances', data);
     },
@@ -190,7 +190,7 @@ module.exports = function() {
      * @return {Object}
      * https://github.com/P2B-team/p2b-api-docs/blob/master/api-doc.md#order-list
      */
-    getOrders: function(pair, offset = 0, limit = 100) {
+    getOrders(pair, offset = 0, limit = 100) {
       const data = {};
       if (pair) data.market = pair;
       if (offset) data.offset = offset;
@@ -211,7 +211,7 @@ module.exports = function() {
      * Incorrect orderId: { success: false, errorCode: 3080, message: 'Invalid orderId value', result: [], p2bErrorInfo: ..'
      * Order doesn't exist or No deals or Cancelled: { success: true, result: { offset: 0, limit: 100, records: [] }, ..'
      */
-    getOrderDeals: function(orderId, offset = 0, limit = 100) {
+    getOrderDeals(orderId, offset = 0, limit = 100) {
       const data = {
         orderId,
         offset,
@@ -229,7 +229,7 @@ module.exports = function() {
      * @param {String} side 'buy' or 'sell'
      * https://github.com/P2B-team/p2b-api-docs/blob/master/api-doc.md#create-order
      */
-    addOrder: function(market, amount, price, side) {
+    addOrder(market, amount, price, side) {
       const data = {
         market,
         amount: String(amount),
@@ -246,7 +246,7 @@ module.exports = function() {
      * @param {String} market
      * @return {Object}
      */
-    cancelOrder: function(orderId, market) {
+    cancelOrder(orderId, market) {
       const data = {
         orderId,
         market,
@@ -260,7 +260,7 @@ module.exports = function() {
      * @param {String} market
      * @return {Object}
      */
-    ticker: function(market) {
+    ticker(market) {
       const data = {
         market,
       };
@@ -276,7 +276,7 @@ module.exports = function() {
      * @param {Number} interval One of 0, 0.00000001, 0.0000001, 0.000001, 0.00001, 0.0001, 0.001, 0.01, 0.1, 1. Default 0.
      * @return {Object}
      */
-    orderBook: function(pair, limit = 100, interval = 0) {
+    orderBook(pair, limit = 100, interval = 0) {
       const data = {};
       data.market = pair;
       if (limit) data.limit = limit;
@@ -293,21 +293,21 @@ module.exports = function() {
      * @return {Array of Object} Last trades
      * https://github.com/P2B-team/p2b-api-docs/blob/master/api-doc.md#history
      */
-    getTradesHistory: function(market, lastId = 1, limit = 100) {
+    getTradesHistory(market, lastId = 1, limit = 100) {
       const data = {
         market,
         lastId,
         limit,
       };
 
-      return publicRequest(`/public/history`, data);
+      return publicRequest('/public/history', data);
     },
 
     /**
      * Get info on all markets
      * @return string
      */
-    markets: function() {
+    markets() {
       const data = {};
       return publicRequest('/public/markets', data);
     },

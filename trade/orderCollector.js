@@ -2,18 +2,27 @@ const constants = require('../helpers/const');
 const db = require('../modules/DB');
 const config = require('../modules/configReader');
 const log = require('../helpers/log');
-const traderapi = require('./trader_' + config.exchange)(config.apikey, config.apisecret, config.apipassword, log);
+const traderapi = require('./trader_' + config.exchange)(
+    config.apikey,
+    config.apisecret,
+    config.apipassword,
+    log,
+    undefined,
+    undefined,
+    config.exchange_socket,
+    config.exchange_socket_pull,
+);
 const orderUtils = require('./orderUtils');
 const utils = require('../helpers/utils');
 
 module.exports = {
   orderPurposes: {
-    'mm': 'Market making',
-    'ob': 'Dynamic order book',
-    'liq': 'Liquidity',
-    'pw': 'Price watcher',
-    'man': 'Manual', // manually placed order with /fill, /buy, /sell, /make price commands
-    'all': 'All types',
+    mm: 'Market making',
+    ob: 'Dynamic order book',
+    liq: 'Liquidity',
+    pw: 'Price watcher',
+    man: 'Manual', // manually placed order with /fill, /buy, /sell, /make price commands
+    all: 'All types',
     // unk: unknown order (not in the local bot's database)
   },
 
@@ -45,7 +54,7 @@ module.exports = {
         order = await ordersDb.findOne({
           _id: orderId,
           exchange: config.exchange,
-          pair: pair,
+          pair,
           isSecondAccountOrder: api.isSecondAccount ? true : { $ne: true },
         });
 
@@ -59,7 +68,7 @@ module.exports = {
       if (order) {
         orderType = order.type;
 
-        subPurposeString = '';
+        let subPurposeString = '';
         if (order.subPurpose) {
           subPurposeString = order.subPurpose === 'ss' ? '(spread support)' : '(depth)';
         }
@@ -68,19 +77,19 @@ module.exports = {
 
         if (isOrderFoundById) {
           if (order.isProcessed) {
-            note = ` Note: this order is found in the ordersDb by ID and already marked as processed.`;
+            note = ' Note: this order is found in the ordersDb by ID and already marked as processed.';
           } else {
-            note = ` Note: this order is found in the ordersDb by ID.`;
+            note = ' Note: this order is found in the ordersDb by ID.';
           }
         } else {
           if (order.isProcessed) {
-            note = ` Note: this order is already marked as processed in the ordersDb.`;
+            note = ' Note: this order is already marked as processed in the ordersDb.';
           }
         }
       } else {
         orderInfoString = `order${onWhichAccount} with id=${orderId}, type=${orderType}, pair=${pair}`;
 
-        note = ` Note: this order was not found in the ordersDb.`;
+        note = ' Note: this order was not found in the ordersDb.';
       }
 
       let reasonToCloseString = '';
@@ -107,7 +116,7 @@ module.exports = {
 
         if (cancelReq) {
           if (order) {
-            ordersDbString = ` Also marked it as cancelled in the ordersDb.`;
+            ordersDbString = ' Also marked it as cancelled in the ordersDb.';
 
             order?.update({
               isCancelled: true,
@@ -117,14 +126,14 @@ module.exports = {
           log.log(`Order collector: Successfully cancelled ${orderInfoString}${reasonToCloseString}.${ordersDbString}`);
         } else {
           if (order) {
-            ordersDbString = ` Marking it as closed in the ordersDb.`;
+            ordersDbString = ' Marking it as closed in the ordersDb.';
           }
 
           log.log(`Order collector: Unable to cancel ${orderInfoString}. Probably it doesn't exist anymore.${ordersDbString}`);
         }
       } else {
         if (order) {
-          ordersDbString = ` Keeping this order in the ordersDb.`;
+          ordersDbString = ' Keeping this order in the ordersDb.';
         }
 
         log.warn(`Order collector: Request to cancel ${orderInfoString} failed.${ordersDbString}`);
@@ -179,6 +188,7 @@ module.exports = {
         isProcessed: false,
         pair: pair || config.pair,
         exchange: config.exchange,
+        isSecondAccountOrder: api.isSecondAccount ? true : { $ne: true },
       };
       if (purposes !== 'all') {
         orderFilter.purpose = { $in: purposes };
@@ -187,7 +197,7 @@ module.exports = {
         orderFilter.type = orderType;
       }
       Object.assign(orderFilter, filter);
-      ordersToClear = await ordersDb.find(orderFilter);
+      let ordersToClear = await ordersDb.find(orderFilter);
 
       const orderCountAll = ordersToClear.length;
       ordersToClear = ordersToClear.filter((order) => order.purpose !== 'ld' || constants.LADDER_OPENED_STATES.includes(order.ladderState));
@@ -276,7 +286,7 @@ module.exports = {
               log.log(`Order collector: Request to cancel ${orderInfoString} failed. Will try next time, keeping this order in the DB for now.`);
             }
           }
-        };
+        }
 
         notFinished = doForce && ordersToClear.length > clearedOrdersAll.length && tries < MAX_TRIES;
       } while (notFinished);
@@ -284,11 +294,11 @@ module.exports = {
       logMessage = '';
       if (ordersToClear.length) {
         const pairObj = orderUtils.parseMarket(pair);
+
+        let ladderClearedString = '';
+        const purposesIncludesLadder = ordersString.includes('ld') || purposes === 'all';
+
         if (clearedOrdersSuccess.length) {
-          let ladderClearedString = '';
-
-          const purposesIncludesLadder = ordersString.includes('ld') || purposes === 'all';
-
           if (clearedOrdersLadder.length && purposesIncludesLadder) {
             ladderClearedString = ` ${clearedOrdersLadder.length} of them are ld-orders, kept in DB in cancelled state.`;
           }
@@ -299,9 +309,8 @@ module.exports = {
         } else {
           logMessage += `No ${ordersStringForLog} of total ${ordersToClear.length} were cancelled.`;
         }
-        if (clearedOrdersOnlyMarked.length) {
-          ladderClearedString = '';
 
+        if (clearedOrdersOnlyMarked.length) {
           if (clearedOrdersOnlyMarkedLadder.length && purposesIncludesLadder) {
             ladderClearedString = ` ${clearedOrdersOnlyMarkedLadder.length} of them are ld-orders, kept in DB in filled state.`;
           }
@@ -357,6 +366,7 @@ module.exports = {
         isProcessed: false,
         pair: pair || config.pair,
         exchange: config.exchange,
+        isSecondAccountOrder: api.isSecondAccount ? true : { $ne: true },
       };
       let orderTypeString = '';
       if (orderType) {
@@ -366,7 +376,7 @@ module.exports = {
 
       dbOrders = await ordersDb.find(orderFilter);
       const totalOrdersCountBeforeUpdate = dbOrders.length;
-      dbOrders = await orderUtils.updateOrders(dbOrders, pair || config.pair, utils.getModuleName(module.id)); // update orders which partially filled or not found
+      dbOrders = await orderUtils.updateOrders(dbOrders, pair || config.pair, utils.getModuleName(module.id), undefined, api); // update orders which partially filled or not found
       const totalOrdersCountAfterUpdate = dbOrders.length;
 
       const dbOrderIds = dbOrders.map((order) => {
@@ -406,7 +416,7 @@ module.exports = {
                 }
               }
             }
-          };
+          }
 
           notFinished = doForce && totalOrdersToClearCount > clearedOrders.length && tries < MAX_TRIES;
         } while (notFinished);
