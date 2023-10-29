@@ -7,14 +7,23 @@ const constants = require('../helpers/const');
 const apiServer = 'https://data.azbit.com';
 const exchangeName = 'Azbit';
 
-module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
+module.exports = (
+    apiKey,
+    secretKey,
+    pwd,
+    log,
+    publicOnly = false,
+    loadMarket = true,
+) => {
   const azbitClient = Azbit();
 
   azbitClient.setConfig(apiServer, apiKey, secretKey, pwd, log, publicOnly);
 
   // Fulfill markets and currencies on initialization
-  getMarkets();
-  getCurrencies();
+  if (loadMarket) {
+    getMarkets();
+    getCurrencies();
+  }
 
   /**
    * Get exchange trade pairs config
@@ -636,6 +645,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
      */
     getDepositAddress(coin) {
       const paramString = `coin: ${coin}`;
+      coin = coin?.toUpperCase();
 
       return new Promise((resolve, reject) => {
         azbitClient.getDepositAddress(coin).then(function(data) {

@@ -1,6 +1,6 @@
 const log = require('../helpers/log');
 const MongoClient = require('mongodb').MongoClient;
-const mongoClient = new MongoClient('mongodb://127.0.0.1:27017/', { useNewUrlParser: true, useUnifiedTopology: true, serverSelectionTimeoutMS: 3000 });
+const mongoClient = new MongoClient('mongodb://127.0.0.1:27017/', { serverSelectionTimeoutMS: 3000 });
 const model = require('../helpers/dbModel');
 const config = require('./configReader');
 

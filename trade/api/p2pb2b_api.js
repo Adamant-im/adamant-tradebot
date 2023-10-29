@@ -200,28 +200,6 @@ module.exports = function() {
     },
 
     /**
-     * Query order deals
-     * The request returns a json with 'order deals' items list
-     * Warn: result is cached. It means if order was filled and you'll request deals in 1 second after it, result will be [].
-     * @param {String} orderId Exchange's orderId as 120531775560
-     * @param {Number} offset Min value 0. Default 0. Max value 10000.
-     * @param {Number} limit Min value 1. Default value 50. Max value 100.
-     * @return {Object}
-     * https://github.com/P2B-team/p2b-api-docs/blob/master/api-doc.md#order-deals
-     * Incorrect orderId: { success: false, errorCode: 3080, message: 'Invalid orderId value', result: [], p2bErrorInfo: ..'
-     * Order doesn't exist or No deals or Cancelled: { success: true, result: { offset: 0, limit: 100, records: [] }, ..'
-     */
-    getOrderDeals: function(orderId, offset = 0, limit = 100) {
-      const data = {
-        orderId,
-        offset,
-        limit,
-      };
-
-      return protectedRequest('/account/order', data);
-    },
-
-    /**
      * Places a Limit order. P2PB2B doesn't support market orders.
      * @param {String} market In P2PB2B format as ETH_USDT
      * @param {String} amount Order amount

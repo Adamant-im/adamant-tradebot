@@ -154,10 +154,12 @@ module.exports = function() {
 
     let headers;
     let bodyString;
+    let queryString;
 
     try {
       if (method === 'get') {
         bodyString = '';
+        queryString = getParamsString(data);
         url = getUrlWithParams(url, data);
       } else {
         bodyString = getBody(data);
@@ -185,8 +187,8 @@ module.exports = function() {
       };
 
       axios(httpOptions)
-          .then((response) => handleResponse(response, resolve, reject, bodyString, undefined, urlBase))
-          .catch((error) => handleResponse(error, resolve, reject, bodyString, undefined, urlBase));
+          .then((response) => handleResponse(response, resolve, reject, bodyString, queryString, urlBase))
+          .catch((error) => handleResponse(error, resolve, reject, bodyString, queryString, urlBase));
     });
   }
 

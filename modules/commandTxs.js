@@ -18,9 +18,26 @@ const pendingConfirmation = {
   timestamp: 0,
 };
 
-// stored for each senderId
-const previousBalances = [{}, {}, {}]; // stored for each account and both as well (for two-keys trading)
-const previousOrders = [{}, {}]; // stored for each account as well (for two-keys trading)
+
+const previousBalances = [
+  {}, // balances of the first trade account
+  {}, // balances of the second trade account
+  {}, // sum of balances for both trade accounts
+];
+/*
+  accountNo -> userId -> balances object
+  {
+    userId: {
+      timestamp,
+      balances: balances for userId/senderId @timestamp
+    }
+  }
+*/
+
+const previousOrders = [
+  {}, // orders of the first trade account
+  {}, // orders of the second trade account
+];
 
 module.exports = async (commandMsg, tx, itx) => {
   let commandResult = {};
@@ -63,7 +80,7 @@ module.exports = async (commandMsg, tx, itx) => {
       itx.update({ isProcessed: true }, true);
     }
 
-    utils.saveConfig();
+    utils.saveConfig(false, 'After-commandTxs()');
 
   } catch (e) {
     tx = tx || {};
@@ -72,6 +89,52 @@ module.exports = async (commandMsg, tx, itx) => {
 
   return commandResult;
 };
+
+/**
+ * Get pair rates info from an exchange
+ * @param {String} pair Trade pair to request
+ * @returns {Object} success, exchangeRates, ratesString
+ */
+async function getRatesInfo(pair) {
+  let exchangeRates;
+  let ratesString;
+  let success;
+
+  try {
+    const pairObj = orderUtils.parseMarket(pair);
+    const coin2 = pairObj.coin2;
+    const coin2Decimals = pairObj.coin2Decimals;
+
+    exchangeRates = await traderapi.getRates(pairObj.pair);
+
+    if (exchangeRates) {
+      const delta = exchangeRates.ask-exchangeRates.bid;
+      const average = (exchangeRates.ask+exchangeRates.bid)/2;
+      const deltaPercent = delta/average * 100;
+
+      ratesString = `${config.exchangeName} rates for ${pair} pair:`;
+      ratesString += `\nBid: ${exchangeRates.bid.toFixed(coin2Decimals)}, ask: ${exchangeRates.ask.toFixed(coin2Decimals)}, spread: _${(delta).toFixed(coin2Decimals)}_ ${coin2} (${(deltaPercent).toFixed(2)}%).`;
+      if (exchangeRates.last) {
+        ratesString += ` Last price: _${(exchangeRates.last).toFixed(coin2Decimals)}_ ${coin2}.`;
+      }
+
+      success = true;
+    } else {
+      ratesString = `Unable to get ${config.exchangeName} rates for ${pairObj.pair}.`;
+      success = false;
+    }
+  } catch (e) {
+    log.error(`Error in getRatesString() of ${utils.getModuleName(module.id)} module: ` + e);
+    ratesString = `Unable to process ${config.exchangeName} rates for ${pair}.`;
+    success = false;
+  }
+
+  return {
+    success,
+    exchangeRates,
+    ratesString,
+  };
+}
 
 /**
  * Set a command to be confirmed
@@ -357,6 +420,7 @@ async function enable(params, {}, isWebApi = false) {
         return {
           msgNotify: '',
           msgSendBack: `Wrong parameters. Example: */enable pw 0.1—0.2 USDT* or */enable pw ADM/USDT@Azbit 0.5% smart*.`,
+          errorField: 'source',
           notifyType: 'log',
         };
       }
@@ -369,13 +433,15 @@ async function enable(params, {}, isWebApi = false) {
       let pwLowPrice; let pwHighPrice; let pwMidPrice; let pwDeviationPercent; let pwSource; let pwSourcePolicy;
 
       if (params[1].indexOf('@') > -1) {
-        // watch pair@exchange
+        // Watch pair@exchange
+
         [pair, exchange] = params[1].split('@');
 
         if (!pair || pair.length < 3 || pair.indexOf('/') === -1 || !exchange || exchange.length < 3) {
           return {
             msgNotify: '',
             isError: true,
+            errorField: 'source',
             msgSendBack: isWebApi ? `Trading pair ${pair.toUpperCase()} is not valid` : `Wrong price source. Example: */enable pw ADM/USDT@Azbit 0.5% smart*.`,
             notifyType: 'log',
           };
@@ -391,20 +457,21 @@ async function enable(params, {}, isWebApi = false) {
           return {
             msgNotify: '',
             isError: true,
+            errorField: 'source',
             msgSendBack: isWebApi ? `Unknown exchange: ${exchange}` : `I don't support ${exchange} exchange. Supported exchanges: ${config.supported_exchanges}. Example: */enable pw ADM/USDT@Azbit 0.5% smart*.`,
             notifyType: 'log',
           };
         }
 
-        pairObj = orderUtils.parseMarket(pair, exchangeName);
-
-        // We don't actually check if this pair is exists on the exchange
-        // We check if pair string includes '/' sign
+        // Parse 'pair' string to market pair object, { pair, coin1, coin2 }
+        // In case of external exchange, start loading getMarkets(). Do not connect to socket at this stage.
+        pairObj = orderUtils.parseMarket(pair, exchangeName, true);
         if (!pairObj) {
           return {
             msgNotify: '',
             isError: true,
-            msgSendBack: `Trading pair ${pair.toUpperCase()} is not valid. Example: */enable pw ADM/USDT@Azbit 0.5% smart*.`,
+            errorField: 'source',
+            msgSendBack: isWebApi ? `Trading pair ${pair.toUpperCase()} is not valid` : `Trading pair ${pair.toUpperCase()} is not valid. Example: */enable pw ADM/USDT@Azbit 0.5% smart*.`,
             notifyType: 'log',
           };
         }
@@ -413,6 +480,7 @@ async function enable(params, {}, isWebApi = false) {
           return {
             msgNotify: '',
             isError: true,
+            errorField: 'source',
             msgSendBack: isWebApi ? `Base currency of a trading pair must be ${config.coin1}` : `Base currency of a trading pair must be ${config.coin1}, like ${config.coin1}/USDT.`,
             notifyType: 'log',
           };
@@ -425,29 +493,36 @@ async function enable(params, {}, isWebApi = false) {
           return {
             msgNotify: '',
             isError: true,
+            errorField: 'source',
             msgSendBack: isWebApi ? `Unable to set Price watcher to the same trading pair as I trade, ${pairObj.pair}@${exchangeName}` : `Unable to set Price watcher to the same trading pair as I trade, ${pairObj.pair}@${exchangeName}. Set price in numbers or watch other trading pair/exchange. Example: */enable pw 0.1—0.2 USDT* or */enable pw ADM/USDT@Azbit 0.5% smart*.`,
             notifyType: 'log',
           };
         }
 
+        // Test if we can retrieve order book for the specific pair on the exchange
         let orderBook;
         if (exchange.toLowerCase() === config.exchange) {
           orderBook = await traderapi.getOrderBook(pairObj.pair);
         } else {
-          const exchangeapi = require('../trade/trader_' + exchange.toLowerCase())(null, null, null, log, true);
-          orderBook = await exchangeapi.getOrderBook(pairObj.pair);
+          // We already created pairObj.exchangeApi when orderUtils.parseMarket()
+          orderBook = await pairObj.exchangeApi.getOrderBook(pairObj.pair);
         }
         if (!orderBook || !orderBook.asks[0] || !orderBook.bids[0]) {
+          const noOrderBookInfo = `Unable to receive an order book for ${pairObj.pair} at ${exchangeName} exchange.`;
+          log.warn(noOrderBookInfo);
+
           return {
             msgNotify: '',
             isError: true,
-            msgSendBack: isWebApi ? `Unable to get the order book for ${pairObj.pair} at ${exchangeName} exchange` : `Unable to get the order book for ${pairObj.pair} at ${exchangeName} exchange. Check if you've specified trading pair correctly. It may be a temporary API error also.`,
+            errorField: 'source',
+            msgSendBack: isWebApi ? noOrderBookInfo : `${noOrderBookInfo} Check if you've specified the trading pair correctly; Or it may be a temporary API error.`,
             notifyType: 'log',
           };
         }
 
         pwSource = `${pairObj.pair}@${exchangeName}`;
 
+        // Validate deviation percent
         percentString = params[2];
         if (!percentString || (percentString.slice(-1) !== '%')) {
           return {
@@ -466,11 +541,9 @@ async function enable(params, {}, isWebApi = false) {
         }
         pwDeviationPercent = percentValue;
 
+        // Validate deviation percent policy
         pwSourcePolicy = params[3];
-        if (!pwSourcePolicy) {
-          pwSourcePolicy = 'smart';
-        }
-        pwSourcePolicy = pwSourcePolicy.toLowerCase();
+        pwSourcePolicy = pwSourcePolicy?.toLowerCase();
         if (!['smart', 'strict'].includes(pwSourcePolicy)) {
           return {
             msgNotify: '',
@@ -486,13 +559,16 @@ async function enable(params, {}, isWebApi = false) {
         infoString = ` based on _${pwSource}_ with _${pwSourcePolicy}_ policy and _${pwDeviationPercent.toFixed(2)}%_ deviation`;
 
       } else {
-        // watch price in coin
+        // Watch price in coin
+
         rangeOrValue = utils.parseRangeOrValue(params[1]);
         if (!rangeOrValue.isRange && !rangeOrValue.isValue) {
           return {
             msgNotify: '',
-            msgSendBack: `Set a price range or value. Example: */enable pw 0.1—0.2 USDT* or */enable pw 0.5 USDT 1%*.`,
+            msgSendBack: isWebApi ? 'Set correct source' : `Set a price range or value. Example: */enable pw 0.1—0.2 USDT* or */enable pw 0.5 USDT 1%*.`,
             notifyType: 'log',
+            isError: true,
+            errorField: 'source',
           };
         }
 
@@ -500,8 +576,10 @@ async function enable(params, {}, isWebApi = false) {
         if (!coin || !coin.length || coin.toUpperCase() === config.coin1) {
           return {
             msgNotify: '',
-            msgSendBack: `Incorrect currency. Example: */enable pw 0.1—0.2 USDT* or */enable pw 0.5 USDT 1%*.`,
+            msgSendBack: isWebApi ? 'Incorrect currency' : `Incorrect currency. Example: */enable pw 0.1—0.2 USDT* or */enable pw 0.5 USDT 1%*.`,
             notifyType: 'log',
+            errorField: 'currency',
+            isError: true,
           };
         }
         coin = coin.toUpperCase();
@@ -509,8 +587,10 @@ async function enable(params, {}, isWebApi = false) {
         if (!exchangerUtils.hasTicker(coin)) {
           return {
             msgNotify: '',
-            msgSendBack: `I don't know currency ${coin}. Example: */enable pw 0.1—0.2 USDT* or */enable pw 0.5 USDT 1%*.`,
+            msgSendBack: isWebApi ? 'Incorrect currency' : `I don't know currency ${coin}. Example: */enable pw 0.1—0.2 USDT* or */enable pw 0.5 USDT 1%*.`,
             notifyType: 'log',
+            errorField: 'currency',
+            isError: true,
           };
         }
 
@@ -626,15 +706,12 @@ async function enable(params, {}, isWebApi = false) {
           priceInfoString = `Global market rates for ${pairObj.coin1}:\n${res}.`;
         }
 
-        const exchangeRatesBefore = await traderapi.getRates(pairObj.pair);
         if (priceInfoString) {
           priceInfoString += '\n\n';
         }
-        if (exchangeRatesBefore) {
-          priceInfoString += `${config.exchangeName} rates for ${pairObj.pair} pair:\nBid: ${exchangeRatesBefore.bid.toFixed(pairObj.coin2Decimals)}, ask: ${exchangeRatesBefore.ask.toFixed(pairObj.coin2Decimals)}.`;
-        } else {
-          priceInfoString += `Unable to get ${config.exchangeName} rates for ${pairObj.pair}.`;
-        }
+
+        const exchangeRatesInfo = await getRatesInfo(pairObj.pair);
+        priceInfoString += exchangeRatesInfo.ratesString;
 
         setPendingConfirmation(`/enable ${params.join(' ')}`);
 

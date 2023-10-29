@@ -195,7 +195,7 @@ module.exports = function() {
         config = {
           apiKey,
           secret_key: secretKey,
-          tradePwd: tradePwd,
+          tradePwd,
         };
       }
     },
