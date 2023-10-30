@@ -183,11 +183,10 @@ module.exports = {
    */
   satsToADM(sats, decimals = 8) {
     try {
-
       let adm = (+sats / SAT).toFixed(decimals);
       adm = +adm;
-      return adm;
 
+      return adm;
     } catch (e) {
       // Silent
     }
@@ -200,11 +199,10 @@ module.exports = {
    */
   AdmToSats(adm) {
     try {
-
       let sats = (+adm * SAT).toFixed(0);
       sats = +sats;
-      return sats;
 
+      return sats;
     } catch (e) {
       // Silent
     }
@@ -1564,7 +1562,7 @@ module.exports = {
     const diff = [];
 
     b.forEach((obj2) => {
-      obj1 = a.filter((crypto) => crypto.code === obj2.code)[0];
+      const obj1 = a.filter((crypto) => crypto.code === obj2.code)[0];
       if (!obj1) {
         a.push({
           code: obj2.code,
@@ -1657,20 +1655,24 @@ module.exports = {
           output += '\n';
         });
 
+        // Show the total holdings change: Market value of all known coins, including coin1 (Trading coin)
         if (Math.abs(deltaTotalUSD)> 0.01 || Math.abs(deltaTotalBTC > 0.00000009)) {
           output += `Total holdings ${signTotalUSD}${this.formatNumber(+deltaTotalUSD.toFixed(2), true)} _USD_ or ${signTotalBTC}${this.formatNumber(deltaTotalBTC.toFixed(8), true)} _BTC_`;
         } else {
           output += 'Total holdings ~ No changes';
         }
 
+        // Show the holdings change, excluding coin1 (Trading coin)
         if (Math.abs(deltaTotalNonCoin1USD) > 0.01 || Math.abs(deltaTotalNonCoin1BTC) > 0.00000009) {
           output += `\nTotal holdings (non-${config.coin1}) ${signTotalNonCoin1USD}${this.formatNumber(+deltaTotalNonCoin1USD.toFixed(2), true)} _USD_ or ${signTotalNonCoin1BTC}${this.formatNumber(deltaTotalNonCoin1BTC.toFixed(8), true)} _BTC_`;
         } else {
           output += `\nTotal holdings (non-${config.coin1}) ~ No changes`;
         }
 
-        if (deltaCoin1 && deltaTotalNonCoin1USD && (signCoin1 !== signTotalNonCoin1USD)) {
-          const price = deltaTotalNonCoin1USD / deltaCoin1;
+        // Calculate the mid price of coin1/coin2 buying or selling
+        // We assume that there were no deposit, withdrawals, and trades on other pairs
+        if (deltaCoin1 && deltaCoin2 && (signCoin1 !== signCoin2)) {
+          const price = deltaCoin2 / deltaCoin1;
           output += `\n[Can be wrong] ${signCoin1 === '+' ? 'I\'ve bought' : 'I\'ve sold'} ${this.formatNumber(+deltaCoin1.toFixed(marketInfo.coin1Decimals), true)} _${config.coin1}_ at ${this.formatNumber(price.toFixed(marketInfo.coin2Decimals), true)} _${config.coin2}_ price.`;
         }
       } else {
