@@ -1,20 +1,68 @@
 const config = require('../modules/configReader');
 const log = require('./log');
-const tradeParams = require('../trade/settings/tradeParams_' + config.exchange);
+let tradeParams = require('../trade/settings/tradeParams_' + config.exchange);
 const fs = require('fs');
 const { SAT, EPOCH, MINUTE, LIQUIDITY_SS_MAX_SPREAD_PERCENT } = require('./const');
 const equal = require('fast-deep-equal');
+const { diff } = require('deep-object-diff');
+
 
 const AVERAGE_SPREAD_DEVIATION = 0.15;
 
 module.exports = {
-  saveConfig(isWebApi = false) {
-    let oldConfig;
-    eval(fs.readFileSync(config.fileWithPath).toString().replace('module.exports', 'oldConfig'));
-    if (!equal(tradeParams, oldConfig)) {
-      const toSave = 'module.exports = ' + JSON.stringify(tradeParams, null, 2).replace(/"/g, '\'').replace(/\n\}/g, ',\n};\n');
-      fs.writeFileSync(config.fileWithPath, toSave);
-      log.log(`Config is updated and saved: ${config.file}`);
+  /**
+   * Reads a trade config file and transforms it to a JSON-readable string
+   * @return {String}
+   */
+  readTradeConfig() {
+    const tradeConfig = fs.readFileSync(config.fileWithPath).toString()
+        .replace(/\n/g, '').replace('module.exports = ', '').replace(/'/g, '"').replace(';', '').replace(',}', '}');
+    return tradeConfig;
+  },
+
+  /**
+   * Watch tradeParams_EXCHANGE file for updates.
+   * It may be updated by CLI, or in a manual way by admin.
+   */
+  watchConfig() {
+    log.log(`Watching external changes in the trade config file: ${config.fileWithPath}…`);
+
+    fs.watch(config.fileWithPath, () => {
+      let newConfigString;
+
+      try {
+        newConfigString = this.readTradeConfig();
+        const newConfig = JSON.parse(newConfigString);
+
+        if (!equal(tradeParams, newConfig)) {
+          log.log(`Config is updated externally: ${JSON.stringify(diff(tradeParams, newConfig))}.`);
+          tradeParams = Object.assign(tradeParams, newConfig);
+        }
+      } catch {
+        log.warn(`Trade config is updated externally, but it's not a valid JSON: '${newConfigString}'. Leaving it as is.`);
+      }
+    });
+  },
+
+  /**
+   * If a trade config is changed, saves it to file
+   * @param {Boolean} isWebApi If changes are made with WebUI
+   * @param {String} callerName Who saved config, for logging
+   */
+  saveConfig(isWebApi = false, callerName) {
+    try {
+      const oldConfigString = this.readTradeConfig();
+      const oldConfig = JSON.parse(oldConfigString);
+
+      if (!equal(tradeParams, oldConfig)) {
+        const toSave = 'module.exports = ' + JSON.stringify(tradeParams, null, 2).replace(/"/g, '\'').replace(/\n\}/g, ',\n};\n');
+        fs.writeFileSync(config.fileWithPath, toSave);
+
+        const callerInfo = callerName ? ` by ${callerName}` : '';
+        log.log(`Trade config ${config.file} is updated${callerInfo} and saved: ${JSON.stringify(diff(oldConfig, tradeParams))}`);
+      }
+    } catch (error) {
+      log.warn(`Error while saving trade config ${config.file}: ${error}`);
     }
   },
 
@@ -135,12 +183,13 @@ module.exports = {
    */
   satsToADM(sats, decimals = 8) {
     try {
-
       let adm = (+sats / SAT).toFixed(decimals);
       adm = +adm;
-      return adm;
 
-    } catch (e) { }
+      return adm;
+    } catch (e) {
+      // Silent
+    }
   },
 
   /**
@@ -150,12 +199,13 @@ module.exports = {
    */
   AdmToSats(adm) {
     try {
-
       let sats = (+adm * SAT).toFixed(0);
       sats = +sats;
-      return sats;
 
-    } catch (e) { }
+      return sats;
+    } catch (e) {
+      // Silent
+    }
   },
 
   /**
@@ -334,7 +384,7 @@ module.exports = {
         case 'm':
           multiplier = 1000000;
           break;
-        case 'm':
+        case 'b':
           multiplier = 1000000000;
           break;
         default:
@@ -369,10 +419,14 @@ module.exports = {
   tryParseJSON(jsonString) {
     try {
       const o = JSON.parse(jsonString);
+
       if (o && typeof o === 'object') {
         return o;
       }
-    } catch (e) { }
+    } catch (e) {
+      // Silent
+    }
+
     return false;
   },
 
@@ -424,7 +478,7 @@ module.exports = {
    * @return {boolean} True, if arrays are equal
    */
   isArraysEqual(array1, array2) {
-    return array1.length === array2.length && array1.sort().every(function(value, index) {
+    return array1.length === array2.length && array1.sort().every((value, index) => {
       return value === array2.sort()[index];
     });
   },
@@ -567,14 +621,16 @@ module.exports = {
 
   /**
    * Formats number to a pretty string
-   * @param {number} num Number to format
-   * @param {boolean} doBold If to add **bold** markdown for integer part
-   * @return {string} Formatted number, like 3 134 234.778
+   * @param {Number|String} num Number to format, e.g., 3134234.778
+   * @param {Boolean} doBold If to add **bold** markdown for an integer part
+   * @return {String} Formatted number, like '3 134 234.778'
    */
   formatNumber(num, doBold) {
-    const parts = (+num + '').split('.');
+    const parts = String(+num).split('.');
+
     const main = parts[0];
     const len = main.length;
+
     let output = '';
     let i = len - 1;
 
@@ -585,6 +641,7 @@ module.exports = {
       }
       --i;
     }
+
     if (parts.length > 1) {
       if (doBold) {
         output = `**${output}**.${parts[1]}`;
@@ -592,6 +649,7 @@ module.exports = {
         output = `${output}.${parts[1]}`;
       }
     }
+
     return output;
   },
 
@@ -634,7 +692,7 @@ module.exports = {
     if (!Array.isArray(arr) || arr.length === 0) return false;
     if (!maxLength) maxLength = arr.length - 1;
     const arrToCalc = arr.slice(0, maxLength);
-    arrToCalc.sort(function(a, b) {
+    arrToCalc.sort((a, b) => {
       return a - b;
     });
     const lowMiddle = Math.floor( (arrToCalc.length - 1) / 2);
@@ -720,9 +778,10 @@ module.exports = {
    * @param {Number} targetPrice Calculate how much to buy or to sell to set a target price; Build Quote hunter table.
    * @param {Number} placedAmount Calculate price change in case of *market* order placed with placedAmount, both sides
    * @param {Array<Object>} openOrders Open orders[], received via traderapi.getOpenOrders(). To filter third-party orders.
+   * @param {String} moduleName For logging only
    * @return {Object} Order book metrics
    */
-  getOrderBookInfo(orderBookInput, customSpreadPercent, targetPrice, placedAmount, openOrders) {
+  getOrderBookInfo(orderBookInput, customSpreadPercent, targetPrice, placedAmount, openOrders, moduleName) {
     try {
       const orderBook = this.cloneObject(orderBookInput);
 
@@ -916,8 +975,8 @@ module.exports = {
       const smartAsk = this.getSmartPrice(orderBook.asks, 'asks', liquidity);
 
       // Used in Cleaner to remove cheaters' orders
-      const cleanBid = this.getCleanPrice(orderBook.bids, 'bids', liquidity, smartBid);
-      const cleanAsk = this.getCleanPrice(orderBook.asks, 'asks', liquidity, smartAsk);
+      const cleanBid = this.getCleanPrice(orderBook.bids, 'bids', liquidity, smartBid, moduleName);
+      const cleanAsk = this.getCleanPrice(orderBook.asks, 'asks', liquidity, smartAsk, moduleName);
 
       // Used in Ant-gap
       const ORDERBOOK_HEIGHT = 20;
@@ -1097,6 +1156,7 @@ module.exports = {
           t = liquidity['percent50'].amountBidsQuote;
         }
 
+        // eslint-disable-next-line no-unused-vars
         prev_c_c_m1 = c_c_m1;
         prev_c_t = c_t;
         prev_s = s;
@@ -1155,10 +1215,11 @@ module.exports = {
    * @param {String} type Items are 'asks' or 'bids'? Asks arranged from low to high, Bids from high to low (spread in the center).
    * @param {Array of object} liquidity Liquidity info, calculated in getOrderBookInfo(). Using percent50 liquidity for total.
    * @param {Number} smartPrice Smart price for the order book
-   * @param {Number} koef How to understand we achieve clean price
+   * @param {String} moduleName For logging only
    * @return {Number} Clean price
    */
-  getCleanPrice(items, type, liquidity, smartPrice, koef = 3) {
+  getCleanPrice(items, type, liquidity, smartPrice, moduleName) {
+    const koef = 7; // How to understand we achieve clean price
 
     try {
 
@@ -1167,6 +1228,7 @@ module.exports = {
       let a = 0; let t = 0; let c = 0; let c_t = 0;
       let d = 0; let d2 = 0; let ct_d2 = 0;
       const table = [];
+      let orderInfo = '';
 
       // Each iteration el.price moves towards to Smart price
 
@@ -1178,10 +1240,12 @@ module.exports = {
           if (el.price > smartPrice) break;
           a = el.amount;
           t = liquidity['percent50'].amountAsks;
+          orderInfo = `${this.inclineNumber(i)} order to sell ${el.amount} ${config.coin1} @${el.price} ${config.coin2}`;
         } else {
           if (el.price < smartPrice) break;
           a = el.amount * el.price;
           t = liquidity['percent50'].amountBidsQuote;
+          orderInfo = `${this.inclineNumber(i)} order to buy ${el.amount} ${config.coin1} @${el.price} ${config.coin2} for ${a} ${config.coin2}`;
         }
 
         d = this.numbersDifferencePercent(el.price, smartPrice) / 100;
@@ -1190,8 +1254,17 @@ module.exports = {
         c_t = c / t; // Grows each iteration
         ct_d2 = c_t / d2; // Grows each iteration. For order with smartPrice (last iteration) it equals Infinity.
 
+        const logIfCleaner = ((orderStatus, reason) => {
+          if (moduleName === 'Cleaner') {
+            log.log(`Utils/Cleaner: Considering ${orderInfo} as ${orderStatus}. Value ct_d2 ${ct_d2.toFixed(5)} is ${reason} than Koef ${koef}.`);
+          }
+        });
+
         if (ct_d2 < koef && items[i + 1]) { // While ct_d2 is less than Koef, consider an order as a cheater price
           cleanPrice = items[i + 1].price;
+          logIfCleaner('cheater', 'less');
+        } else if (i === 0) {
+          logIfCleaner('decent', 'higher');
         }
 
         // This table is only for logging
@@ -1484,10 +1557,12 @@ module.exports = {
    */
   differenceInBalances(a, b) {
     if (!a || !b || !a[0] || !b[0]) return false;
+
     let obj2;
     const diff = [];
+
     b.forEach((obj2) => {
-      obj1 = a.filter((crypto) => crypto.code === obj2.code)[0];
+      const obj1 = a.filter((crypto) => crypto.code === obj2.code)[0];
       if (!obj1) {
         a.push({
           code: obj2.code,
@@ -1495,6 +1570,7 @@ module.exports = {
         });
       }
     });
+
     a.forEach((obj1) => {
       obj2 = b.filter((crypto) => crypto.code === obj1.code)[0];
       if (obj2) {
@@ -1513,6 +1589,7 @@ module.exports = {
         });
       }
     });
+
     return diff;
   },
 
@@ -1526,6 +1603,7 @@ module.exports = {
     let output = '';
     const diff = this.differenceInBalances(a, b?.balances);
     const timeDiffString = b?.timestamp ? ' in ' + this.timestampInDaysHoursMins(Date.now() - b.timestamp) : '';
+
     if (diff) {
       if (diff[0]) {
         output += `\nChanges${timeDiffString}:\n`;
@@ -1534,61 +1612,74 @@ module.exports = {
         let deltaCoin1 = 0; let deltaCoin2 = 0; let deltaTotalNonCoin1USD = 0; let deltaTotalNonCoin1BTC = 0;
         let sign; let signTotalUSD = ''; let signTotalBTC = '';
         let signCoin1 = ''; let signCoin2 = ''; let signTotalNonCoin1USD = ''; let signTotalNonCoin1BTC = '';
+
         diff.forEach((crypto) => {
           delta = Math.abs(crypto.now - crypto.prev);
           sign = crypto.now > crypto.prev ? '+' : '−';
+
           if (crypto.code === 'totalUSD') {
             deltaTotalUSD = delta;
             signTotalUSD = sign;
             return;
           }
+
           if (crypto.code === 'totalBTC') {
             deltaTotalBTC = delta;
             signTotalBTC = sign;
             return;
           }
+
           if (crypto.code === 'totalNonCoin1USD') {
             deltaTotalNonCoin1USD = delta;
             signTotalNonCoin1USD = sign;
             return;
           }
+
           if (crypto.code === 'totalNonCoin1BTC') {
             deltaTotalNonCoin1BTC = delta;
             signTotalNonCoin1BTC = sign;
             return;
           }
+
           if (crypto.code === config.coin1) {
             deltaCoin1 = delta;
             signCoin1 = sign;
           }
+
           if (crypto.code === config.coin2) {
             deltaCoin2 = delta;
             signCoin2 = sign;
           }
+
           output += `_${crypto.code}_: ${sign}${this.formatNumber(+(delta).toFixed(8), true)}`;
           output += '\n';
         });
 
+        // Show the total holdings change: Market value of all known coins, including coin1 (Trading coin)
         if (Math.abs(deltaTotalUSD)> 0.01 || Math.abs(deltaTotalBTC > 0.00000009)) {
           output += `Total holdings ${signTotalUSD}${this.formatNumber(+deltaTotalUSD.toFixed(2), true)} _USD_ or ${signTotalBTC}${this.formatNumber(deltaTotalBTC.toFixed(8), true)} _BTC_`;
         } else {
-          output += `Total holdings ~ No changes`;
+          output += 'Total holdings ~ No changes';
         }
 
+        // Show the holdings change, excluding coin1 (Trading coin)
         if (Math.abs(deltaTotalNonCoin1USD) > 0.01 || Math.abs(deltaTotalNonCoin1BTC) > 0.00000009) {
           output += `\nTotal holdings (non-${config.coin1}) ${signTotalNonCoin1USD}${this.formatNumber(+deltaTotalNonCoin1USD.toFixed(2), true)} _USD_ or ${signTotalNonCoin1BTC}${this.formatNumber(deltaTotalNonCoin1BTC.toFixed(8), true)} _BTC_`;
         } else {
           output += `\nTotal holdings (non-${config.coin1}) ~ No changes`;
         }
 
-        if (deltaCoin1 && deltaTotalNonCoin1USD && (signCoin1 !== signTotalNonCoin1USD)) {
-          const price = deltaTotalNonCoin1USD / deltaCoin1;
+        // Calculate the mid price of coin1/coin2 buying or selling
+        // We assume that there were no deposit, withdrawals, and trades on other pairs
+        if (deltaCoin1 && deltaCoin2 && (signCoin1 !== signCoin2)) {
+          const price = deltaCoin2 / deltaCoin1;
           output += `\n[Can be wrong] ${signCoin1 === '+' ? 'I\'ve bought' : 'I\'ve sold'} ${this.formatNumber(+deltaCoin1.toFixed(marketInfo.coin1Decimals), true)} _${config.coin1}_ at ${this.formatNumber(price.toFixed(marketInfo.coin2Decimals), true)} _${config.coin2}_ price.`;
         }
       } else {
         output += `\nNo changes${timeDiffString}.\n`;
       }
     }
+
     return output;
   },
 
@@ -1599,22 +1690,30 @@ module.exports = {
    * @return {Array of Object} arr1 + arr2
    */
   sumBalances(arr1, arr2) {
+    // Combine all the cryptos in the only object
     const arr3 = arr1.concat(arr2);
+
+    // Calculate sums for each coin
     const sum = { free: [], freezed: [], total: [] };
     arr3.forEach((crypto) => {
       sum['free'][crypto.code] = (sum['free'][crypto.code] || 0) + crypto.free;
       sum['freezed'][crypto.code] = (sum['freezed'][crypto.code] || 0) + crypto.freezed;
       sum['total'][crypto.code] = (sum['total'][crypto.code] || 0) + crypto.total;
     });
+
+    // Store result as array of usual balance objects { code-free-freezed-total }
     const result = [];
     for (const code in sum['total']) {
-      result.push({ code: code, free: sum['free'][code], freezed: sum['freezed'][code], total: sum['total'][code] });
+      result.push({ code, free: sum['free'][code], freezed: sum['freezed'][code], total: sum['total'][code] });
     }
+
+    // Clean up values where NaN, e.g., totalBTC.freezed = NaN
     result.forEach((crypto) => {
       if (isNaN(crypto.free)) delete crypto.free;
       if (isNaN(crypto.freezed)) delete crypto.freezed;
       if (isNaN(crypto.total)) delete crypto.total;
     });
+
     return result;
   },
 
@@ -1799,3 +1898,5 @@ module.exports = {
     return params.join('&');
   },
 };
+
+module.exports.watchConfig();

@@ -303,7 +303,7 @@ module.exports = (
      * @param {Number} coin1Amount Base coin amount. Provide either coin1Amount or coin2Amount.
      * @param {Number} limit StakeCube supports only limit orders
      * @param {Number} coin2Amount Quote coin amount. Provide either coin1Amount or coin2Amount.
-     * @returns {Promise<{orderId: string|boolean, message: string}>|message: string}
+     * @returns {Promise<{orderId: string|boolean, message: string}>|string}
      *   In case of pre-request error, returns error message string.
      *   After request, returns an object with orderId and message. Cast orderId to string.
      *   In case if order was not placed, orderId is false, and message contains error info.
@@ -331,6 +331,7 @@ module.exports = (
       // for Limit orders, calculate coin2Amount if only coin1Amount is provided
       let coin2AmountCalculated;
       if (!coin2Amount && coin1Amount && price) {
+        // eslint-disable-next-line no-unused-vars
         coin2AmountCalculated = coin1Amount * price;
       }
 

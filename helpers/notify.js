@@ -13,20 +13,29 @@ const {
 } = config;
 
 const slackColors = {
-  'error': '#FF0000',
-  'warn': '#FFFF00',
-  'info': '#00FF00',
-  'log': '#FFFFFF',
+  error: '#FF0000',
+  warn: '#FFFF00',
+  info: '#00FF00',
+  log: '#FFFFFF',
 };
 
 const discordColors = {
-  'error': '16711680',
-  'warn': '16776960',
-  'info': '65280',
-  'log': '16777215',
+  error: '16711680',
+  warn: '16776960',
+  info: '65280',
+  log: '16777215',
 };
 
+/**
+ * Notify to channels, which set in config
+ * @param {String} messageText Notification message, may include markdown
+ * @param {String} type error < warn < info < log
+ * @param {Boolean} silent_mode If true, only priority notification will be sent. only logging
+ * @param {Boolean} isPriority Priority notifications have special channels
+ */
 module.exports = (messageText, type, silent_mode = false, isPriority = false) => {
+  const paramString = `messageText: '${messageText}', type: ${type}, silent_mode: ${String(silent_mode)}, isPriority: ${String(isPriority)}`;
+
   try {
     const prefix = isPriority ? '[Attention] ' : '';
     const message = `${prefix}${messageText}`;
@@ -40,11 +49,11 @@ module.exports = (messageText, type, silent_mode = false, isPriority = false) =>
 
       if (slackKeys.length) {
         const params = {
-          'attachments': [{
-            'fallback': message,
-            'color': slackColors[type],
-            'text': makeBoldForSlack(message),
-            'mrkdwn_in': ['text'],
+          attachments: [{
+            fallback: message,
+            color: slackColors[type],
+            text: makeBoldForSlack(message),
+            mrkdwn_in: ['text'],
           }],
         };
 
@@ -52,7 +61,7 @@ module.exports = (messageText, type, silent_mode = false, isPriority = false) =>
           if (typeof slackApp === 'string' && slackApp.length > 34) {
             axios.post(slackApp, params)
                 .catch((error) => {
-                  log.log(`Request to Slack with message ${message} failed. ${error}.`);
+                  log.warn(`Notifier: Request to Slack with message ${message} failed. ${error}.`);
                 });
           }
         });
@@ -68,7 +77,7 @@ module.exports = (messageText, type, silent_mode = false, isPriority = false) =>
             const mdMessage = makeBoldForMarkdown(message);
             api.sendMessage(config.passPhrase, admAddress, `${type}| ${mdMessage}`).then((response) => {
               if (!response.success) {
-                log.warn(`Failed to send notification message '${mdMessage}' to ${admAddress}. ${response.errorMessage}.`);
+                log.warn(`Notifier: Failed to send notification message '${mdMessage}' to ${admAddress}. ${response.errorMessage}.`);
               }
             });
           }
@@ -97,12 +106,11 @@ module.exports = (messageText, type, silent_mode = false, isPriority = false) =>
           }
         });
       }
-
     } else {
       log[type](`/No notification, Silent mode, Logging only/ ${removeMarkdown(message)}`);
     }
   } catch (e) {
-    log.error('Notifier error: ' + e);
+    log.error(`Notifier: Error while processing a notification with params ${paramString}. ${e}`);
   }
 };
 

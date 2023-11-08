@@ -2,7 +2,16 @@ const constants = require('../helpers/const');
 const utils = require('../helpers/utils');
 const config = require('../modules/configReader');
 const log = require('../helpers/log');
-const traderapi = require('./trader_' + config.exchange)(config.apikey, config.apisecret, config.apipassword, log);
+const traderapi = require('./trader_' + config.exchange)(
+    config.apikey,
+    config.apisecret,
+    config.apipassword,
+    log,
+    undefined,
+    undefined,
+    config.exchange_socket,
+    config.exchange_socket_pull,
+);
 const db = require('../modules/DB');
 const tradeParams = require('./settings/tradeParams_' + config.exchange);
 
@@ -71,14 +80,18 @@ module.exports = {
   },
 
   /**
-   * Parses a market info for specific exchange: coin1, coin2, and decimals.
-   * @param {String} pair String to parse
-   * @return {Object} or false
+   * Parses a market from string.
+   * Then retrieves static info for a specific exchange: coin1, coin2, and decimals.
+   * If an exchange is external, connect and retrieve market info, no socket
+   * @param {String} pair String to parse, e.g., 'ETH/USDT'
+   * @param {String} exchange Exchange to request market info. Optional, default to config.exchange.
+   * @param {Boolean} noWarn Don't warn if we didn't receive market info. It may be because getMarkets() is not yet finished.
+   * @return {Object|Boolean} { pair, coin1, coin2, coin1Decimals, coin2Decimals, isParsed, marketInfoSupported, exchangeApi } or false
    */
   parseMarket(pair, exchange, noWarn = false) {
     try {
       if (!pair || pair.indexOf('/') === -1) {
-        log.warn(`orderUtils: Unable to parse market pair from '${pair}'. Returning 'false'.`);
+        log.warn(`orderUtils: parseMarket() is unable to parse a market pair from string '${pair}'. Returning 'false'.`);
         return false;
       }
 
@@ -88,7 +101,17 @@ module.exports = {
       let exchangeApi;
       if (exchange) {
         exchangeApi = require('./trader_' + exchange.toLowerCase())(
-            null, null, null, log, true, undefined, false,
+            null, // API credentials
+            null,
+            null,
+            log, // Same logger
+            true, // publicOnly, no private endpoints
+            undefined, // loadMarket, usually true by default
+            false, // Don't connect socket
+            false, // Don't connect socket
+            undefined, // Use accountNo by default
+            coin1, // Doesn't mean anything as we don't connect socket
+            coin2,
         );
       } else {
         exchange = config.exchangeName;
@@ -106,7 +129,7 @@ module.exports = {
 
       if (!marketInfo) {
         if (marketInfoSupported && !noWarn) {
-          log.warn(`orderUtils: Unable to get info about ${pair} market on ${exchange} exchange. Returning default values for decimal places.`);
+          log.warn(`orderUtils: parseMarket() is unable to get info about ${pair} market on ${exchange} exchange. Returning default values for decimal places.`);
         }
       } else {
         coin1Decimals = marketInfo.coin1Decimals;
@@ -122,6 +145,7 @@ module.exports = {
         coin2Decimals,
         isParsed,
         marketInfoSupported,
+        exchangeApi,
       };
     } catch (e) {
       log.warn(`Error in parseMarket() of ${utils.getModuleName(module.id)} module: ${e}. Returning 'false'.`);
@@ -190,10 +214,10 @@ module.exports = {
         const order = new ordersDb({
           _id: orderReq.orderId,
           date: utils.unixTimeStampMs(),
-          purpose: purpose,
+          purpose,
           type: orderType,
           exchange: config.exchange,
-          pair: pair,
+          pair,
           coin1: pairObj.coin1,
           coin2: pairObj.coin2,
           price: limit ? price : 'Market',
@@ -210,7 +234,7 @@ module.exports = {
         });
         await order.save();
 
-        const limit_marketString = limit === 1 ? `at ${price.toFixed(pairObj.coin2Decimals)} ${pairObj.coin2}` : `at Market price`;
+        const limit_marketString = limit === 1 ? `at ${price.toFixed(pairObj.coin2Decimals)} ${pairObj.coin2}` : 'at Market price';
         const output = coin1Amount ?
           `${orderType} ${coin1Amount.toFixed(pairObj.coin1Decimals)} ${pairObj.coin1} ${limit_marketString}` :
           `${orderType} ${pairObj.coin1} for ${coin2Amount.toFixed(pairObj.coin2Decimals)} ${pairObj.coin2}`;
@@ -268,7 +292,6 @@ module.exports = {
           traderapi.features().dontTrustApi &&
           traderapi.getOrderDetails
         ) {
-          let allOrdersAreUnknown = true;
           let falseResultDetails;
 
           for (const dbOrder of dbOrders) {
@@ -298,16 +321,8 @@ module.exports = {
                 falseResultDetails = `Order ${dbOrder._id} status is ${orderStatus}`;
                 break;
               }
-
-              if (orderStatus !== 'unknown') {
-                allOrdersAreUnknown = false;
-              }
             }
           } // for (const dbOrder of dbOrders)
-
-          if (!falseResultDetails && allOrdersAreUnknown) {
-            falseResultDetails = `All of ${dbOrders.length} ${samePurpose}dbOrders are in unknown status`;
-          }
 
           if (falseResultDetails) {
             log.warn(`orderUtils: It seems ${config.exchangeName} API returned false empty order list: ${falseResultDetails}. Leaving ${samePurpose}dbOrders as is.`);

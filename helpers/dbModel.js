@@ -72,7 +72,7 @@ module.exports = (db) => {
         return this._id;
       }
     }
-  };
+  }
 
   return Model;
 };

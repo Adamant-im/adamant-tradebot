@@ -28,7 +28,7 @@ module.exports = async (tx) => {
       await updateProcessedTx(tx, knownTx, knownTx.height && processedTxs[tx.id]); // update height of Tx and last processed block
     }
     return;
-  };
+  }
 
   log.log(`Processing new incoming transaction ${tx.id} from ${tx.senderId} via ${tx.height ? 'REST' : 'socket'}…`);
 
@@ -116,7 +116,7 @@ module.exports = async (tx) => {
       isNonAdmin: true,
     });
     if (config.notify_non_admins) {
-      const notAdminMsg = `I won't execute your commands as you are not an admin. Connect with my master.`;
+      const notAdminMsg = 'I won\'t execute your commands as you are not an admin. Connect with my master.';
       api.sendMessage(config.passPhrase, tx.senderId, notAdminMsg).then((response) => {
         if (!response.success) {
           log.warn(`Failed to send ADM message '${notAdminMsg}' to ${tx.senderId}. ${response.errorMessage}.`);
@@ -130,7 +130,7 @@ module.exports = async (tx) => {
 
   if (itx.isSpam && !spamerAlreadyNotified) {
     msgNotify = `${config.notifyName} notifies _${tx.senderId}_ is a spammer or talks too much. ${admTxDescription}.`;
-    msgSendBack = `I’ve _banned_ you as you talk too much. Connect with my master.`;
+    msgSendBack = 'I’ve _banned_ you as you talk too much. Connect with my master.';
     notify(msgNotify, 'warn');
     api.sendMessage(config.passPhrase, tx.senderId, msgSendBack).then((response) => {
       if (!response.success) {

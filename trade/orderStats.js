@@ -1,4 +1,3 @@
-const constants = require('../helpers/const');
 const db = require('../modules/DB');
 const utils = require('../helpers/utils');
 const config = require('../modules/configReader');

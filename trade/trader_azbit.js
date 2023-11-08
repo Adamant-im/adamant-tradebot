@@ -7,14 +7,23 @@ const constants = require('../helpers/const');
 const apiServer = 'https://data.azbit.com';
 const exchangeName = 'Azbit';
 
-module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
+module.exports = (
+    apiKey,
+    secretKey,
+    pwd,
+    log,
+    publicOnly = false,
+    loadMarket = true,
+) => {
   const azbitClient = Azbit();
 
   azbitClient.setConfig(apiServer, apiKey, secretKey, pwd, log, publicOnly);
 
   // Fulfill markets and currencies on initialization
-  getMarkets();
-  getCurrencies();
+  if (loadMarket) {
+    getMarkets();
+    getCurrencies();
+  }
 
   /**
    * Get exchange trade pairs config
@@ -30,7 +39,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
     module.exports.gettingMarkets = true;
 
     return new Promise((resolve, reject) => {
-      azbitClient.markets().then(async function(data) {
+      azbitClient.markets().then(async (data) => {
         try {
           const result = {};
 
@@ -90,7 +99,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
     module.exports.gettingCurrencies = true;
 
     return new Promise((resolve, reject) => {
-      azbitClient.getCurrencies().then(function(data) {
+      azbitClient.getCurrencies().then((data) => {
         try {
           const result = [];
 
@@ -180,7 +189,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
       const paramString = `nonzero: ${nonzero}`;
 
       return new Promise((resolve, reject) => {
-        azbitClient.getBalances().then(function(data) {
+        azbitClient.getBalances().then((data) => {
           try {
             let result = [];
 
@@ -347,7 +356,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
       const pair_ = formatPairName(pair);
 
       return new Promise((resolve, reject) => {
-        azbitClient.cancelOrder(orderId).then(function(data) {
+        azbitClient.cancelOrder(orderId).then((data) => {
           if (data && !data.azbitErrorInfo) {
             log.log(`Cancelling order ${orderId} on ${pair_.pairReadable} pair…`);
             resolve(true);
@@ -373,7 +382,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
       const pair_ = formatPairName(pair);
 
       return new Promise((resolve, reject) => {
-        azbitClient.cancelAllOrders(pair_.pairPlain).then(function(data) {
+        azbitClient.cancelAllOrders(pair_.pairPlain).then((data) => {
           if (data && !data.azbitErrorInfo) {
             log.log(`Cancelling all orders on ${pair_.pairReadable} pair…`);
             resolve(true);
@@ -399,7 +408,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
       const pair_ = formatPairName(pair);
 
       return new Promise((resolve, reject) => {
-        azbitClient.ticker(pair_.pair).then(function(data) {
+        azbitClient.ticker(pair_.pair).then((data) => {
           try {
             const ticker = data[0];
 
@@ -492,7 +501,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
         output = `${orderType} ${coin1Amount} ${pairName.coin1} at ${price} ${pairName.coin2}.`;
 
         return new Promise((resolve, reject) => {
-          azbitClient.addOrder(marketInfo.pairPlain, coin1Amount, price, orderType).then(function(data) {
+          azbitClient.addOrder(marketInfo.pairPlain, coin1Amount, price, orderType).then((data) => {
             try {
               if (data && !data.azbitErrorInfo && data.match(constants.REGEXP_UUID)) {
                 message = `Order placed to ${output} Order Id: ${data}.`;
@@ -539,7 +548,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
       const pair_ = formatPairName(pair);
 
       return new Promise((resolve, reject) => {
-        azbitClient.orderBook(pair_.pair).then(function(data) {
+        azbitClient.orderBook(pair_.pair).then((data) => {
           try {
             const result = {
               bids: [],
@@ -564,11 +573,11 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
               }
             });
 
-            result.asks.sort(function(a, b) {
+            result.asks.sort((a, b) => {
               return parseFloat(a.price) - parseFloat(b.price);
             });
 
-            result.bids.sort(function(a, b) {
+            result.bids.sort((a, b) => {
               return parseFloat(b.price) - parseFloat(a.price);
             });
 
@@ -597,7 +606,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
       const pair_ = formatPairName(pair);
 
       return new Promise((resolve, reject) => {
-        azbitClient.getTradesHistory(pair_.pair, limit).then(function(data) {
+        azbitClient.getTradesHistory(pair_.pair, limit).then((data) => {
           try {
             const result = [];
 
@@ -613,7 +622,7 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
             });
 
             // We need ascending sort order
-            result.sort(function(a, b) {
+            result.sort((a, b) => {
               return parseFloat(a.date) - parseFloat(b.date);
             });
 
@@ -636,16 +645,17 @@ module.exports = (apiKey, secretKey, pwd, log, publicOnly = false) => {
      */
     getDepositAddress(coin) {
       const paramString = `coin: ${coin}`;
+      coin = coin?.toUpperCase();
 
       return new Promise((resolve, reject) => {
-        azbitClient.getDepositAddress(coin).then(function(data) {
+        azbitClient.getDepositAddress(coin).then((data) => {
           try {
             const result = {};
 
             if (data?.length) {
               // Note: chain returns as Id (Number). To map it, re-build getCurrencies() with all the info.
               // Also, getDepositAddress() returns additional fields.
-              resolve(data.map(({ chain, address }) => ({ network: chain, address: address })));
+              resolve(data.map(({ chain, address }) => ({ network: chain, address })));
             } else {
               resolve(false);
             }
