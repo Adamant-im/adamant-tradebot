@@ -93,7 +93,7 @@ const fields = {
   },
   bot_name: {
     type: String,
-    default: null,
+    default: '',
   },
   adamant_notify: {
     type: Array,
@@ -199,37 +199,83 @@ try {
     config.passPhrase = undefined;
   }
 
-  if (!config.passPhrase) {
-    exit('Bot\'s config is wrong. ADAMANT passPhrase is invalid.');
+  if (!config.cli) {
+    if (process.env.CLI_MODE_ENABLED) {
+      exit('TradeBot CLI is disabled in the config.');
+    }
+
+    if (!config.passPhrase) {
+      exit('Bot\'s config is wrong. ADAMANT passPhrase is invalid.');
+    }
+
+    if (!config.node_ADM) {
+      exit('Bot\'s config is wrong. ADM nodes are not set. Cannot start the Bot.');
+    }
   }
 
-  if (!config.node_ADM) {
-    exit('Bot\'s config is wrong. ADM nodes are not set. Cannot start the Bot.');
-  }
   let keyPair;
-  try {
-    keyPair = keys.createKeypairFromPassPhrase(config.passPhrase);
-  } catch (e) {
-    exit(`Bot's config is wrong. Invalid passPhrase. Error: ${e}. Cannot start the Bot.`);
-  }
-  const address = keys.createAddressFromPublicKey(keyPair.publicKey);
-  config.keyPair = keyPair;
-  config.publicKey = keyPair.publicKey.toString('hex');
-  config.address = address;
-  config.notifyName = `${config.bot_name} (${config.address})`;
+  let address;
+  let cliString;
+
+  config.name = require('../package.json').name;
   config.version = require('../package.json').version;
-  config.supported_exchanges = config.exchanges.join(', ');
-  config.exchangeName = config.exchange;
-  config.exchange = config.exchangeName.toLowerCase();
-  config.file = 'tradeParams_' + config.exchange + '.js';
-  config.fileWithPath = './trade/settings/' + config.file;
+
+  const pathParts = __dirname.split(path.sep);
+  config.projectName = pathParts[pathParts.length - 2].replace(' ', '-');
+  config.projectName = config.projectName.replace('adamant-', '').replace('tradebot', 'TradeBot').replace('coinoptimus', 'CoinOptimus');
+
+  const { exec } = require('child_process');
+  exec('git rev-parse --abbrev-ref HEAD', (err, stdout, stderr) => {
+    config.projectBranch = stdout.trim();
+  });
+
   config.pair = config.pair.toUpperCase();
   config.coin1 = config.pair.split('/')[0].trim();
   config.coin2 = config.pair.split('/')[1].trim();
+
+  config.supported_exchanges = config.exchanges.join(', ');
+  config.exchangeName = config.exchange;
+  config.exchange = config.exchangeName.toLowerCase();
+
+  config.file = 'tradeParams_' + config.exchange + '.js';
+  config.fileWithPath = './trade/settings/' + config.file;
+
   config.email_notify_enabled =
       (config.email_notify?.length || config.email_notify_priority?.length) &&
       config.email_smtp?.auth?.username &&
       config.email_smtp?.auth?.password;
+
+  config.bot_id = `${config.pair}@${config.exchangeName}`;
+
+  if (config.account) {
+    config.bot_id += `-${config.account}`;
+  }
+
+  config.bot_id += ` ${config.projectName}`;
+
+  if (!config.bot_name) {
+    config.bot_name = config.bot_id;
+  }
+
+  config.welcome_string = config.welcome_string.replace('{bot_name}', config.bot_name);
+
+  if (config.passPhrase) {
+    try {
+      keyPair = keys.createKeypairFromPassPhrase(config.passPhrase);
+    } catch (e) {
+      exit(`Bot's config is wrong. Invalid passPhrase. Error: ${e}. Cannot start the Bot.`);
+    }
+
+    address = keys.createAddressFromPublicKey(keyPair.publicKey);
+    config.keyPair = keyPair;
+    config.publicKey = keyPair.publicKey.toString('hex');
+    config.address = address;
+    cliString = process.env.CLI_MODE_ENABLED ? ', CLI mode' : '';
+    config.notifyName = `${config.bot_name} (${config.address}${cliString})`;
+  } else {
+    cliString = process.env.CLI_MODE_ENABLED ? ' (CLI mode)' : '';
+    config.notifyName = `${config.bot_name}${cliString}`;
+  }
 
   Object.keys(fields).forEach((f) => {
     if (!config[f] && fields[f].isRequired) {
@@ -240,6 +286,13 @@ try {
     if (config[f] && fields[f].type !== config[f].__proto__.constructor) {
       exit(`Bot's ${address} config is wrong. Field type _${f}_ is not valid, expected type is _${fields[f].type.name}_. Cannot start Bot.`);
     }
+  });
+
+  config.fund_supplier.coins.forEach((coin) => {
+    coin.coin = coin.coin?.toUpperCase();
+    coin.sources.forEach((source) => {
+      source = source?.toUpperCase();
+    });
   });
 
   console.info(`${config.notifyName} successfully read the config-file '${configFile}'${isDev ? ' (dev)' : ''}.`);

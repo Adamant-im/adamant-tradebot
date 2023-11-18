@@ -65,20 +65,26 @@
   **/
   "clearAllOrdersInterval": 0,
 
+  /**
+    A short name which helps you to understand which exchange account you use.
+    Letters and digits only.
+  **/
+  "account": "acc1",
+
   /** Exchange's account API key for connection **/
   "apikey": "YOUR-KEY..",
 
   /** Exchange's account API secret for connection **/
   "apisecret": "YOUR-SECRET..",
 
-  /** Exchange's account trade password **/
+  /** Exchange's account trade password or memo (if required by exchange) **/
   "apipassword": "YOUR-TRADE-PASS",
 
-  /** How to reply user in-chat, if first unknown command received **/
-  "welcome_string": "Hi! 😊 I'm a trade and market making bot. ℹ️ Learn more on https://marketmaking.app or type **/help**.",
+  /** Bot's name for notifications. Keep it empty if you want the default format ADM/USDT@Coinstore-acc1 **/
+  "bot_name": "",
 
-  /** Bot's name for notifications **/
-  "bot_name": "Lovely Trade Bot",
+  /** How to reply to user in-chat if the first unknown command is received. **/
+  "welcome_string": "Hi! 😊 I'm the {bot_name} trade and market-making bot. ℹ️ Learn more on https://marketmaking.app or type **/help**.",
 
   /** ADAMANT addresses for notifications and monitoring. Optional. **/
   "adamant_notify": [""],
@@ -92,11 +98,11 @@
   /** Slack keys for priority notifications **/
   "slack_priority": [],
 
- /** Discord keys for notificationis and monitoring. Optional. **/
- "discord_notify": ["https://discord.com/api/webhooks/..."],
+  /** Discord keys for notifications and monitoring. Optional. **/
+  "discord_notify": ["https://discord.com/api/webhooks/..."],
 
- /** Discord keys for priority notificatons. Optional. **/
- "discord_notify_priority": [],
+  /** Discord keys for priority notifications. Optional. **/
+  "discord_notify_priority": [],
 
   /** If you don't want to receive "not enough balance" notifications, set this to "true" **/
   "silent_mode": false,
