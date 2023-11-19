@@ -80,7 +80,7 @@
   /** Exchange's account trade password or memo (if required by exchange) **/
   "apipassword": "YOUR-TRADE-PASS",
 
-  /** Bot's name for notifications. Keep it empty if you want the default format ADM/USDT@Coinstore-acc1 **/
+  /** Bot's name for notifications. Keep it empty if you want the default format ADM/USDT@Coinstore-acc1 TradeBot **/
   "bot_name": "",
 
   /** How to reply to user in-chat if the first unknown command is received. **/
