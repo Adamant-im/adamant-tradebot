@@ -222,11 +222,16 @@ try {
 
   const pathParts = __dirname.split(path.sep);
   config.projectNamePlain = pathParts[pathParts.length - 2];
-  config.projectName = config.projectNamePlain
-      .replace(' ', '-')
-      .replace('adamant-', '')
-      .replace('tradebot', 'TradeBot')
-      .replace('coinoptimus', 'CoinOptimus');
+
+  if (config.project_name) {
+    config.projectName = config.project_name;
+  } else {
+    config.projectName = config.projectNamePlain
+        .replace(' ', '-')
+        .replace('adamant-', '')
+        .replace('tradebot', 'TradeBot')
+        .replace('coinoptimus', 'CoinOptimus');
+  }
 
   const { exec } = require('child_process');
   exec('git rev-parse --abbrev-ref HEAD', (err, stdout, stderr) => {
