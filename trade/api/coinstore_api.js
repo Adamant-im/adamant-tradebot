@@ -165,7 +165,7 @@ module.exports = function() {
         .createHmac('sha256', key)
         .update(payload)
         .digest('hex');
-  };
+  }
 
   const EXCHANGE_API = {
     setConfig(apiServer, apiKey, secretKey, tradePwd, logger, publicOnly = false) {
