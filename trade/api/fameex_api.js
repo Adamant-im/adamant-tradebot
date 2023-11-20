@@ -187,12 +187,12 @@ module.exports = function() {
         timeout: 10000,
         headers: {
           'Content-Type': 'application/json',
-          'AccessKey': config.apiKey,
-          'SecretKey': config.secret_key,
-          'Timestamp': timestamp,
-          'SignatureVersion': 'v1.0',
-          'SignatureMethod': 'HmacSHA256',
-          'Signature': sign,
+          AccessKey: config.apiKey,
+          SecretKey: config.secret_key,
+          Timestamp: timestamp,
+          SignatureVersion: 'v1.0',
+          SignatureMethod: 'HmacSHA256',
+          Signature: sign,
         },
         data: type === 'post' ? stringifiedData : undefined,
         params: type === 'post' ? undefined : data,
@@ -244,7 +244,7 @@ module.exports = function() {
     return crypto.createHmac('sha256', secret)
         .update(timestamp + method + requestPath + payload)
         .digest('hex');
-  };
+  }
 
   const EXCHANGE_API = {
     setConfig(apiServer, apiKey, secretKey, tradePwd, logger, publicOnly = false) {

@@ -530,7 +530,7 @@ module.exports = (
         if (coin2Amount) {
           output = `${side} ${coin1Amount} ${pairNames.coin1} for ${coin2Amount} ${pairNames.coin2} at ${price} ${pairNames.coin2}.`;
         } else {
-          output = `${side} ${coin1Amount} ${pairNames.coin1} for ${coin2AmountCalculated} ${coinPair.coin2} at ${price} ${pairNames.coin2}.`;
+          output = `${side} ${coin1Amount} ${pairNames.coin1} for ${coin2AmountCalculated} ${pairNames.coin2} at ${price} ${pairNames.coin2}.`;
         }
       } else {
         if (coin2Amount) {
@@ -842,12 +842,12 @@ module.exports = (
  */
 function formatNetworkName(network) {
   const networksToSystemNameMap = {
-    'POLYGON': networks['MATIC'].code,
+    POLYGON: networks['MATIC'].code,
     'AVAX-CCHAIN': networks['AVAX-C-CHAIN'].code,
-    'AVAXC': networks['AVAX-C-CHAIN'].code,
-    'BSC': networks['BEP20'].code,
-    'BCH': networks['BTC'].code,
-    'TRX': networks['TRC20'].code,
+    AVAXC: networks['AVAX-C-CHAIN'].code,
+    BSC: networks['BEP20'].code,
+    BCH: networks['BTC'].code,
+    TRX: networks['TRC20'].code,
   };
 
   network = network?.toUpperCase();
@@ -861,7 +861,7 @@ function formatNetworkName(network) {
  */
 function formatPairName(pair) {
   pair = pair?.toUpperCase();
-  const [coin1, coin2] = pair.split(/[\-\_\/]/);
+  const [coin1, coin2] = pair.split(/[-_/]/);
 
   return {
     pair: `${coin1}/${coin2}`,

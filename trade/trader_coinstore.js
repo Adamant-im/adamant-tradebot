@@ -800,8 +800,8 @@ function formatPairName(pair) {
   const [coin1, coin2] = pair.split('/');
 
   return {
-    coin1: coin1,
-    coin2: coin2,
+    coin1,
+    coin2,
     pair: `${coin1}${coin2}`,
     pairReadable: `${coin1}/${coin2}`,
     pairPlain: `${coin1}${coin2}`,
