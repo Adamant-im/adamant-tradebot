@@ -38,6 +38,7 @@ Profit trading is a mode in which a bot runs orders according to some strategy. 
 * [StakeCube](https://stakecube.net/?team=adm)
 * [Coinstore](https://h5.coinstore.com/h5/signup?invitCode=o951vZ)
 * [FameEX](https://www.fameex.com/en-US/commissiondispense?code=MKKAWV)
+* [NonKYC](https://nonkyc.io?ref=655b4df9eb13acde84677358)
 
 To add other exchange support, see [marketmaking.app/services](https://marketmaking.app/services/).
 

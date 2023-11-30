@@ -40,7 +40,8 @@
     "making price",
     "azbit",
     "stakecube",
-    "coinstore"
+    "coinstore",
+    "nonkyc"
   ],
   "author": "Aleksei Lebedev, ADAMANT Team <devs@adamant.im> (https://adamant.im)",
   "license": "GPL-3.0",

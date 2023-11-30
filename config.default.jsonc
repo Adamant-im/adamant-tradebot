@@ -47,7 +47,8 @@
     "Azbit",
     "StakeCube",
     "Coinstore",
-    "FameEX"
+    "FameEX",
+    "NonKYC"
   ],
 
   /** Exchange to work with. Case insensitive. **/
