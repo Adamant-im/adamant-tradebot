@@ -48,7 +48,8 @@
     "StakeCube",
     "Coinstore",
     "FameEX",
-    "NonKYC"
+    "NonKYC",
+    "XeggeX"
   ],
 
   /** Exchange to work with. Case insensitive. **/
