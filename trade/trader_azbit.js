@@ -56,9 +56,9 @@ module.exports = (
               coin2Decimals: market.digitsPrice,
               coin1Precision: utils.getPrecision(market.digitsAmount),
               coin2Precision: utils.getPrecision(market.digitsPrice),
-              coin1MinAmount: null,
+              coin1MinAmount: market.minBaseAmount, // in coin1
               coin1MaxAmount: null,
-              coin2MinAmount: market.minQuoteAmount,
+              coin2MinAmount: market.minQuoteAmount, // in coin2
               coin2MaxAmount: null,
               coin2MinPrice: null,
               coin2MaxPrice: null,

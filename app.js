@@ -38,7 +38,7 @@ function init() {
       // require('./trade/mm_orderbook_builder').test();
 
       const addressInfo = config.address ? ` for address _${config.address}_` : ' in CLI mode';
-      notify(`${config.notifyName} *started*${addressInfo} (ver. ${config.version}).`, 'info');
+      notify(`${config.notifyName} *started*${addressInfo} (${config.projectBranch}, v${config.version}).`, 'info');
     }
   } catch (e) {
     notify(`${config.notifyName} is not started. Error: ${e}`, 'error');
