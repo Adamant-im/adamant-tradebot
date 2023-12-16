@@ -156,6 +156,7 @@ module.exports = function() {
 
     const nonkycError = data?.error;
     const nonkycErrorInfo = errorCodeDescriptions[nonkycError?.code];
+    const httpCodeInfo = errorCodeDescriptions[httpCode];
 
     const success = httpCode === 200 && !nonkycError;
 
@@ -173,14 +174,14 @@ module.exports = function() {
       if (success) {
         resolve(data);
       } else {
-        const nonkycErrorInfo = `[${error.code}] ${error.message || 'No error message'}`;
-        const errorMessage = httpCode ? `${httpCode} ${httpMessage}, ${nonkycErrorInfo}` : String(responseOrError);
+        const nonkycErrorInfoString = `[${error.code}] ${error.message || 'No error message'}`;
+        const errorMessage = httpCode ? `${httpCode} ${httpMessage}, ${nonkycErrorInfoString}` : String(responseOrError);
 
         if (typeof data === 'object') {
-          data.nonkycErrorInfo = nonkycErrorInfo;
+          data.nonkycErrorInfo = nonkycErrorInfoString;
         }
 
-        if (httpCode && !nonkycErrorInfo?.isTemporary) {
+        if (!httpCodeInfo?.isTemporary && !nonkycErrorInfo?.isTemporary) {
           log.log(`Nonkyc processed a request to ${url} with data ${reqParameters}, but with error: ${errorMessage}. Resolving…`);
 
           resolve(data);
