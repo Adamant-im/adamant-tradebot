@@ -4,9 +4,9 @@ const _networks = require('./../helpers/networks');
 
 /**
  * API endpoints:
- * https://nonkyc.io/api/v2
+ * https://api.nonkyc.io/api/v2
  */
-const apiServer = 'https://nonkyc.io/api/v2';
+const apiServer = 'https://api.nonkyc.io/api/v2';
 const exchangeName = 'NonKYC';
 
 // Map NonKYC's order status -> Bot's status

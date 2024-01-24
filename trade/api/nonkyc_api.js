@@ -131,7 +131,7 @@ const errorCodeDescriptions = {
 };
 
 module.exports = function() {
-  let WEB_BASE = 'https://nonkyc.io/api/v2';
+  let WEB_BASE = 'https://api.nonkyc.io/api/v2';
   let config = {
     apiKey: '',
     secret_key: '',
