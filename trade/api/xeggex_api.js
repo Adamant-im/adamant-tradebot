@@ -156,6 +156,7 @@ module.exports = function() {
 
     const xeggexError = data?.error;
     const xeggexErrorInfo = errorCodeDescriptions[xeggexError?.code];
+    const httpCodeInfo = errorCodeDescriptions[httpCode];
 
     const success = httpCode === 200 && !xeggexError;
 
@@ -173,14 +174,14 @@ module.exports = function() {
       if (success) {
         resolve(data);
       } else {
-        const xeggexErrorInfo = `[${error.code}] ${error.message || 'No error message'}`;
-        const errorMessage = httpCode ? `${httpCode} ${httpMessage}, ${xeggexErrorInfo}` : String(responseOrError);
+        const xeggexErrorInfoString = `[${error.code}] ${error.message || 'No error message'}`;
+        const errorMessage = httpCode ? `${httpCode} ${httpMessage}, ${xeggexErrorInfoString}` : String(responseOrError);
 
         if (typeof data === 'object') {
-          data.xeggexErrorInfo = xeggexErrorInfo;
+          data.xeggexErrorInfo = xeggexErrorInfoString;
         }
 
-        if (httpCode && !xeggexErrorInfo?.isTemporary) {
+        if (!httpCodeInfo?.isTemporary && !xeggexErrorInfo?.isTemporary) {
           log.log(`XeggeX processed a request to ${url} with data ${reqParameters}, but with error: ${errorMessage}. Resolving…`);
 
           resolve(data);
