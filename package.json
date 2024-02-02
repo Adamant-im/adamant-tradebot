@@ -42,7 +42,8 @@
     "stakecube",
     "coinstore",
     "nonkyc",
-    "xeggex"
+    "xeggex",
+    "bitcastle"
   ],
   "author": "Aleksei Lebedev, ADAMANT Team <devs@adamant.im> (https://adamant.im)",
   "license": "GPL-3.0",
