@@ -141,7 +141,7 @@ module.exports = function() {
         }
 
         if (httpCode === statusCodes.ok && !fameEXError?.isTemporary && data.data?.timestamp !== 0) {
-          log.log(`FameEX processed a request to ${url} with data ${reqParameters}, but with error: [${error.code}] ${error.msg}. Resolving…`);
+          log.log(`FameEX processed a request to ${url} with data ${reqParameters}, but with error: ${errorMessage}. Resolving…`);
           resolve(data);
         } else {
           log.warn(`Request to ${url} with data ${reqParameters} failed. details: ${errorMessage}. Rejecting…`);
@@ -222,6 +222,9 @@ module.exports = function() {
         params,
         method: type,
         timeout: 10000,
+        headers: {
+          'Accept-Encoding': 'application/gzip',
+        },
       };
 
       axios(httpOptions)
