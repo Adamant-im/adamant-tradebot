@@ -110,7 +110,7 @@ module.exports = {
       liquidityOrders = await orderUtils.updateOrders(liquidityOrders, config.pair, utils.getModuleName(module.id) + ':liq-'); // update orders which partially filled or not found
       liquidityOrders = await this.closeLiquidityOrders(liquidityOrders, orderBookInfo); // close orders which expired or out of spread or out pf Pw's range
 
-      let liqInfoString; let liqSsInfoString;
+      let liqInfoString; let liqSsInfoString = '';
 
       // 2. Place regular (depth) liq-orders
 

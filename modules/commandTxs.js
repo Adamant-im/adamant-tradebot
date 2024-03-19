@@ -283,16 +283,6 @@ function validateFeature(feature, action) {
     ob: 'dynamic order book building',
     liq: 'liquidity and spread maintenance',
     pw: 'price watching',
-    cl: 'order book cleaner',
-    fb: '2-key trading fund balancer',
-    be: 'balance equalizer when third-party bots are active',
-    ag: 'order book anti-gap',
-    vc: 'volatility chart',
-    vv: 'volume volatility',
-    pmv: 'creating additional volume by Price maker and Price watcher',
-    sp: 'support price',
-    qh: 'quote hunter',
-    ld: 'ladder/grid trading',
   };
 
   let featureDescription = Object.entries(botFeatures)
