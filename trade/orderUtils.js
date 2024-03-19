@@ -68,7 +68,7 @@ module.exports = {
       onWhichAccount = ' on second account';
       balances = await api.getBalances(false);
     } else {
-      balances = await this.getBalancesCached(false, utils.getModuleName(module.id));
+      balances = await traderapi.getBalances(false);
     }
 
     if (!balances) {
@@ -419,7 +419,7 @@ module.exports = {
 
     try {
       const onWhichAccount = api.isSecondAccount ? ' (on second account)' : '';
-      const exchangeOrders = await this.getOpenOrdersCached(pair, `${utils.getModuleName(module.id)}/${moduleName}`, noCache, api);
+      const exchangeOrders = await traderapi.getOpenOrders(pair);
 
       log.log(`orderUtils: Updating ${dbOrders.length} ${samePurpose}dbOrders on ${pair} for ${moduleName}, noCache: ${noCache}, hideNotOpened: ${hideNotOpened}… Received ${exchangeOrders?.length} orders from the exchange.`);
 

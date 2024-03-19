@@ -1075,18 +1075,7 @@ async function clear(params) {
     let clearedInfo = {};
     const typeString = type ? `**${type}**-` : '';
 
-    let api = traderapi;
-    if (params.includes('-2')) {
-      if (traderapi2) {
-        api = traderapi2;
-      } else {
-        return {
-          msgNotify: '',
-          msgSendBack: 'Second trader account is not set. Remove _-2_ option to run command for account 1.',
-          notifyType: 'log',
-        };
-      }
-    }
+    const api = traderapi;
 
     if (purposes === 'all') {
       clearedInfo = await orderCollector.clearAllOrders(pairObj.pair, doForce, type, 'User command', `${typeString}orders`, api);
@@ -1210,7 +1199,7 @@ async function fill(params) {
 
   const onWhichAccount = '';
 
-  const balances = await orderUtils.getBalancesCached(false, utils.getModuleName(module.id), undefined, undefined, api);
+  const balances = await traderapi.getBalances(false);
   let balance;
   let isBalanceEnough = true;
   if (balances) {
@@ -1775,7 +1764,7 @@ async function stats(params) {
     }
 
     // Second, get order book information
-    const orderBook = await orderUtils.getOrderBookCached(pairObj.pair, utils.getModuleName(module.id));
+    const orderBook = await traderapi.getOrderBook(pairObj.pair);
     const orderBookInfo = utils.getOrderBookInfo(orderBook);
     if (orderBook && orderBookInfo) {
       const delta = orderBookInfo.smartAsk-orderBookInfo.smartBid;

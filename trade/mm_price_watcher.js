@@ -402,7 +402,7 @@ module.exports = {
       await setPriceRange();
 
       if (isPriceActual) {
-        let orderBook = await orderUtils.getOrderBookCached(config.pair, utils.getModuleName(module.id));
+        let orderBook = await traderapi.getOrderBook(config.pair);
         if (!orderBook || !orderBook.asks[0] || !orderBook.bids[0]) {
           log.warn(`Price watcher: Order books are empty for ${config.pair}, or temporary API error. Unable to check if I need to place pw-order.`);
           return;
@@ -465,7 +465,7 @@ module.exports = {
               // Don't clear account 1 orders in case of two accounts trading (no SELF_TRADE possible for two accounts)
               const cleanUpReason = tradeParams.mm_Policy === 'depth' ? 'Depth mm_Policy, clean up not to SELF_TRADE' : 'Don`t create additional volume';
               await orderCollector.clearPriceStepOrders(orderType, targetPrice, 'Price watcher', cleanUpReason);
-              orderBook = await orderUtils.getOrderBookCached(config.pair, utils.getModuleName(module.id), true);
+              orderBook = await traderapi.getOrderBook(config.pair);
               if (!orderBook || !orderBook.asks[0] || !orderBook.bids[0]) {
                 log.warn(`Price watcher: (After cancelling bot's orders) Order books are empty for ${config.pair}, or temporary API error.`);
                 return;
@@ -688,7 +688,7 @@ async function isEnoughCoins(coin1, coin2, amount1, amount2, type, noCache = fal
     onWhichAccount = ' on second account';
     balances = await priceWatcherApi.getBalances(false);
   } else {
-    balances = await orderUtils.getBalancesCached(false, utils.getModuleName(module.id), noCache);
+    balances = await traderapi.getBalances(false);
   }
 
   let balance1free; let balance2free;
@@ -772,7 +772,7 @@ async function setPriceRange() {
 
       let orderBook;
       if (exchange.toLowerCase() === config.exchange) {
-        orderBook = await orderUtils.getOrderBookCached(pairObj.pair, utils.getModuleName(module.id), true);
+        orderBook = await traderapi.getOrderBook(pairObj.pair);
       } else {
         orderBook = await pwExchangeApi.getOrderBook(pair);
       }
