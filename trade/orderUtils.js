@@ -15,8 +15,6 @@ const traderapi = require('./trader_' + config.exchange)(
 const db = require('../modules/DB');
 const tradeParams = require('./settings/tradeParams_' + config.exchange);
 
-const MAX_SMALL_ORDER_USD = 10;
-
 module.exports = {
   readableModuleName: 'orderUtils',
 
@@ -30,31 +28,142 @@ module.exports = {
   },
 
   /**
+   * Checks if it's enough balances to place an order
+   * It uses second keypair, if set
+   * E.g., Buy 2 BTC for 80,000 USDT on BTC/USDT
+   * E.g., Sell 2 BTC for 80,000 USDT on BTC/USDT
+   * @param {String} type buy | sell
+   * @param {String} pair 'ADM/USDT' or pairObj from parseMarket()
+   * @param {Number} base (When selling) Check if an account have enough base coin balance
+   * @param {Number} quote (When buying) Check if an account have enough quote coin balance
+   * @param {String} purpose Order purpose, e.g., pm
+   * @param {String} additionalInfo E.g., ' to achieve 10.00 USDT price'. With leading space, no ending dot. Optional.
+   * @param {String} moduleName For logging
+   * @param {Object} api Set to traderapi2 if applicable
+   * @return {Object<result, message>} Return error message only if you want to notify()
+   */
+  async isEnoughCoins(type, pair, base, quote, purpose, additionalInfo = '', moduleName, api = traderapi) {
+    const logModule = `${utils.getModuleName(module.id)}/${moduleName}`;
+
+    let pairObj;
+
+    if (typeof pair === 'string') {
+      pairObj = this.parseMarket(pair);
+    } else {
+      pairObj = pair;
+    }
+
+    if (typeof pairObj !== 'object') {
+      log.warn(`${logModule}: Unable to check balances for placing ${purpose}-order. Unable to parse a market pair from '${pair}'.`);
+
+      return {
+        result: false,
+      };
+    }
+
+    let balances;
+    let onWhichAccount = '';
+
+    if (api.isSecondAccount) {
+      onWhichAccount = ' on second account';
+      balances = await api.getBalances(false);
+    } else {
+      balances = await traderapi.getBalances(false);
+    }
+
+    if (!balances) {
+      log.warn(`${logModule}: Unable to receive balances${onWhichAccount} for placing ${purpose}-order.`);
+
+      return {
+        result: false,
+      };
+    }
+
+    let balance1free; let balance2free;
+    let balance1freezed; let balance2freezed;
+
+    let isBalanceEnough = true;
+    let output = '';
+
+    try {
+      balance1free = balances.filter((crypto) => crypto.code === pairObj.coin1)[0]?.free || 0;
+      balance2free = balances.filter((crypto) => crypto.code === pairObj.coin2)[0]?.free || 0;
+      balance1freezed = balances.filter((crypto) => crypto.code === pairObj.coin1)[0]?.freezed || 0;
+      balance2freezed = balances.filter((crypto) => crypto.code === pairObj.coin2)[0]?.freezed || 0;
+
+      let amount; let coin;
+      let balanceFree; let balanceFreezed;
+      let orderString;
+
+      if (type === 'buy') {
+        if (balance2free < quote) {
+          // Not enough USDT balance to place buy tw-order for 40,000 USDT
+          amount = quote.toFixed(pairObj.coin2Decimals);
+          coin = pairObj.coin2;
+          balanceFree = balance2free.toFixed(pairObj.coin2Decimals);
+          balanceFreezed = balance2freezed.toFixed(pairObj.coin2Decimals);
+          orderString = `${type} ${purpose}-order for ${amount} ${coin}`;
+          isBalanceEnough = false;
+        }
+      } else {
+        if (balance1free < base) {
+          // Not enough BTC balance to place 1 BTC sell tw-order
+          amount = base.toFixed(pairObj.coin1Decimals);
+          coin = pairObj.coin1;
+          balanceFree = balance1free.toFixed(pairObj.coin1Decimals);
+          balanceFreezed = balance1freezed.toFixed(pairObj.coin1Decimals);
+          orderString = `${amount} ${coin} ${type} ${purpose}-order`;
+          isBalanceEnough = false;
+        }
+      }
+
+      if (!isBalanceEnough) {
+        output = `Not enough ${coin} balance${onWhichAccount} to place ${orderString}`;
+        output += `${additionalInfo}`;
+        output += `. Free: ${balanceFree} ${coin}, frozen: ${balanceFreezed} ${coin}.`;
+      }
+
+      return {
+        result: isBalanceEnough,
+        message: output,
+      };
+    } catch (e) {
+      log.warn(`${logModule}: Unable to process balances${onWhichAccount} for placing ${purpose}-order: ${e}`);
+
+      return {
+        result: false,
+      };
+    }
+  },
+
+  /**
    * Returns minimum order amount in coin1, allowed on the exchange, and upper bound for minimal order
-   * Consider mm_minAmount and exchange's coin1MinAmount, coin2MinAmount in coin1
-   * With reliabilityKoef
-   * @param {Number} price Calculate min amount for a specific price, if coin2MinAmount is set for the trade pair. Optional.
-   * @return {Object<Number, Number>} Minimum order amount, and upper bound for minimal order
+   * Considers coin1MinAmount, coin2MinAmount (converted in coin1) set by an exchange
+   * Or default values set in the config or by constants
+   * @param {number} price Calculate min amount for a specific price, if coin2MinAmount is set for the trade pair. Optional.
+   * @return {Object<number, number>} Minimum order amount, and upper bound for minimal order
    */
   getMinOrderAmount(price) {
-    const reliabilityKoef = 1.1;
-    let minOrderAmount = tradeParams.mm_minAmount * reliabilityKoef;
-
     const exchangerUtils = require('../helpers/cryptos/exchanger');
+
     try {
-      const coin1MinAmount = traderapi.marketInfo(config.pair)?.coin1MinAmount * reliabilityKoef;
+      let minOrderAmount; let upperBound;
+
+      // Consider both coin1MinAmount and coin2MinAmount on an exchange
+
+      const coin1MinAmount = traderapi.marketInfo(config.pair)?.coin1MinAmount;
       if (utils.isPositiveNumber(coin1MinAmount)) {
         minOrderAmount = coin1MinAmount;
       }
 
-      const coin2MinAmount = traderapi.marketInfo(config.pair)?.coin2MinAmount * reliabilityKoef;
+      const coin2MinAmount = traderapi.marketInfo(config.pair)?.coin2MinAmount;
       if (utils.isPositiveNumber(coin2MinAmount)) {
         let coin2MinAmountInCoin1;
 
         if (utils.isPositiveNumber(price)) {
           coin2MinAmountInCoin1 = coin2MinAmount / price;
         } else {
-          coin2MinAmountInCoin1 = exchangerUtils.convertCryptos(config.coin2, config.coin1, coin2MinAmount).outAmount || null;
+          coin2MinAmountInCoin1 = exchangerUtils.convertCryptos(config.coin2, config.coin1, coin2MinAmount).outAmount;
         }
 
         if (utils.isPositiveNumber(coin2MinAmountInCoin1)) {
@@ -65,18 +174,30 @@ module.exports = {
           }
         }
       }
+
+      if (minOrderAmount) {
+        upperBound = minOrderAmount * 2;
+      } else {
+        // Use constants if an exchange doesn't provide min amounts
+
+        const defaultMinOrderAmountUSD =
+            config.exchange_restrictions?.minOrderAmountUSD ??
+            constants.DEFAULT_MIN_ORDER_AMOUNT_USD;
+        minOrderAmount = exchangerUtils.convertCryptos('USD', config.coin1, defaultMinOrderAmountUSD).outAmount;
+
+        const defaultMinOrderAmountUpperBoundUSD =
+            config.exchange_restrictions?.minOrderAmountUpperBoundUSD ??
+            constants.DEFAULT_MIN_ORDER_AMOUNT_UPPER_BOUND_USD;
+        upperBound = exchangerUtils.convertCryptos('USD', config.coin1, defaultMinOrderAmountUpperBoundUSD).outAmount;
+      }
+
+      return {
+        min: minOrderAmount,
+        upperBound,
+      };
     } catch (e) {
-      log.warn(`Error in getMinOrderAmount() of ${utils.getModuleName(module.id)} module: ${e}. Returning mm_minAmount.`);
+      log.warn(`Error in getMinOrderAmount() of ${utils.getModuleName(module.id)} module: ${e}.`);
     }
-
-    let upperBound = Math.max(tradeParams.mm_minAmount, minOrderAmount) * 2;
-    const maxSmallOrderInCoin1 = exchangerUtils.convertCryptos('USD', config.coin1, MAX_SMALL_ORDER_USD).outAmount || upperBound;
-    upperBound = Math.min(upperBound, maxSmallOrderInCoin1);
-
-    return {
-      min: minOrderAmount,
-      upperBound,
-    };
   },
 
   /**
@@ -223,6 +344,10 @@ module.exports = {
           price: limit ? price : 'Market',
           coin1Amount: coin1AmountEstimated,
           coin2Amount: coin2AmountEstimated,
+          coin1AmountFilled: undefined,
+          coin2AmountFilled: undefined,
+          coin1AmountLeft: coin1AmountEstimated,
+          coin2AmountLeft: coin2AmountEstimated,
           isCoin1AmountEstimated,
           isCoin2AmountEstimated,
           LimitOrMarket: limit, // 1 for limit price. 0 for Market price.
@@ -232,6 +357,7 @@ module.exports = {
           isSecondAccountOrder,
           message: whichAccountMsg + orderReq?.message,
         });
+
         await order.save();
 
         const limit_marketString = limit === 1 ? `at ${price.toFixed(pairObj.coin2Decimals)} ${pairObj.coin2}` : 'at Market price';
@@ -255,197 +381,315 @@ module.exports = {
 
   /**
    * Updates local bot's orders database dbOrders, independent of its purpose
-   * It looks through all of current exchange orders in dbOrders
-   * If found one, updates its status. If not found, closes it as not actual.
-   * Note: This method don't close ld-orders, as they may be saved, but not exist.
-   * @param {Array of Object} dbOrders Local orders database
-   * @param {String} pair Trade pair to check orders from exchange
-   * @param {String} moduleName Name of module, which requests the method. For logging only.
-   * @param {Boolean} noCache If true, get fresh data, not cached
-   * @param {Object} api Exchange API to use, can be a second trade account. If not set, the first account will be used.
-   * @param {Boolean} hideNotOpened Hide ld-order in states as Not opened, Filled, Cancelled (default)
-   * @return {Array of Object} Updated local orders database
+   * It loops through all the orders in local dbOrders and compares them with the current exchange orders
+   * If found one, updates its status.
+   * If not found, closes it as not actual. Note: This method doesn't close ld-orders, as they may be saved but not exist.
+   * Additionally, stores all order fills in the fillsDb
+   * @param {Array<Object>} dbOrders Local orders database
+   * @param {string} pair Trade pair to check orders from an exchange
+   * @param {string} moduleName Name of the module, which requests the method. For logging only.
+   * @param {boolean} [noCache=false] If true, get fresh data, not cached
+   * @param {Object} [api=traderapi] Exchange API to use; may be a second trade account. If not set, the first account will be used.
+   * @param {boolean} [hideNotOpened=true] Hide ld-order in states as Not opened, Filled, Cancelled (default)
+   * @return {Array<Object>|Object} Updated local orders database, with or without details
   */
   async updateOrders(dbOrders, pair, moduleName, noCache = false, api = traderapi, hideNotOpened = true) {
-    const paramString = `dbOrders: ${dbOrders}, pair: ${pair}, moduleName: ${moduleName}, noCache: ${noCache}, api: ${api}, hideNotOpened: ${hideNotOpened}`;
+    const paramString = `dbOrders-length: ${dbOrders.length}, pair: ${pair}, moduleName: ${moduleName}, noCache: ${noCache}, api: ${api}, hideNotOpened: ${hideNotOpened}`;
+
     let updatedOrders = [];
+
+    const orderPurposes = require('./orderCollector').orderPurposes;
+    const fills = Object.keys(orderPurposes).reduce((acc, purpose) => {
+      acc[purpose] = {
+        partlyFilledOrders: [],
+        notFoundOrders: [],
+        filledOrders: [],
+        buyFilledAmount: 0,
+        sellFilledAmount: 0,
+        buyFilledQuote: 0,
+        sellFilledQuote: 0,
+      };
+      return acc;
+    }, {});
+
     let ldFilledCount = 0;
 
-    let samePurpose;
-    [moduleName, samePurpose] = moduleName.split(':');
-    samePurpose = samePurpose || '';
+    let samePurpose; // If all of the orders are of same purpose, e.g., 'ld', moduleName receives value like 'Ladder:ld-'
+    [moduleName, samePurpose = ''] = moduleName.split(':');
 
     try {
       const onWhichAccount = api.isSecondAccount ? ' (on second account)' : '';
-      const exchangeOrders = await api.getOpenOrders(pair);
+      const exchangeOrders = await traderapi.getOpenOrders(pair);
 
-      log.log(`orderUtils: Updating ${dbOrders.length} ${samePurpose}dbOrders on ${pair} for ${moduleName}, noCache: ${noCache}, hideNotOpened: ${hideNotOpened}… Received ${exchangeOrders?.length} orders from exchange.`);
+      log.log(`orderUtils: Updating ${dbOrders.length} ${samePurpose}dbOrders on ${pair} for ${moduleName}, noCache: ${noCache}, hideNotOpened: ${hideNotOpened}… Received ${exchangeOrders?.length} orders from the exchange.`);
 
-      if (exchangeOrders) {
-
-        // If we don't trust exchange API, it can return false empty order list even if there are orders. Re-check then.
-        // Bullshit, but it's a reality. We'll deal with it.
-
-        if (
-          dbOrders.length !== 0 &&
-          exchangeOrders.length === 0 &&
-          traderapi.features().dontTrustApi &&
-          traderapi.getOrderDetails
-        ) {
-          let falseResultDetails;
-
-          for (const dbOrder of dbOrders) {
-            if (
-              !dbOrder.isVirtual &&
-              (!dbOrder.apikey || dbOrder.apikey === config.apikey)
-            ) {
-              const orderDetails = await traderapi.getOrderDetails(dbOrder._id, dbOrder.pair);
-              const orderStatus = orderDetails?.status;
-
-              /**
-               * !orderStatus, 'new', 'part_filled' -> API failed, don't trust
-               * 'filled', 'cancelled' -> Empty order list is still possible
-               * 'unknown' means Order doesn't exist or Wrong orderId. It's possible/accepted, if:
-               * - Order is virtual (ld-order which is not created)
-               * - Order placed with other API keys. We check it where an order stores API key.
-               * - On other exchange. Don't check it as we already filtered orders by exchange.
-               * - If any order is not 'unknown', empty order list is still possible
-               */
-
-              if (!orderStatus) {
-                falseResultDetails = `No order ${dbOrder._id} status received. Request result is ${JSON.stringify(orderDetails)}`;
-                break;
-              }
-
-              if (['new', 'part_filled'].includes(orderStatus)) {
-                falseResultDetails = `Order ${dbOrder._id} status is ${orderStatus}`;
-                break;
-              }
-            }
-          } // for (const dbOrder of dbOrders)
-
-          if (falseResultDetails) {
-            log.warn(`orderUtils: It seems ${config.exchangeName} API returned false empty order list: ${falseResultDetails}. Leaving ${samePurpose}dbOrders as is.`);
-            return dbOrders;
-          }
-        }
-
-        for (const dbOrder of dbOrders) {
-
-          const orderInfoString = `${dbOrder.purpose}-order${onWhichAccount} with params: id=${dbOrder._id}, type=${dbOrder.type}, pair=${dbOrder.pair}, price=${dbOrder.price}, coin1Amount=${dbOrder.coin1AmountInitial || dbOrder.coin1Amount}, coin2Amount=${dbOrder.coin2Amount}`;
-
-          let isLifeOrder = false;
-          let isOrderFound = false;
-          for (const exchangeOrder of exchangeOrders) {
-            if (dbOrder._id?.toString() === exchangeOrder.orderId?.toString()) {
-              isOrderFound = true;
-              switch (exchangeOrder.status) {
-                // Possible values: new, part_filled, filled
-                // But because we get only life orders, actually statuses are: new, part_filled
-                case 'new':
-                  isLifeOrder = true;
-                  break;
-                case 'part_filled':
-                  isLifeOrder = true;
-
-                  if (dbOrder.coin1Amount > exchangeOrder.amountLeft) {
-                    if (dbOrder.purpose === 'ld') {
-                      dbOrder.update({
-                        ladderState: 'Partly filled',
-                      });
-                    }
-
-                    if (!dbOrder.coin1AmountInitial) {
-                      dbOrder.coin1AmountInitial = dbOrder.coin1Amount;
-                      dbOrder.amountUpdateCount = 0;
-                    }
-
-                    await dbOrder.update({
-                      isExecuted: true,
-                      coin1Amount: exchangeOrder.amountLeft,
-                      amountUpdateCount: dbOrder.amountUpdateCount + 1,
-                    }, true);
-
-                    log.log(`orderUtils: Updating ${orderInfoString}. It's partly filled (${utils.inclineNumber(dbOrder.amountUpdateCount)} update): ${dbOrder.coin1AmountInitial} -> ${dbOrder.coin1Amount} ${dbOrder.coin1}.`);
-                  }
-                  break;
-                default:
-                  isLifeOrder = true;
-                  break;
-              }
-            } // if match orderId
-          } // for (const exchangeOrder of exchangeOrders)
-
-          if (isOrderFound) {
-            if (isLifeOrder) {
-              updatedOrders.push(dbOrder);
-            }
-          } else {
-            if (dbOrder.purpose === 'ld') {
-              const previousState = dbOrder.ladderState;
-
-              if (constants.LADDER_OPENED_STATES.includes(previousState)) {
-                dbOrder.update({
-                  ladderState: 'Filled',
-                });
-
-                ldFilledCount++;
-
-                log.log(`orderUtils: Changing state of ${orderInfoString} from ${previousState} to ${dbOrder.ladderState}. Ladder index: ${dbOrder.ladderIndex}. Unable to find it in the exchangeOrders, consider it's filled.`);
-                await dbOrder.save();
-              } else {
-                log.log(`orderUtils: Not found ${orderInfoString}, it's ok for a ladder order with state ${dbOrder.ladderState}${dbOrder.ladderNotPlacedReason ? ' (' + dbOrder.ladderNotPlacedReason + ')' : ''}. Ladder index: ${dbOrder.ladderIndex}.`);
-              }
-
-              updatedOrders.push(dbOrder);
-            } else {
-              const reasonToClose = 'Unable to find it in the exchangeOrders';
-              const reasonObject = {
-                isNotFound: true,
-              };
-
-              const orderCollector = require('./orderCollector');
-              const cancellation = await orderCollector.clearOrderById(
-                  dbOrder, dbOrder.pair, dbOrder.type, this.readableModuleName, reasonToClose, reasonObject, api);
-
-              if (!cancellation.isCancelRequestProcessed) {
-                updatedOrders.push(dbOrder);
-              }
-            }
-          }
-
-        } // for (const dbOrder of dbOrders)
-      } else { // if exchangeOrders
+      if (!exchangeOrders) {
         log.warn(`orderUtils: Unable to get exchangeOrders${onWhichAccount} in updateOrders(), leaving ${samePurpose}dbOrders as is.`);
         return dbOrders;
       }
+
+      // If we don't trust the exchange API, it can return a false-empty order list even if there are orders. Re-check then.
+      // Bullshit, but it's a reality. We'll deal with it.
+
+      if (
+        dbOrders.length !== 0 &&
+        exchangeOrders.length === 0 &&
+        traderapi.features().dontTrustApi &&
+        traderapi.getOrderDetails
+      ) {
+        let falseResultDetails;
+
+        for (const dbOrder of dbOrders) {
+          if (
+            !dbOrder.isVirtual &&
+            (!dbOrder.apikey || dbOrder.apikey === config.apikey)
+          ) {
+            const orderDetails = await traderapi.getOrderDetails(dbOrder._id, dbOrder.pair);
+            const orderStatus = orderDetails?.status;
+
+            /**
+             * !orderStatus, 'new', 'part_filled' -> API failed, don't trust
+             * 'filled', 'cancelled' -> Empty order list is still possible
+             * 'unknown' means Order doesn't exist or Wrong orderId. It's possible/accepted, if:
+             * - Order is virtual (ld-order which is not created)
+             * - Order placed with other API keys. We check it where an order stores API key.
+             * - On other exchange. Don't check it as we already filtered orders by exchange.
+             * - If any order is not 'unknown', empty order list is still possible
+             */
+
+            if (!orderStatus) {
+              falseResultDetails = `No order ${dbOrder._id} status received. Request result is ${JSON.stringify(orderDetails)}`;
+              break;
+            }
+
+            if (['new', 'part_filled'].includes(orderStatus)) {
+              falseResultDetails = `Order ${dbOrder._id} status is ${orderStatus}`;
+              break;
+            }
+          }
+        } // for (const dbOrder of dbOrders)
+
+        if (falseResultDetails) {
+          log.warn(`orderUtils: It seems ${config.exchangeName} API returned false empty order list: ${falseResultDetails}. Leaving ${samePurpose}dbOrders as is.`);
+          return dbOrders;
+        }
+      }
+
+      // Loop through all the orders in local dbOrders and compare them with the current exchange orders
+
+      for (const dbOrder of dbOrders) {
+        const orderInfoString = `${dbOrder.purpose}-order${dbOrder.subPurposeString || ''}${onWhichAccount} with params: id=${dbOrder._id}, type=${dbOrder.type}, pair=${dbOrder.pair}, price=${dbOrder.price}, coin1Amount=${dbOrder.coin1Amount} (${dbOrder.coin1AmountLeft} left), coin2Amount=${dbOrder.coin2Amount}`;
+
+        let isOrderFound = false;
+
+        const coin1AmountBeforeIteration = dbOrder.coin1AmountLeft ?? dbOrder.coin1Amount;
+
+        for (const exchangeOrder of exchangeOrders) {
+          if (dbOrder._id?.toString() === exchangeOrder.orderId?.toString()) { // While dbOrders stores ids in native type (can be number), getOpenOrders always returns ids as strings
+            isOrderFound = true;
+
+            switch (exchangeOrder.status) {
+              // Possible values: new, part_filled
+              case 'part_filled':
+                if (coin1AmountBeforeIteration > exchangeOrder.amountLeft) {
+                  if (dbOrder.purpose === 'ld') {
+                    dbOrder.update({
+                      ladderState: 'Partly filled',
+                    });
+                  }
+
+                  await dbOrder.update({
+                    isExecuted: true,
+                    coin1AmountFilled: exchangeOrder.amountExecuted,
+                    coin1AmountLeft: exchangeOrder.amountLeft,
+                    amountUpdateCount: (dbOrder.amountUpdateCount || 0) + 1,
+                  }, true);
+
+                  const coin1AmountFilled = coin1AmountBeforeIteration - dbOrder.coin1AmountLeft;
+                  const coin2AmountFilled = coin1AmountFilled * dbOrder.price;
+
+                  fills[dbOrder.purpose][`${dbOrder.type}FilledAmount`] += coin1AmountFilled;
+                  fills[dbOrder.purpose][`${dbOrder.type}FilledQuote`] += coin2AmountFilled;
+                  fills[dbOrder.purpose].partlyFilledOrders.push({
+                    orderId: dbOrder._id,
+                    type: dbOrder.type,
+                    coin1AmountFilled,
+                    coin2AmountFilled,
+                    price: dbOrder.price,
+                    subPurpose: dbOrder.subPurpose,
+                  });
+
+                  const filledPercent = (dbOrder.coin1AmountFilled / dbOrder.coin1Amount * 100).toFixed(2);
+
+                  log.log(`orderUtils: Updating ${orderInfoString}. It's partly filled ${utils.inclineNumber(dbOrder.amountUpdateCount)} time: ${coin1AmountBeforeIteration} -> ${dbOrder.coin1AmountLeft} ${dbOrder.coin1} (${filledPercent}% filled${dbOrder.amountUpdateCount > 1 ? ' in total.' : '.'})`);
+                }
+
+                break;
+              case 'new':
+                break;
+              default:
+                break;
+            }
+          }
+        }
+
+        // An order is found, keep it
+
+        if (isOrderFound) {
+          updatedOrders.push(dbOrder);
+          continue;
+        }
+
+        // An order is missing in the exchangeOrders, remove it (if not an ld-order)
+
+        let isOrderFilled = false;
+        fills[dbOrder.purpose].notFoundOrders.push({
+          orderId: dbOrder._id,
+          type: dbOrder.type,
+          coin1AmountFilled: coin1AmountBeforeIteration,
+          coin2AmountFilled: coin1AmountBeforeIteration * dbOrder.price,
+          price: dbOrder.price,
+          subPurpose: dbOrder.subPurpose,
+        });
+
+        if (dbOrder.purpose === 'ld') {
+          const previousState = dbOrder.ladderState;
+
+          if (constants.LADDER_OPENED_STATES.includes(previousState)) {
+            dbOrder.update({
+              ladderState: 'Filled',
+            });
+
+            isOrderFilled = true;
+            ldFilledCount++;
+
+            log.log(`orderUtils: Changing state of ${orderInfoString} from ${previousState} to ${dbOrder.ladderState}. Ladder index: ${dbOrder.ladderIndex}. Unable to find it in the exchangeOrders, consider it's filled.`);
+            await dbOrder.save();
+          } else {
+            log.log(`orderUtils: Not found ${orderInfoString}, it's ok for a ladder order with state ${dbOrder.ladderState}${dbOrder.ladderNotPlacedReason ? ' (' + dbOrder.ladderNotPlacedReason + ')' : ''}. Ladder index: ${dbOrder.ladderIndex}.`);
+          }
+
+          updatedOrders.push(dbOrder);
+        } else {
+          const reasonToClose = 'Unable to find it in the exchangeOrders';
+          const reasonObject = {
+            isNotFound: true,
+          };
+
+          const orderCollector = require('./orderCollector');
+          const cancellation = await orderCollector.clearOrderById(
+              dbOrder, dbOrder.pair, dbOrder.type, this.readableModuleName, reasonToClose, reasonObject, api);
+
+          if (cancellation.isCancelRequestProcessed) {
+            isOrderFilled = true;
+          } else {
+            updatedOrders.push(dbOrder);
+          }
+        }
+
+        if (isOrderFilled) {
+          fills[dbOrder.purpose][`${dbOrder.type}FilledAmount`] += coin1AmountBeforeIteration;
+          fills[dbOrder.purpose][`${dbOrder.type}FilledQuote`] += coin1AmountBeforeIteration * dbOrder.price;
+          fills[dbOrder.purpose].filledOrders.push({
+            orderId: dbOrder._id,
+            type: dbOrder.type,
+            coin1AmountFilled: coin1AmountBeforeIteration,
+            coin2AmountFilled: coin1AmountBeforeIteration * dbOrder.price,
+            price: dbOrder.price,
+            subPurpose: dbOrder.subPurpose,
+          });
+        }
+      }
     } catch (e) {
-      log.error(`Error in updateOrders(${paramString}) of ${utils.getModuleName(module.id)} module: ${e}`);
-      log.warn(`orderUtils: Because of error in updateOrders(), returning ${samePurpose}dbOrders before processing finished. It may be partly modified.`);
+      log.error(`Error in updateOrders(${paramString})-1 of ${utils.getModuleName(module.id)} module: ${e}`);
+      log.warn(`orderUtils: Because of error in updateOrders(), returning ${samePurpose}dbOrders before the processing is finished. It may be partly modified.`);
+
       return dbOrders;
     }
 
-    const orderCountAll = updatedOrders.length;
-    const updatedOrdersOpened = updatedOrders.filter((order) => order.purpose !== 'ld' || constants.LADDER_OPENED_STATES.includes(order.ladderState));
-    const orderCountOpened = updatedOrdersOpened.length;
-    const orderCountHidden = orderCountAll - orderCountOpened;
+    try {
+      // dbOrders may include 'not placed' orders ~placeholders for ladder
+      // We can include them in the result, or hide
 
-    let openOrdersString = '';
+      const orderCountAll = updatedOrders.length;
+      const updatedOrdersOpened = updatedOrders.filter((order) => order.purpose !== 'ld' || constants.LADDER_OPENED_STATES.includes(order.ladderState));
+      const orderCountOpened = updatedOrdersOpened.length;
+      const orderCountHidden = orderCountAll - orderCountOpened;
 
-    if (hideNotOpened) {
-      if (orderCountHidden > 0) {
-        updatedOrders = updatedOrdersOpened;
-        openOrdersString = ` (${orderCountHidden} not placed ld-orders are hidden)`;
+      let openOrdersString = '';
+
+      if (hideNotOpened) {
+        if (orderCountHidden > 0) {
+          updatedOrders = updatedOrdersOpened;
+          openOrdersString = ` (${orderCountHidden} not placed ld-orders are hidden)`;
+        }
+      } else {
+        if (orderCountHidden > 0) {
+          openOrdersString = ` (including ${orderCountHidden} not placed ld-orders)`;
+        }
       }
-    } else {
-      if (orderCountHidden > 0) {
-        openOrdersString = ` (including ${orderCountHidden} not placed ld-orders)`;
-      }
-    }
 
-    log.log(`orderUtils: ${samePurpose}dbOrders updated for ${moduleName} with ${updatedOrders.length} live orders${openOrdersString} on ${pair}.`);
-    if (ldFilledCount/tradeParams.mm_ladderCount > 0.7) {
-      log.warn(`orderUtils: ${ldFilledCount} orders considered as filled.`);
+
+      // Store non-empty fills data
+
+      Object.keys(fills).forEach((purpose) => {
+        if (purpose !== 'all') {
+          fills[purpose].partlyFilledOrders.forEach((order) => fills['all'].partlyFilledOrders.push(order));
+          fills[purpose].notFoundOrders.forEach((order) => fills['all'].notFoundOrders.push(order));
+          fills[purpose].filledOrders.forEach((order) => fills['all'].filledOrders.push(order));
+          fills['all'].buyFilledAmount += fills[purpose].buyFilledAmount;
+          fills['all'].sellFilledAmount += fills[purpose].sellFilledAmount;
+          fills['all'].buyFilledQuote += fills[purpose].buyFilledQuote;
+          fills['all'].sellFilledQuote += fills[purpose].sellFilledQuote;
+        }
+      });
+
+      const { fillsDb } = db;
+
+      for (const purpose in fills) {
+        const purposeFills = fills[purpose];
+
+        if (purposeFills.partlyFilledOrders.length > 0 || purposeFills.filledOrders.length > 0) {
+          const fill = new fillsDb({
+            purpose,
+            date: utils.unixTimeStampMs(),
+            exchange: config.exchange,
+            pair,
+            isProcessed: false,
+            ...purposeFills,
+          });
+
+          await fill.save();
+        }
+      }
+
+      // Log results
+
+      pair = this.parseMarket(pair);
+
+      let logString = `orderUtils: ${samePurpose}dbOrders updated for ${moduleName} with ${updatedOrders.length} live orders${openOrdersString} on ${pair.pair}.`;
+
+      if (fills['all'].filledOrders.length > 0) {
+        logString += ` ${fills['all'].filledOrders.length} orders filled.`;
+      }
+
+      if (fills['all'].partlyFilledOrders.length > 0) {
+        logString += ` ${fills['all'].partlyFilledOrders.length} orders partially filled.`;
+      }
+
+      if (fills['all'].filledOrders.length > 0 || fills['all'].partlyFilledOrders.length > 0) {
+        logString += ` Asks are filled with ${fills['all'].sellFilledAmount} ${pair.coin1} (${fills['all'].sellFilledQuote} ${pair.coin2})`;
+        logString += ` and bids with ${fills['all'].buyFilledAmount} ${pair.coin1} (${fills['all'].buyFilledQuote} ${pair.coin2}).`;
+      }
+
+      log.log(logString);
+
+      if (ldFilledCount/tradeParams.mm_ladderCount > 0.7) {
+        log.warn(`orderUtils: ${ldFilledCount} ld-orders considered as filled.`);
+      }
+    } catch (e) {
+      log.error(`Error in updateOrders(${paramString})-2 of ${utils.getModuleName(module.id)} module: ${e}`);
+      log.warn(`orderUtils: Because of error in updateOrders(), returning updated ${samePurpose}dbOrders, but the processing is finished partly.`);
     }
 
     return updatedOrders;

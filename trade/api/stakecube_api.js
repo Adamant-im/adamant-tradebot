@@ -228,10 +228,10 @@ module.exports = function() {
     /**
      * Creates an exchange limit order on the chosen market, side, price and amount
      * Note: market orders are not supported via API
-     * @param {String} symbol In StakeCube format as BTC_USDT
-     * @param {Number} amount Order amount in coin1
-     * @param {Number} price Order price
-     * @param {String} side 'BUY' or 'SELL'. StakeCube supports only uppercase side parameter.
+     * @param {string} symbol In StakeCube format as BTC_USDT
+     * @param {string} amount Order amount in coin1
+     * @param {string} price Order price
+     * @param {string} side 'BUY' or 'SELL'. StakeCube supports only uppercase side parameter.
      * @return {Promise<Object>}
      * https://github.com/stakecube-hub/stakecube-api-docs/blob/master/rest-api/exchange.md#order
      */

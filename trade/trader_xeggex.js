@@ -1,6 +1,7 @@
 const XeggeXAPI = require('./api/xeggex_api');
 const utils = require('../helpers/utils');
 const _networks = require('../helpers/networks');
+const config = require('../modules/configReader');
 
 /**
  * API endpoints:
@@ -25,6 +26,11 @@ module.exports = (
     log,
     publicOnly = false,
     loadMarket = true,
+    useSocket = false,
+    useSocketPull = false,
+    accountNo = 0,
+    coin1 = config.coin1,
+    coin2 = config.coin2,
 ) => {
   const xeggexApiClient = XeggeXAPI();
 
@@ -238,7 +244,7 @@ module.exports = (
         getAccountTradeVolume: false,
         createDepositAddressWithWebsiteOnly: false,
         getFundHistory: true,
-        getFundHistoryImplemented: false,
+        getFundHistoryImplemented: true,
         allowAmountForMarketBuy: true,
         amountForMarketOrderNecessary: true,
         accountTypes: false, // XeggeX doesn't supports main, trade, margin accounts
@@ -554,25 +560,52 @@ module.exports = (
         coin2AmountCalculated = coin1Amount * price;
       }
 
+      // Round coin1Amount, coin2Amount and price to a certain number of decimal places, and check if they are correct.
+      // Note: any value may be small, e.g., 0.000000033. In this case, its number representation will be 3.3e-8.
+      // That's why we store values as strings. If an exchange doesn't support string type for values, cast them to numbers.
+
       if (coin1Amount) {
         coin1Amount = (+coin1Amount).toFixed(marketInfo.coin1Decimals);
-      }
-      if (coin2Amount) {
-        coin2Amount = (+coin2Amount).toFixed(marketInfo.coin2Decimals);
-      }
-      if (price) {
-        price = (+price).toFixed(marketInfo.coin2Decimals);
+        if (!+coin1Amount) {
+          message = `Unable to place an order on ${exchangeName} exchange. After rounding to ${marketInfo.coin1Decimals} decimal places, the order amount is wrong: ${coin1Amount}.`;
+          log.warn(message);
+          return {
+            message,
+          };
+        }
       }
 
-      if (coin1Amount < marketInfo.coin1MinAmount) {
-        message = `Unable to place an order on ${exchangeName} exchange. Order amount ${coin1Amount} ${marketInfo.coin1} is less minimum ${marketInfo.coin1MinAmount} ${marketInfo.coin1} on ${pair} pair.`;
+      if (coin2Amount) {
+        coin2Amount = (+coin2Amount).toFixed(marketInfo.coin2Decimals);
+        if (!+coin2Amount) {
+          message = `Unable to place an order on ${exchangeName} exchange. After rounding to ${marketInfo.coin2Decimals} decimal places, the order volume is wrong: ${coin2Amount}.`;
+          log.warn(message);
+          return {
+            message,
+          };
+        }
+      }
+
+      if (price) {
+        price = (+price).toFixed(marketInfo.coin2Decimals);
+        if (!+price) {
+          message = `Unable to place an order on ${exchangeName} exchange. After rounding to ${marketInfo.coin2Decimals} decimal places, the order price is wrong: ${price}.`;
+          log.warn(message);
+          return {
+            message,
+          };
+        }
+      }
+
+      if (+coin1Amount < marketInfo.coin1MinAmount) {
+        message = `Unable to place an order on ${exchangeName} exchange. Order amount ${coin1Amount} ${marketInfo.coin1} is less minimum ${marketInfo.coin1MinAmount} ${marketInfo.coin1} on ${marketInfo.pairReadable} pair.`;
         log.warn(message);
         return {
           message,
         };
       }
 
-      if (coin2Amount && coin2Amount < marketInfo.coin2MinAmount) { // coin2Amount may be null
+      if (coin2Amount && +coin2Amount < marketInfo.coin2MinAmount) { // coin2Amount may be null or undefined
         message = `Unable to place an order on ${exchangeName} exchange. Order volume ${coin2Amount} ${marketInfo.coin2} is less minimum ${marketInfo.coin2MinAmount} ${marketInfo.coin2} on ${pair} pair.`;
         log.warn(message);
         return {
@@ -785,6 +818,158 @@ module.exports = (
       } catch (error) {
         log.warn(`Error while processing getDepositAddress(${paramString}) request: ${error}`);
         return undefined;
+      }
+    },
+
+    /**
+     * Withdraw coin from XeggeX
+     * @param {String} address Crypto address to withdraw funds to
+     * @param {Number} amount Quantity to withdraw. Fee to be added, if provided.
+     * @param {String} coin Unique symbol of the currency to withdraw from
+     * @param {Number} withdrawalFee If to add withdrawal fee
+     * @param {String} network
+     * @return {Promise<Object>}
+     */
+    async withdraw(address, amount, coin, withdrawalFee, network) {
+      const paramString = `address: ${address}, amount: ${amount}, coin: ${coin}, withdrawalFee: ${withdrawalFee}, network: ${network}`;
+      let ticker = coin;
+      if (network !== coin) {
+        ticker = `${coin}-${network}`; // USDT-ARB20
+      }
+
+      // There is an issue withdrawing asset USDT-ARB20
+      // XeggeX processed a request to https://xeggex.com/api/v2/createwithdrawal with data ticker=USDT-ARB20&quantity=0.0015&address=0x22137BbFfF376dD910d4040ed28E887bD6245151, but with error: 500 Internal Server Error, [No error code] No error message. Resolving…
+      // Withdrawals of DASH work good
+
+      let data;
+
+      try {
+        data = await xeggexApiClient.addWithdrawal(ticker, amount, address);
+      } catch (error) {
+        log.warn(`API request withdraw(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${error}`);
+        return {
+          success: undefined,
+          error: data?.xeggexErrorInfo ?? error,
+        };
+      }
+
+      try {
+        return {
+          success: true,
+          result: {
+            id: data.id,
+            currency: data.ticker,
+            amount: +data.quantity,
+            address: data.address,
+            withdrawalFee: +data.fee,
+            withdrawalFeeCurrency: +data.feecurrency,
+            status: data.status.toUpperCase(),
+            date: +data.sentat || +data.requestedat,
+            target: null,
+            network,
+            payment_id: data.paymentid,
+            note: null,
+          },
+        };
+      } catch (error) {
+        log.warn(`Error while processing withdraw(${paramString}) request result: ${JSON.stringify(data)}. ${error}`);
+        return {
+          success: false,
+          error: data?.xeggexErrorInfo ?? error,
+        };
+      }
+    },
+
+    /**
+     * Get withdrawal history
+     * @param {String} coin Filter by coin, optional
+     * @param {Number} limit Limit records, optional
+     * @returns {Promise<{success: boolean, error: string}|{result: *[], success: boolean}>}
+     */
+    async getWithdrawalHistory(coin, limit) {
+      return this.processHistoryRecords('getWithdrawalHistory', coin, limit, true);
+    },
+
+    /**
+     * Get deposit history
+     * @param {String} coin Filter by coin, optional
+     * @param {Number} limit Limit records, optional
+     * @returns {Promise<{success: boolean, error: string}|{result: *[], success: boolean}>}
+     */
+    async getDepositHistory(coin, limit) {
+      return this.processHistoryRecords('getDepositHistory', coin, limit, false);
+    },
+
+    // Shared function to process history records
+    async processHistoryRecords(apiMethod, coin, limit, isWithdrawal) {
+      const paramString = `coin: ${coin}, limit: ${limit}`;
+
+      let records;
+
+      try {
+        records = await xeggexApiClient[apiMethod](coin, limit);
+      } catch (error) {
+        log.warn(`API request ${apiMethod}(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${error}`);
+        return {
+          success: false,
+          error,
+        };
+      }
+
+      try {
+        const result = [];
+
+        for (const record of records) {
+          let networkPlain = record.childticker?.split('-')[1];
+          if (networkPlain === 'MAIN') {
+            networkPlain = record.ticker;
+          }
+
+          const commonFields = {
+            id: record.id,
+            currencySymbol: record.ticker,
+            quantity: +record.quantity,
+            cryptoAddress: record.address,
+            txId: record.transactionid,
+            status: record.status,
+            chain: networkPlain, // TODO: ARB20 -> ARBITRUM
+            chainPlain: networkPlain,
+          };
+
+          if (isWithdrawal) {
+            result.push({
+              ...commonFields,
+              confirmations: null,
+              createdAt: +record.requestedat,
+              updatedAt: +record.sentat,
+              fee: +record.fee,
+              feeCurrency: record.feecurrency,
+              target: null,
+              source: null,
+            });
+          } else {
+            result.push({
+              ...commonFields,
+              confirmations: +record.confirmations,
+              createdAt: +record.firstseenat,
+              updatedAt: (record.isposted || record.isreversed || +record.confirmations) ? +record.firstseenat : null,
+              fee: null,
+              target: null,
+              source: null,
+            });
+          }
+        }
+
+        return {
+          success: true,
+          result,
+        };
+      } catch (error) {
+        log.warn(`Error while processing ${apiMethod}(${paramString}) request result: ${JSON.stringify(records)}. ${error}`);
+        return {
+          success: false,
+          error,
+        };
       }
     },
   };

@@ -1,4 +1,6 @@
 const config = require('../../modules/configReader');
+const tradeParams = require('../../trade/settings/tradeParams_' + config.exchange);
+const orderUtils = require('../../trade/orderUtils');
 const log = require('../log');
 const constants = require('../const');
 const utils = require('../utils');
@@ -113,6 +115,121 @@ module.exports = {
   hasTicker(coin) {
     const pairs = Object.keys(this.currencies).toString();
     return pairs.includes(',' + coin + '/') || pairs.includes('/' + coin);
+  },
+
+  /**
+   * Parses a pair, exchange, account and project name from full pair string
+   * @param {string} pair A pair or a pair with an exchange, account and project name.
+   * Examples:
+   *   - ADM/USDT
+   *   - ADM/USDT@Bittrex
+   *   - ADM/USDT@Bittrex-acc1
+   *   - ADM/USDT@Bittrex-acc1 TradeBot
+   *   - ADM/USDT@Bittrex-acc1+TradeBot
+   * @return {Object}
+   */
+  parsePair(pair) {
+    let baseCoin; let quoteCoin; let exchange; let account; let project;
+
+    if (pair.includes(' ')) {
+      [pair, project] = pair.split(' ');
+    } else if (pair.includes('+')) {
+      [pair, project] = pair.split('+');
+    }
+
+    if (pair.includes('-')) {
+      [pair, account] = pair.split('-');
+    }
+
+    if (pair.includes('@')) {
+      [pair, exchange] = pair.split('@');
+    }
+
+    if (pair.includes('_')) {
+      [baseCoin, quoteCoin] = pair.split('_');
+    } else if (pair.includes('/')) {
+      [baseCoin, quoteCoin] = pair.split('/');
+    }
+
+    return {
+      pair,
+      baseCoin,
+      quoteCoin,
+      exchange,
+      account,
+      project,
+    };
+  },
+
+  /**
+   * Estimates daily mm trading volume according to tradeParams
+   * @param maxAmount If to override tradeParams.mm_maxAmount
+   * @return {Object} Estimate mm trade volume in coin1, coin2, USD, USDT and BTC
+   */
+  estimateCurrentDailyTradeVolume(maxAmount) {
+    try {
+      maxAmount = maxAmount || tradeParams.mm_maxAmount;
+      const midAmount = (tradeParams.mm_minAmount + maxAmount) / 2;
+      const midInterval = (tradeParams.mm_minInterval + tradeParams.mm_maxInterval) / 2;
+      const dailyTrades = constants.DAY / midInterval;
+      const dailyVolumeCoin1 = midAmount * dailyTrades;
+      return this.calcCoin1AmountInOtherCoins(dailyVolumeCoin1);
+    } catch (e) {
+      log.error(`Error in estimateCurrentDailyTradeVolume() of ${utils.getModuleName(module.id)} module: ` + e);
+    }
+  },
+
+  /**
+   * Calculates coin1 amount in coin1, coin2, USD, USDT and BTC
+   * @param coin1Amount Amount in coin1
+   * @return {Object}
+   */
+  calcCoin1AmountInOtherCoins(coin1Amount) {
+    try {
+      return {
+        coin1: coin1Amount,
+        coin2: this.convertCryptos(config.coin1, config.coin2, coin1Amount).outAmount,
+        USD: this.convertCryptos(config.coin1, 'USD', coin1Amount).outAmount,
+        USDT: this.convertCryptos(config.coin1, 'USDT', coin1Amount).outAmount,
+        BTC: this.convertCryptos(config.coin1, 'BTC', coin1Amount).outAmount,
+      };
+    } catch (e) {
+      log.error(`Error in calcCoin1AmountInOtherCoins() of ${utils.getModuleName(module.id)} module: ` + e);
+    }
+  },
+
+  /**
+   * Calculates mm_maxAmount from mm trade volume.
+   * mm_minInterval, mm_maxInterval and mm_minAmount will stay the same
+   * @return {Number} New tradeParams.mm_maxAmount
+   */
+  calcMaxAmountFromDailyTradeVolume(dailyVolumeCoin1) {
+    try {
+      const midInterval = (tradeParams.mm_minInterval + tradeParams.mm_maxInterval) / 2;
+      const dailyTrades = constants.DAY / midInterval;
+      const new_mm_maxAmount = (2 * dailyVolumeCoin1 / dailyTrades) - tradeParams.mm_minAmount;
+      return utils.isPositiveNumber(new_mm_maxAmount) ? new_mm_maxAmount : undefined;
+    } catch (e) {
+      log.error(`Error in calcMaxAmountFromDailyTradeVolume() of ${utils.getModuleName(module.id)} module: ` + e);
+    }
+  },
+
+  /**
+   * Creates volume change infoString
+   * @return {String}
+   */
+  getVolumeChangeInfoString(oldVolume, newVolume) {
+    try {
+      const coin1Decimals = orderUtils.parseMarket(config.pair).coin1Decimals;
+      const coin2Decimals = orderUtils.parseMarket(config.pair).coin2Decimals;
+
+      let infoString = `from ${utils.formatNumber(oldVolume.coin1.toFixed(coin1Decimals), true)} ${config.coin1} (${utils.formatNumber(oldVolume.coin2.toFixed(coin2Decimals), true)} ${config.coin2})`;
+      infoString += ` to ${utils.formatNumber(newVolume.coin1.toFixed(coin1Decimals), true)} ${config.coin1} (${utils.formatNumber(newVolume.coin2.toFixed(coin2Decimals), true)} ${config.coin2})`;
+
+      return infoString;
+    } catch (e) {
+      log.error(`Error in getVolumeChangeInfoString() of ${utils.getModuleName(module.id)} module: ` + e);
+    }
   },
 
   ADM: new adm_utils(),
