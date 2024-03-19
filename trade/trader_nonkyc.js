@@ -1,6 +1,7 @@
 const NonkycAPI = require('./api/nonkyc_api');
 const utils = require('../helpers/utils');
 const _networks = require('./../helpers/networks');
+const config = require('./../modules/configReader');
 
 /**
  * API endpoints:
@@ -25,6 +26,11 @@ module.exports = (
     log,
     publicOnly = false,
     loadMarket = true,
+    useSocket = false,
+    useSocketPull = false,
+    accountNo = 0,
+    coin1 = config.coin1,
+    coin2 = config.coin2,
 ) => {
   const nonkycApiClient = NonkycAPI();
 
@@ -135,6 +141,10 @@ module.exports = (
               const children = currencies.filter((el) => el.childOf === currency.id);
 
               for (const child of children) {
+                if (child.ticker.includes('BRIDGED')) {
+                  continue;
+                }
+
                 const [, rawNetwork] = child.ticker.split('-');
 
                 const network = formatNetworkName(child.network, currency.ticker);
@@ -149,7 +159,8 @@ module.exports = (
                   confirmations: +child.confirmsRequired,
                   withdrawalFee: +child.withdrawFee,
                   withdrawalFeeCurrency: child.tokenOf?.ticker?.split('-')[0],
-                  precision: +child.withdrawDecimals,
+                  decimals: +child.withdrawDecimals,
+                  precision: utils.getPrecision(+child.withdrawDecimals),
                 };
               }
             } else {
@@ -163,7 +174,8 @@ module.exports = (
                 comment: currency.maintenanceNotes || currency.withdrawalNotes,
                 confirmations: +currency.confirmsRequired,
                 withdrawalFee: +currency.withdrawFee,
-                precision: +currency.withdrawDecimals,
+                decimals: +currency.withdrawDecimals,
+                precision: utils.getPrecision(+currency.withdrawDecimals),
               };
             }
           }
@@ -547,25 +559,52 @@ module.exports = (
         coin2AmountCalculated = coin1Amount * price;
       }
 
+      // Round coin1Amount, coin2Amount and price to a certain number of decimal places, and check if they are correct.
+      // Note: any value may be small, e.g., 0.000000033. In this case, its number representation will be 3.3e-8.
+      // That's why we store values as strings. If an exchange doesn't support string type for values, cast them to numbers.
+
       if (coin1Amount) {
         coin1Amount = (+coin1Amount).toFixed(marketInfo.coin1Decimals);
-      }
-      if (coin2Amount) {
-        coin2Amount = (+coin2Amount).toFixed(marketInfo.coin2Decimals);
-      }
-      if (price) {
-        price = (+price).toFixed(marketInfo.coin2Decimals);
+        if (!+coin1Amount) {
+          message = `Unable to place an order on ${exchangeName} exchange. After rounding to ${marketInfo.coin1Decimals} decimal places, the order amount is wrong: ${coin1Amount}.`;
+          log.warn(message);
+          return {
+            message,
+          };
+        }
       }
 
-      if (coin1Amount < marketInfo.coin1MinAmount) {
-        message = `Unable to place an order on ${exchangeName} exchange. Order amount ${coin1Amount} ${marketInfo.coin1} is less minimum ${marketInfo.coin1MinAmount} ${marketInfo.coin1} on ${pair} pair.`;
+      if (coin2Amount) {
+        coin2Amount = (+coin2Amount).toFixed(marketInfo.coin2Decimals);
+        if (!+coin2Amount) {
+          message = `Unable to place an order on ${exchangeName} exchange. After rounding to ${marketInfo.coin2Decimals} decimal places, the order volume is wrong: ${coin2Amount}.`;
+          log.warn(message);
+          return {
+            message,
+          };
+        }
+      }
+
+      if (price) {
+        price = (+price).toFixed(marketInfo.coin2Decimals);
+        if (!+price) {
+          message = `Unable to place an order on ${exchangeName} exchange. After rounding to ${marketInfo.coin2Decimals} decimal places, the order price is wrong: ${price}.`;
+          log.warn(message);
+          return {
+            message,
+          };
+        }
+      }
+
+      if (+coin1Amount < marketInfo.coin1MinAmount) {
+        message = `Unable to place an order on ${exchangeName} exchange. Order amount ${coin1Amount} ${marketInfo.coin1} is less minimum ${marketInfo.coin1MinAmount} ${marketInfo.coin1} on ${marketInfo.pairReadable} pair.`;
         log.warn(message);
         return {
           message,
         };
       }
 
-      if (coin2Amount && coin2Amount < marketInfo.coin2MinAmount) { // coin2Amount may be null
+      if (coin2Amount && +coin2Amount < marketInfo.coin2MinAmount) { // coin2Amount may be null or undefined
         message = `Unable to place an order on ${exchangeName} exchange. Order volume ${coin2Amount} ${marketInfo.coin2} is less minimum ${marketInfo.coin2MinAmount} ${marketInfo.coin2} on ${pair} pair.`;
         log.warn(message);
         return {
@@ -732,7 +771,7 @@ module.exports = (
      * @returns {Promise<Array|undefined>}
      */
     async getDepositAddress(coin) {
-      const paramString = `coin: ${coin}`;
+      let paramString = `coin: ${coin}`;
 
       const currencyInfo = this.currencyInfo(coin);
 
@@ -749,25 +788,24 @@ module.exports = (
             ticker = `${coin}-${network.chainName}`;
           }
 
+          paramString += ` -> ticker: ${ticker}`;
+
           try {
-            if (network.chainName.includes('BRIDGED')) {
-              continue;
-            } else {
-              data = await nonkycApiClient.getDepositAddress(ticker);
-            }
+            data = await nonkycApiClient.getDepositAddress(ticker);
           } catch (error) {
             log.warn(`API request getDepositAddress(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${error}`);
-            return undefined;
+            continue;
           }
 
           try {
             if (!data.nonkycErrorInfo) {
-              result.push({ network: formatNetworkName(data.network, ticker), address: data.address, memo: data.paymentid ? `paymentid: ${data.paymentid}` : '' });
+              result.push({ network: networkName, address: data.address, memo: data.paymentid ? `paymentid: ${data.paymentid}` : '' });
             } else {
-              const errorMessage = data.nonkycErrorInfo ?? 'No details.';
-              log.log(`Unable to get ${coin} deposit address.  Details: ${JSON.stringify(errorMessage)}.`);
+              const nonkycErrorInfo = data.nonkycErrorInfo ?? 'No details.';
+              const errorMessage = `Unable to get ${ticker} deposit address. Details: ${JSON.stringify(nonkycErrorInfo)}.`;
 
-              return undefined;
+              log.log(errorMessage);
+              result.push({ network: networkName, address: errorMessage });
             }
           } catch (error) {
             log.warn(`Error while processing getDepositAddress(${paramString}) request results: ${JSON.stringify(data)}. ${error}`);
@@ -777,7 +815,7 @@ module.exports = (
 
         return result;
       } catch (error) {
-        log.warn(`Error while processing getDepositAddress(${paramString}) request ${error}`);
+        log.warn(`Error while processing getDepositAddress(${paramString}) request: ${error}`);
         return undefined;
       }
     },
@@ -904,6 +942,7 @@ module.exports = (
               createdAt: +record.requestedat,
               updatedAt: +record.sentat,
               fee: +record.fee,
+              feeCurrency: record.feecurrency,
               target: null,
               source: null,
             });

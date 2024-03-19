@@ -1,3 +1,4 @@
+const constants = require('../helpers/const');
 const db = require('../modules/DB');
 const utils = require('../helpers/utils');
 const config = require('../modules/configReader');
@@ -26,13 +27,199 @@ const orderPurposes = require('./orderCollector').orderPurposes;
 
 module.exports = {
   /**
+   * Get stats on all orders by purposes list
+   * Used for statistics
+   * @param {Array<String>} purposes List of purposes
+   * @param {String} pair Filter order trade pair
+   * @return {Object} Aggregated info
+   */
+  async getAllOrderStats(purposes, pair) {
+    const statList = [];
+    const statTotal = {};
+
+    try {
+      let sampleStructure = {};
+      for (const purpose of purposes) {
+        const stats = await this.getOrderStats(true, true, false, purpose, pair);
+        statList.push({
+          purpose,
+          purposeName: orderPurposes[purpose],
+          ...stats,
+        });
+        if (stats.db) {
+          sampleStructure = stats;
+        }
+      }
+
+      statTotal.purpose = 'total';
+      statTotal.purposeName = 'Total orders';
+      Object.keys(sampleStructure).forEach((key) => {
+        if (key.startsWith('coin')) {
+          statTotal[key] = statList.reduce((total, stats) => total + (stats[key] || 0), 0);
+        }
+      });
+    } catch (e) {
+      log.error(`Error in getAllOrderStats(purposes: ${purposes?.join(', ')}, pair: ${pair}) of ${utils.getModuleName(module.id)}: ${e}.`);
+    }
+
+    return { statList, statTotal };
+  },
+
+  /**
+   * Aggregates info about locally stored orders
+   * Used for statistics
+   * @param {Boolean} isExecuted Filter executed orders or not
+   * @param {Boolean} isProcessed Filter processed orders or not
+   * @param {Boolean} isCancelled Filter processed orders or not
+   * @param {String} purpose Filter order type (purpose)
+   * @param {String} pair Filter order trade pair
+   * @return {Object} Aggregated info
+   */
+  async getOrderStats(isExecuted, isProcessed, isCancelled, purpose, pair) {
+    if (purpose === 'man') isExecuted = false; // 'man' orders are not marked as executed
+
+    const { ordersDb } = db;
+    let stats = [];
+
+    const hour = utils.unixTimeStampMs() - constants.HOUR;
+    const day = utils.unixTimeStampMs() - constants.DAY;
+    const month = utils.unixTimeStampMs() - 30 * constants.DAY;
+
+    try {
+      stats = (await ordersDb.aggregate([
+        {
+          $match: {
+            pair,
+            purpose,
+            isProcessed,
+            exchange: config.exchange,
+          },
+        },
+        {
+          $match: {
+            isExecuted,
+            isCancelled,
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            coin1AmountTotalAll: { $sum: '$coin1Amount' },
+            coin1AmountTotalHour: { $sum: {
+              $cond: [
+                // Condition to test
+                { $gt: ['$date', hour] },
+                // True
+                '$coin1Amount',
+                // False
+                0,
+              ],
+            } },
+            coin1AmountTotalDay: { $sum: {
+              $cond: [
+                // Condition to test
+                { $gt: ['$date', day] },
+                // True
+                '$coin1Amount',
+                // False
+                0,
+              ],
+            } },
+            coin1AmountTotalMonth: { $sum: {
+              $cond: [
+                // Condition to test
+                { $gt: ['$date', month] },
+                // True
+                '$coin1Amount',
+                // False
+                0,
+              ],
+            } },
+            coin2AmountTotalAll: { $sum: '$coin2Amount' },
+            coin2AmountTotalHour: { $sum: {
+              $cond: [
+                // Condition to test
+                { $gt: ['$date', hour] },
+                // True
+                '$coin2Amount',
+                // False
+                0,
+              ],
+            } },
+            coin2AmountTotalDay: { $sum: {
+              $cond: [
+                // Condition to test
+                { $gt: ['$date', day] },
+                // True
+                '$coin2Amount',
+                // False
+                0,
+              ],
+            } },
+            coin2AmountTotalMonth: { $sum: {
+              $cond: [
+                // Condition to test
+                { $gt: ['$date', month] },
+                // True
+                '$coin2Amount',
+                // False
+                0,
+              ],
+            } },
+            coin1AmountTotalAllCount: { $sum: 1 },
+            coin1AmountTotalHourCount: { $sum: {
+              $cond: [
+                // Condition to test
+                { $gt: ['$date', hour] },
+                // True
+                1,
+                // False
+                0,
+              ],
+            } },
+            coin1AmountTotalDayCount: { $sum: {
+              $cond: [
+                // Condition to test
+                { $gt: ['$date', day] },
+                // True
+                1,
+                // False
+                0,
+              ],
+            } },
+            coin1AmountTotalMonthCount: { $sum: {
+              $cond: [
+                // Condition to test
+                { $gt: ['$date', month] },
+                // True
+                1,
+                // False
+                0,
+              ],
+            } },
+          },
+        },
+      ]));
+    } catch (e) {
+      log.error(`Error in getOrderStats(isExecuted: ${isExecuted}, isProcessed: ${isProcessed}, isCancelled: ${isCancelled}, purpose: ${purpose}, pair: ${pair}) of ${utils.getModuleName(module.id)}: ${e}.`);
+    }
+
+    if (!stats[0]) {
+      stats[0] = 'Empty';
+    }
+
+    return stats[0];
+  },
+
+  /**
    * Returns info about locally stored orders by purpose (type)
    * Used for /orders command
    * @param {String} pair Filter order trade pair
-   * @param {Object} api If we should use second account in case of 2-keys trading
+   * @param {Object} api If we should calculate for the second account in case of 2-keys trading
+   * @param {Boolean} hideNotOpened Hide ld-order in states as Not opened, Filled, Cancelled (default)
    * @return {Object} Aggregated info
    */
-  async ordersByType(pair, api) {
+  async ordersByType(pair, api, hideNotOpened = true) {
     const ordersByType = { };
 
     try {
@@ -41,10 +228,10 @@ module.exports = {
         isProcessed: false,
         pair: pair || config.pair,
         exchange: config.exchange,
-        isSecondAccountOrder: api ? true : { $ne: true },
+        isSecondAccountOrder: api?.isSecondAccount ? true : { $ne: true },
       });
 
-      dbOrders = await orderUtils.updateOrders(dbOrders, pair, utils.getModuleName(module.id), false, api);
+      dbOrders = await orderUtils.updateOrders(dbOrders, pair, utils.getModuleName(module.id), false, api, hideNotOpened);
       if (dbOrders && dbOrders[0]) {
         Object.keys(orderPurposes).forEach((purpose) => {
           ordersByType[purpose] = { };

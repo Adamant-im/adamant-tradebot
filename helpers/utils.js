@@ -6,7 +6,6 @@ const { SAT, EPOCH, MINUTE, LIQUIDITY_SS_MAX_SPREAD_PERCENT } = require('./const
 const equal = require('fast-deep-equal');
 const { diff } = require('deep-object-diff');
 
-
 const AVERAGE_SPREAD_DEVIATION = 0.15;
 
 module.exports = {
@@ -412,6 +411,104 @@ module.exports = {
   },
 
   /**
+   * Parses time value, like 5sec, 5 secs, 5 min
+   * @param {number} value Time to parse
+   * @return {Object} isTime and time itself
+   */
+  parseSmartTime(value) {
+    // Regular expression to match the number and time unit
+    const regex = /(\d+)\s*(ms|msec|msecs|milliseconds?|s|sec|secs|seconds?|m|min|mins|minutes?|h|hr|hrs|hour|hours?|d|day|days?|w|week|weeks?|mon|month|months?|y|yr|yrs|year|years?)/;
+    const match = value.match(regex);
+
+    if (!match) {
+      return { isTime: false };
+    }
+
+    const num = parseInt(match[1], 10);
+    const unit = match[2].toLowerCase();
+
+    // Convert all units to milliseconds
+    let msecs = 0;
+    switch (unit) {
+      case 'ms':
+      case 'msec':
+      case 'msecs':
+      case 'millisecond':
+      case 'milliseconds':
+        msecs = num;
+        break;
+      case 's':
+      case 'sec':
+      case 'secs':
+      case 'second':
+      case 'seconds':
+        msecs = num * 1000;
+        break;
+      case 'm':
+      case 'min':
+      case 'mins':
+      case 'minute':
+      case 'minutes':
+        msecs = num * 60000;
+        break;
+      case 'h':
+      case 'hr':
+      case 'hrs':
+      case 'hour':
+      case 'hours':
+        msecs = num * 3600000;
+        break;
+      case 'd':
+      case 'day':
+      case 'days':
+        msecs = num * 86400000;
+        break;
+      case 'w':
+      case 'week':
+      case 'weeks':
+        msecs = num * 604800000;
+        break;
+      case 'mon':
+      case 'month':
+      case 'months':
+        msecs = num * 2629800000; // Approximation
+        break;
+      case 'y':
+      case 'yr':
+      case 'yrs':
+      case 'year':
+      case 'years':
+        msecs = num * 31557600000; // Approximation
+        break;
+    }
+
+    // Convert milliseconds to other units
+    return {
+      isTime: true,
+      msecs,
+      secs: msecs / 1000,
+      mins: msecs / 60000,
+      hours: msecs / 3600000,
+      days: msecs / 86400000,
+      weeks: msecs / 604800000,
+      months: msecs / 2629800000, // Approximation
+      years: msecs / 31557600000, // Approximation
+    };
+  },
+
+  /**
+   * Parses String[] from String
+   * E.g., '[Stepup, Stepdown]' ⟶ return ['Stepup', Stepdown']
+   * @param {String} str String to parse
+   * @return {String[]}
+   */
+  parseEnumArray(str) {
+    // Remove the brackets and split the string by comma
+    const trimmed = str.replace(/^\[|\]$/g, '');
+    return trimmed.split(/\s*,\s*/);
+  },
+
+  /**
    * Parses string value to JSON
    * @param {string} jsonString String to parse
    * @return {object} JSON object or false, if unable to parse
@@ -773,12 +870,12 @@ module.exports = {
 
   /**
    * Calculates order book metrics, like highestBid-lowestAsk, smartBid-smartAsk, spread, liquidity, amountTargetPrice
-   * @param {Array of Object} orderBookInput Bids[] and asks[], received via traderapi.getOrderBook(). To be cloned not to modify.
-   * @param {Number} customSpreadPercent If we'd like to calculate liquidity for custom spread, ±% from the average price
-   * @param {Number} targetPrice Calculate how much to buy or to sell to set a target price; Build Quote hunter table.
-   * @param {Number} placedAmount Calculate price change in case of *market* order placed with placedAmount, both sides
+   * @param {Array<Object>} orderBookInput Bids[] and asks[], received via traderapi.getOrderBook(). To be cloned not to modify.
+   * @param {number} customSpreadPercent If we'd like to calculate liquidity for custom spread, ±% from the average price
+   * @param {number} targetPrice Calculate how much to buy or to sell to set a target price; Build Quote hunter table.
+   * @param {number} placedAmount Calculate price change in case of *market* order placed with placedAmount, both sides
    * @param {Array<Object>} openOrders Open orders[], received via traderapi.getOpenOrders(). To filter third-party orders.
-   * @param {String} moduleName For logging only
+   * @param {string} moduleName For logging only
    * @return {Object} Order book metrics
    */
   getOrderBookInfo(orderBookInput, customSpreadPercent, targetPrice, placedAmount, openOrders, moduleName) {
@@ -788,6 +885,9 @@ module.exports = {
       if (!orderBook || !orderBook.asks[0] || !orderBook.bids[0]) {
         return false;
       }
+
+      const bids = orderBook.bids.length;
+      const asks = orderBook.asks.length;
 
       const highestBid = orderBook.bids[0].price;
       const lowestAsk = orderBook.asks[0].price;
@@ -971,8 +1071,8 @@ module.exports = {
       }
 
       // Used in Price watcher to understand real buy and sell prices
-      const smartBid = this.getSmartPrice(orderBook.bids, 'bids', liquidity);
-      const smartAsk = this.getSmartPrice(orderBook.asks, 'asks', liquidity);
+      const smartBid = this.getSmartPrice(orderBook.bids, 'bids', liquidity, moduleName);
+      const smartAsk = this.getSmartPrice(orderBook.asks, 'asks', liquidity, moduleName);
 
       // Used in Cleaner to remove cheaters' orders
       const cleanBid = this.getCleanPrice(orderBook.bids, 'bids', liquidity, smartBid, moduleName);
@@ -1062,15 +1162,48 @@ module.exports = {
             }
             index++;
           }
+        }
+      }
 
-          // See this table to understand the magic
-          // console.log('Lowest ask:', lowestAsk, ', Price limit: ', targetPrice);
-          // console.table(qhTable);
-          // console.log('Optimal Quote hunter bid:', optimalQhBid);
+      // See this table to understand the magic
+      if (moduleName?.startsWith('Test')) {
+        let basicInfo = `bids/asks: ${bids}/${asks}\n`;
+        basicInfo += `average price: ${averagePrice}, down: ${downtrendAveragePrice}, up: ${uptrendAveragePrice}, mid: ${middleAveragePrice}\n`;
+        basicInfo += `spread: ${spread}, ${spreadPercent}%\n`;
+        basicInfo += `hb–la: ${highestBid}—${lowestAsk}, amounts: ${highestBidAggregatedAmount}–${lowestAskAggregatedAmount}, quotes: ${highestBidAggregatedQuote}–${lowestAskAggregatedQuote}\n`;
+        basicInfo += `hb–la Smart: ${smartBid}—${smartAsk}\n`;
+        basicInfo += `hb–la Clean: ${cleanBid}—${cleanAsk}\n\n`;
+        basicInfo += `to achieve ${targetPrice} target price: ${typeTargetPrice} ${amountTargetPrice} coin1 (${amountTargetPriceQuote} coin2, positions ${targetPriceOrdersCount})\n`;
+        basicInfo += `to achieve excluded ${targetPriceExcluded} target price: ${typeTargetPrice} ${amountTargetPriceExcluded} coin1 (${amountTargetPriceQuoteExcluded} coin2, positions ${targetPriceOrdersCountExcluded})\n`;
+        basicInfo += `bid/ask intervals avg: ${avgBidInterval}—${avgAskInterval}, rms: ${rmsBidInterval}—${rmsAskInterval}, median: ${medianBidInterval}—${medianAskInterval}\n`;
+        basicInfo += `placed amount ${placedAmount} to buy (use asks): isReached: ${placedAmountReachedAsk}, ${placedAmountCountAsk} positions for ${placedAmountSumAsk} @ ${placedAmountPriceAsk} \n`;
+        basicInfo += `placed amount ${placedAmount} to sell (use bids): isReached: ${placedAmountReachedBid}, ${placedAmountCountBid} positions for ${placedAmountSumBid} @ ${placedAmountPriceBid} \n`;
+        console.log(basicInfo);
+
+        let l = liquidity.percent2;
+        let liquidityInfo = `liquidity 2%: lp–hp: ${l.lowPrice}–${l.highPrice}, spread ${l.spread}, bids–asks: ${l.bidsCount}–${l.asksCount} (of ${bids}–${asks}), amounts: ${l.amountBids}–${l.amountAsks}, quotes: ${l.amountBidsQuote}–${l.amountAsksQuote}\n`;
+        l = liquidity.percent50;
+        liquidityInfo += `liquidity 50%: lp–hp: ${l.lowPrice}–${l.highPrice}, spread ${l.spread}, bids–asks: ${l.bidsCount}–${l.asksCount} (of ${bids}–${asks}), amounts: ${l.amountBids}–${l.amountAsks}, quotes: ${l.amountBidsQuote}–${l.amountAsksQuote}\n`;
+        console.log(liquidityInfo);
+
+        let qhInfo = `Lowest ask: ${lowestAsk}, Price limit: ${targetPrice}\n`;
+        qhInfo += `Optimal Quote hunter bid: ${optimalQhBid}`;
+        console.log(qhInfo);
+
+        if (moduleName?.startsWith('TestFull')) {
+          console.log({
+            liquidity,
+            bidIntervals,
+            askIntervals,
+          });
+
+          console.table('Qh table:', qhTable);
         }
       }
 
       return {
+        bids,
+        asks,
         highestBid,
         lowestAsk,
         highestBidAggregatedAmount,
@@ -1121,147 +1254,165 @@ module.exports = {
   },
 
   /**
-   * Calculates smart price for the order book
-   * @param {Array of object} items Bids or asks, received using traderapi.getOrderBook()
-   * @param {String} type Items are 'asks' or 'bids'?
-   * @param {Array of object} liquidity Liquidity info, calculated in getOrderBookInfo()
-   * @param {Number} koef How to understand we achieve smart price. The more koef, the farther smart price from spread
-   * @return {Number} Smart price
+   * Calculates smart price for the order book:
+   * Unlike highest bid (hb) and lowest ask (la), a Smart price also considers amounts.
+   * Smart price is a nearest price to hb/la with a decent accumulated amount.
+   * Note: the smart price doesn't consider a distance from spread (unlike the clean price).
+   * @param {Array<Object>} items Bids or asks, received using traderapi.getOrderBook()
+   * @param {string} type Items are 'asks' or 'bids'?
+   * @param {Array<Object>} liquidity Liquidity info, calculated in getOrderBookInfo()
+   * @return {number} Smart price
    */
-  getSmartPrice(items, type, liquidity, koef = 0.02) {
-
+  getSmartPrice(items, type, liquidity, moduleName) {
     try {
+      const c_t_base = 0.01; // Cumulative % to understand that we achieved a smart price. 0.01 means that current price includes 1% of total bids/asks.
+      const c_t_max = 0.05; // When we cumulate, consider we achieved a smart price without any other conditions
+      // Smart price is in the 1–5% cumulative amount generally, but the 0–5% is possible.
 
       let smartPrice;
-      let c_m1 = 0;
-      let a = 0; let a_m1 = 0; let t = 0;
-      let c = 0; let c_a = 0; let c_a_m1 = 0; let c_c_m1 = 0; let c_t = 0; let s = 0;
-      let prev_c_c_m1 = 0; let prev_s = 0; let prev_c_t = 0;
-      const el_0 = items[0]; let c_t0 = 0;
+      let smartPriceIndex;
 
-      const enough_c_t = koef;
+      let c_prev = 0;
+      let a = 0; let a_prev = 0; let t = 0;
+      let c = 0; let c_a = 0; let c__a_prev = 0; let c__c_prev = 0; let c_t = 0; let s = 0;
+      let s_prev = 0; let c_t__prev = 0;
+
       const table = [];
 
       for (let i = 0; i < items.length; i++) {
-
         const el = items[i];
-        const el_m1 = i === 0 ? false : items[i-1];
+        const el_prev = items[i-1];
+
         if (type === 'asks') {
           a = el.amount;
-          a_m1 = el_m1 ? el_m1.amount : false;
+          a_prev = el_prev?.amount;
           t = liquidity['percent50'].amountAsks;
         } else {
           a = el.amount * el.price;
-          a_m1 = el_m1 ? el_m1.amount * el_m1.price : false;
+          a_prev = el_prev?.amount * el_prev?.price;
           t = liquidity['percent50'].amountBidsQuote;
         }
 
-        // eslint-disable-next-line no-unused-vars
-        prev_c_c_m1 = c_c_m1;
-        prev_c_t = c_t;
-        prev_s = s;
+        c_t__prev = c_t;
+        s_prev = s;
+        c_prev = c;
 
-        c_m1 = c;
-        c += a;
+        c += a; // cumulative amount
         c_a = c / a;
-        c_a_m1 = a_m1 ? c / a_m1 : false;
-        c_c_m1 = c_m1 === 0 ? false : c / c_m1;
-        c_t = c / t;
-        if (i === 0) c_t0 = c_t;
-        s = c_c_m1 * c_t;
-
-        if (!smartPrice && s < prev_s && prev_c_t > enough_c_t) {
-          smartPrice = (c_t0 > enough_c_t) && (i === 2) ? el_0.price : el_m1.price;
-        }
+        c__a_prev = a_prev ? c / a_prev : false;
+        c__c_prev = c_prev ? c / c_prev : false;
+        c_t = c / t; // cumulative % to total
+        s = c_t * c__c_prev; // cumulative % change
 
         // This table is only for logging
-        if (!smartPrice) {
-          table.push({
-            items: items.length,
-            total: +t.toFixed(2),
-            price: el.price.toFixed(8),
-            a: a.toFixed(8),
-            c: +c.toFixed(8),
-            c_a: +c_a.toFixed(2),
-            c_a_m1: c_a_m1 ? +c_a_m1.toFixed(2) : false,
-            c_c_m1: c_c_m1 ? +c_c_m1.toFixed(2) : false,
-            c_t: +c_t.toFixed(5),
-            s: +s.toFixed(5),
-          });
-        }
+        table.push({
+          items: items.length,
+          total: +t.toFixed(2),
+          price: el.price.toFixed(8),
+          a: a.toFixed(8),
+          c: +c.toFixed(8),
+          c_a: +c_a.toFixed(2),
+          c__a_prev: c__a_prev ? +c__a_prev.toFixed(2) : false,
+          c__c_prev: c__c_prev ? +c__c_prev.toFixed(2) : false,
+          c_t: +c_t.toFixed(5),
+          s: +s.toFixed(5),
+        });
 
+        // Smart price is the first price when we accumulate c_t_base%
+        // But also starts to decline in cumulative speed
+        if (!smartPrice) {
+          if (i > 0 && c_t__prev > c_t_base && s < s_prev) {
+            smartPrice = el_prev.price;
+            smartPriceIndex = i-1;
+          } else if (c_t > c_t_max) {
+            smartPrice = el.price;
+            smartPriceIndex = i;
+          }
+        }
       }
 
       // See this table to understand the magic
-      // console.table(table);
-      // console.log(`smartPrice for ${type} and ${koef} koef: ${smartPrice.toFixed(8)}\n`);
+      if (moduleName?.startsWith('Test')) {
+        table[smartPriceIndex].sp = '*';
+        console.table(table);
+        console.log(`smartPrice for ${type} and ${c_t_base} koef: ${smartPrice.toFixed(8)}\n`);
+      }
 
       return smartPrice;
-
     } catch (e) {
       log.error(`Error in getSmartPrice() of ${this.getModuleName(module.id)} module: ${e}.`);
       return false;
     }
-
   },
 
   /**
    * Calculates clean (non-cheater) price for the order book
    * It depends on:
-   *   Distance^2 from smart price: bigger distance means higher probability of cheater order
-   *   Amount of order (accumulated): smaller amount means higher probability of cheater order
+   *   Distance^2 from the smart price: bigger distance means higher probability of cheater order
+   *   Accumulated amount of an order: smaller amount means higher probability of cheater order
    *   Koef threshold: bigger koef means higher probability of cheater order
-   * @param {Array of object} items Bids or asks, received using traderapi.getOrderBook()
-   * @param {String} type Items are 'asks' or 'bids'? Asks arranged from low to high, Bids from high to low (spread in the center).
-   * @param {Array of object} liquidity Liquidity info, calculated in getOrderBookInfo(). Using percent50 liquidity for total.
-   * @param {Number} smartPrice Smart price for the order book
-   * @param {String} moduleName For logging only
-   * @return {Number} Clean price
+   * @param {Array<Object>} items Bids or asks, received using traderapi.getOrderBook()
+   * @param {string} type Items are 'asks' or 'bids'? Asks arranged from low to high, Bids from high to low (spread in the center).
+   * @param {Array<Object>} liquidity Liquidity info, calculated in getOrderBookInfo(). Using percent50 liquidity for total.
+   * @param {number} smartPrice Smart price for bids/asks. The clean price is always before the smart price.
+   * @param {string} moduleName For logging only
+   * @return {number} Clean price
    */
   getCleanPrice(items, type, liquidity, smartPrice, moduleName) {
     const koef = 7; // How to understand we achieve clean price
 
-    try {
+    if (!this.isPositiveNumber(smartPrice)) {
+      log.warn(`Utils/Cleaner: Received unexpected smart price: ${smartPrice}. Unable to calculate clean price.`);
+      return false;
+    }
 
-      let cleanPrice;
+    try {
+      let cleanPrice = items[0].price;
+      const smartPriceIndex = items.findIndex((i) => i.price === smartPrice);
+      let cleanPriceIndex = 0;
 
       let a = 0; let t = 0; let c = 0; let c_t = 0;
       let d = 0; let d2 = 0; let ct_d2 = 0;
       const table = [];
       let orderInfo = '';
+      let side;
+      let quote;
 
       // Each iteration el.price moves towards to Smart price
 
       for (let i = 0; i < items.length; i++) {
-
         const el = items[i];
+        quote = el.amount * el.price;
 
         if (type === 'asks') {
           if (el.price > smartPrice) break;
+          side = 'sell';
           a = el.amount;
           t = liquidity['percent50'].amountAsks;
-          orderInfo = `${this.inclineNumber(i)} order to sell ${el.amount} ${config.coin1} @${el.price} ${config.coin2}`;
         } else {
           if (el.price < smartPrice) break;
-          a = el.amount * el.price;
+          side = 'buy';
+          a = quote;
           t = liquidity['percent50'].amountBidsQuote;
-          orderInfo = `${this.inclineNumber(i)} order to buy ${el.amount} ${config.coin1} @${el.price} ${config.coin2} for ${a} ${config.coin2}`;
         }
 
-        d = this.numbersDifferencePercent(el.price, smartPrice) / 100;
+        orderInfo = `${this.inclineNumber(i)} order to ${side} ${el.amount} ${config.coin1} @${el.price} ${config.coin2} for ${quote} ${config.coin2}`;
+
+        d = this.numbersDifferencePercent(el.price, smartPrice) / 100; // Distance from the smart price
         d2 = d * d; // Decreases every iteration. For order with smartPrice (last iteration) it equals 0.
-        c += a;
-        c_t = c / t; // Grows each iteration
+        c += a; // Cumulative amount
+        c_t = c / t; // Cumulative % to total. Grows each iteration
         ct_d2 = c_t / d2; // Grows each iteration. For order with smartPrice (last iteration) it equals Infinity.
 
         const logIfCleaner = ((orderStatus, reason) => {
-          if (moduleName === 'Cleaner') {
+          if (moduleName === 'Cleaner' || moduleName?.startsWith('Test')) {
             log.log(`Utils/Cleaner: Considering ${orderInfo} as ${orderStatus}. Value ct_d2 ${ct_d2.toFixed(5)} is ${reason} than Koef ${koef}.`);
           }
         });
 
         if (ct_d2 < koef && items[i + 1]) { // While ct_d2 is less than Koef, consider an order as a cheater price
           cleanPrice = items[i + 1].price;
+          cleanPriceIndex = i + 1;
           logIfCleaner('cheater', 'less');
         } else if (i === 0) {
           logIfCleaner('decent', 'higher');
@@ -1280,59 +1431,21 @@ module.exports = {
           ct_d2: +ct_d2.toFixed(5),
           isCheater: ct_d2 < koef,
         });
-
-      } // For i
-
-      if (!cleanPrice) { // Set Clean price as the best bid/ask
-        cleanPrice = items?.[0].price;
       }
 
       // See this table to understand the magic
-      // console.table(table);
-      // console.log(`Clean price is ${cleanPrice.toFixed(8)} for ${type} when Smart price = ${smartPrice.toFixed(8)} and Koef = ${koef}.\n`);
+      if (moduleName?.startsWith('Test')) {
+        table[smartPriceIndex].sp = '*';
+        table[cleanPriceIndex].cp = '*';
+        console.table(table);
+        console.log(`Clean price is ${cleanPrice.toFixed(8)} for ${type} when Smart price = ${smartPrice.toFixed(8)} and Koef = ${koef}.\n`);
+      }
 
       return cleanPrice;
-
     } catch (e) {
       log.error(`Error in getCleanPrice() of ${this.getModuleName(module.id)} module: ${e}.`);
       return false;
     }
-
-  },
-
-  /**
-   * Calculates order statistics used in liquidity provider
-   * @param {Array of object} orders Order is an object of ordersDb, including: type, price, coin1Amount, coin2Amount
-   * @return {Object} Stats on asks, bids, total
-   */
-  getOrdersStats(orders) {
-
-    let bidsTotalAmount = 0; let asksTotalAmount = 0;
-    let bidsTotalQuoteAmount = 0; let asksTotalQuoteAmount = 0;
-    let totalAmount = 0; let totalQuoteAmount = 0;
-    let asksCount = 0; let bidsCount = 0; let totalCount = 0;
-    for (const order of orders) {
-      if (order.type === 'buy') {
-        bidsTotalAmount += order.coin1Amount;
-        bidsTotalQuoteAmount += order.coin2Amount;
-        bidsCount += 1;
-      }
-      if (order.type === 'sell') {
-        asksTotalAmount += order.coin1Amount;
-        asksTotalQuoteAmount += order.coin2Amount;
-        asksCount += 1;
-      }
-      totalAmount += order.coin1Amount;
-      totalQuoteAmount += order.coin2Amount;
-      totalCount += 1;
-    }
-
-    return {
-      bidsTotalAmount, asksTotalAmount,
-      bidsTotalQuoteAmount, asksTotalQuoteAmount,
-      totalAmount, totalQuoteAmount,
-      asksCount, bidsCount, totalCount,
-    };
   },
 
   /**
@@ -1449,25 +1562,49 @@ module.exports = {
   },
 
   /**
-   * Checks if order price is out of Price watcher range
-   * @param order Object of ordersDb
-   * @returns {Boolean}
+   * Checks if an order price is out of the Price watcher's range
+   * @param {Object} order Object of ordersDb
+   * @returns {boolean}
    */
   isOrderOutOfPriceWatcherRange(order) {
     try {
       const pw = require('../trade/mm_price_watcher');
+
       if (pw.getIsPriceActualAndEnabled()) {
         const lowPrice = pw.getLowPrice();
         const highPrice = pw.getHighPrice();
+
         if (
-          (order.type === 'sell' && order.price < lowPrice) ||
-          (order.type === 'buy' && order.price > highPrice)
+          (order.type === 'sell' && lowPrice && order.price < lowPrice) ||
+          (order.type === 'buy' && highPrice && order.price > highPrice)
         ) {
           return true;
         }
       }
     } catch (e) {
       log.error(`Error in isOrderOutOfPriceWatcherRange() of ${this.getModuleName(module.id)} module: ${e}.`);
+    }
+
+    return false;
+  },
+
+  /**
+   * Checks if an order price is out of the custom range set by lowPrice–highPrice
+   * @param {Object} order Object of ordersDb
+   * @param {number} lowPrice Lower bound
+   * @param {number} highPrice Higher bound
+   * @returns {boolean}
+   */
+  isOrderOutOfTwapRange(order, lowPrice, highPrice) {
+    try {
+      if (
+        (order.type === 'sell' && lowPrice && order.price < lowPrice) ||
+        (order.type === 'buy' && highPrice && order.price > highPrice)
+      ) {
+        return true;
+      }
+    } catch (e) {
+      log.error(`Error in isOrderOutOfTwapRange() of ${this.getModuleName(module.id)} module: ${e}.`);
     }
 
     return false;
@@ -1757,6 +1894,60 @@ module.exports = {
   },
 
   /**
+   * The disbalance is calculated based on how much one value dominates over the other.
+   * 10, 10 -> 50%
+   * 10, 100 -> 9.09%
+   * 100, 10 -> 90.91%
+   * 0, 100 -> 0%
+   * 100, 0 -> 100%
+   * @param {Number} a Value 1
+   * @param {Number} b Value 2
+   * @return {Number} Disbalance in %
+   */
+  disbalancePercent(a, b) {
+    // Handle the case where both values are zero to avoid division by zero
+    if (a === 0 && b === 0) {
+      return 50;
+    }
+
+    const total = a + b;
+    const ratio = a / total;
+
+    // Calculate the disbalance percentage
+    return ratio * 100;
+  },
+
+  /**
+   * Fix disbalance between a and b to reach targetBalancePercentThreshold
+   * 10, 10 -> disbalancePercent 50%, -> targetBalancePercentThreshold = 30 -> +0
+   * 10, 100 -> disbalancePercent 9.09%, -> targetBalancePercentThreshold = 30 -> +23
+   * 100, 10 -> disbalancePercent 9.09%, -> targetBalancePercentThreshold = 30 -> –23
+   * 0, 100 -> disbalancePercent 0%, -> targetBalancePercentThreshold = 40 -> 40
+   * 100, 0 -> disbalancePercent 100%, -> targetBalancePercentThreshold = 40 -> –40
+   * @param {number} a Value 1
+   * @param {number} b Value 2
+   * @returns {number} Amount to add (positive) or subtract (negative) to/from a to reach targetBalancePercentThreshold
+   */
+  fixDisbalance(a, b, targetBalancePercentThreshold) {
+    const total = a + b;
+
+    const targetAPercentage = targetBalancePercentThreshold;
+    const currentAPercentage = this.disbalancePercent(a, b);
+
+    let targetValueForA;
+
+    if (currentAPercentage < targetAPercentage) {
+      targetValueForA = (total * targetAPercentage) / 100;
+    } else if (currentAPercentage > 100 - targetAPercentage) {
+      targetValueForA = ((total * (100 - targetAPercentage)) / 100);
+    } else {
+      return 0;
+    }
+
+    return targetValueForA - a;
+  },
+
+  /**
    * Returns how much ms is in time unit
    * @param {String} timeUnit Like days, minutes
    * @return {Number} Ms in time unit, or undefined
@@ -1828,17 +2019,20 @@ module.exports = {
   /**
    * Returns readable timestamp in days, hours, minutes
    * @param {Number} timestamp
+   * @param {Boolean} addSecs Include secs
    * @return {String} F. e., '1 day 5 hours'
    */
-  timestampInDaysHoursMins(timestamp) {
+  timestampInDaysHoursMins(timestamp, addSecs = false) {
     let timeString = '';
     let secs = Math.floor(timestamp/1000);
     let mins = Math.floor(secs/60);
     let hours = Math.floor(mins/60);
+
     const days = Math.floor(hours/24);
     hours = hours-(days*24);
     mins = mins-(days*24*60)-(hours*60);
     secs = secs-(days*24*60*60)-(hours*60*60)-(mins*60);
+
     if (days > 0) {
       timeString = timeString + days + ' ' + this.incline(days, 'day', 'days');
     }
@@ -1848,10 +2042,20 @@ module.exports = {
     if ((days === 0) && (mins > 0)) {
       timeString = timeString + ' ' + mins + ' ' + this.incline(mins, 'min', 'mins');
     }
-    timeString = timeString.trim();
-    if (timeString === '') {
-      timeString = '~0 mins';
+    if (addSecs && secs && (days === 0) && (hours === 0) && (mins < 10)) {
+      timeString += ' ' + secs + ' ' + this.incline(secs, 'sec', 'secs');
     }
+
+    timeString = timeString.trim();
+
+    if (timeString === '') {
+      if (addSecs) {
+        timeString = '~0 secs';
+      } else {
+        timeString = '~0 mins';
+      }
+    }
+
     return timeString;
   },
 
@@ -1896,6 +2100,256 @@ module.exports = {
     }
 
     return params.join('&');
+  },
+
+  /**
+   * Calculates order statistics used in the Liquidity provider
+   * @param {Array<Object>} orders A part of ordersDb
+   * @return {Object} Stats on asks, bids, total
+   */
+  calculateOrderStats(orders) {
+    let bidsTotalAmount = 0; let asksTotalAmount = 0;
+    let bidsTotalQuoteAmount = 0; let asksTotalQuoteAmount = 0;
+    let totalAmount = 0; let totalQuoteAmount = 0;
+    let asksCount = 0; let bidsCount = 0; let totalCount = 0;
+
+    for (const order of orders) {
+      if (order.type === 'buy') {
+        bidsTotalAmount += order.coin1AmountLeft;
+        bidsTotalQuoteAmount += order.coin2AmountLeft;
+        bidsCount += 1;
+      }
+
+      if (order.type === 'sell') {
+        asksTotalAmount += order.coin1AmountLeft;
+        asksTotalQuoteAmount += order.coin2AmountLeft;
+        asksCount += 1;
+      }
+
+      totalAmount += order.coin1AmountLeft;
+      totalQuoteAmount += order.coin2AmountLeft;
+      totalCount += 1;
+    }
+
+    return {
+      bidsTotalAmount, asksTotalAmount,
+      bidsTotalQuoteAmount, asksTotalQuoteAmount,
+      totalAmount, totalQuoteAmount,
+      asksCount, bidsCount, totalCount,
+    };
+  },
+
+  /**
+   * Calculates TWAP (Time-Weighted Average Price) for a series of orders
+   * @param {Array<Object>} orders Order list, got from internal DB. It may include skipped orders (not filled, coin1AmountFilled === 0 or undefined).
+   * @returns {Object} Order list metrics, including TWAP
+   */
+  calculateTWAP(orders) {
+    let filledOrders = 0;
+    let partFilledOrders = 0;
+    let skippedOrders = 0;
+    let uncertainOrders = 0;
+
+    let totalQuote = 0;
+    let totalAmount = 0;
+
+    orders.forEach((order) => {
+      const amount = order.coin1AmountFilled;
+      const price = order.priceFilled || order.price; // tw-orders includes priceFilled
+
+      if (amount && price) {
+        totalQuote += amount * price;
+        totalAmount += amount;
+
+        if (order.coin1AmountFilled === order.coin1Amount) {
+          filledOrders++;
+        } else {
+          partFilledOrders++;
+        }
+
+        if (order.probablyFilled) {
+          uncertainOrders++;
+        }
+      } else {
+        skippedOrders++;
+      }
+    });
+
+    const twap = totalAmount ? totalQuote / totalAmount : 0;
+
+    return {
+      twap,
+      totalOrders: orders.length,
+      filledOrders,
+      partFilledOrders,
+      filledAndPartFilledOrders: filledOrders + partFilledOrders,
+      skippedOrders,
+      uncertainOrders,
+      totalAmount,
+      totalQuote,
+    };
+  },
+
+  /**
+   * Parses command params array
+   * E.g., BTC/USDT sell amount=10 minprice=32k time=50m interval=30sec strategy=Stepdown
+   * @param {String[]} params Param list
+   * @param {Number} min Minimum param count
+   * @returns {Object} Parsed params
+   */
+  parseCommandParams(params, min) {
+    if (!Array.isArray(params) || params.length < min) {
+      return;
+    }
+
+    const parsed = {
+      more: [],
+    };
+
+    for (let index = 0; index < params.length; index++) {
+      const param = params[index];
+
+      const paramLc = param.toLowerCase();
+      const paramUc = param.toUpperCase();
+
+      if (param.includes('/')) {
+        parsed.pair = paramUc;
+      } else if (param.includes('=')) {
+        const [key, value] = param.split('=');
+        parsed[key.toLowerCase()] = value;
+      } else if (paramLc === '-y') {
+        parsed.isConfirmed = true;
+      } else if (param === '-2') {
+        parsed.useSecondAccount = true;
+      } else if (['buy', 'sell'].includes(paramLc)) {
+        parsed.orderType = paramLc;
+      } else {
+        parsed.more.push({
+          param,
+          index,
+          isFirst: index === 0,
+          isLast: index === params.length - 1,
+          isInteger: this.isInteger(param),
+          isNumeric: this.isNumeric(param),
+          isInterval: ['-', '–', '—'].includes(param),
+        });
+      }
+    }
+
+    return parsed;
+  },
+
+  /**
+   * Verifies command param
+   * @param {String} name Param name
+   * @param {String} param Param value
+   * @param {String} type Param type, e.g., 'number'
+   * @returns {Object} Verification results
+   */
+  verifyParam(name, param, type) {
+    if (!param) {
+      return {
+        success: false,
+        message: `Param ${name} is not set`,
+      };
+    }
+
+    if (type === 'number') {
+      const parsed = this.parsePositiveSmartNumber(param);
+
+      if (parsed.isNumber) {
+        return {
+          success: true,
+          plain: param,
+          parsed,
+        };
+      } else {
+        return {
+          success: false,
+          message: `Param ${name} is not a number`,
+        };
+      }
+    }
+
+    if (type === 'positive number') {
+      const parsed = this.parsePositiveSmartNumber(param);
+
+      if (parsed.isNumber) {
+        if (this.isPositiveNumber(parsed.number)) {
+          return {
+            success: true,
+            plain: param,
+            parsed,
+          };
+        } else {
+          return {
+            success: false,
+            message: `Param ${name} is not a valid number`,
+          };
+        }
+      } else {
+        return {
+          success: false,
+          message: `Param ${name} is not a number`,
+        };
+      }
+    }
+
+    if (type === 'time') {
+      const parsed = this.parseSmartTime(param);
+
+      if (parsed.isTime) {
+        return {
+          success: true,
+          plain: param,
+          parsed,
+        };
+      } else {
+        return {
+          success: false,
+          message: `Param ${name} is not a time value`,
+        };
+      }
+    }
+
+    if (type.startsWith('[')) {
+      const enumList = this.parseEnumArray(type);
+
+      const lc = param.toLowerCase();
+
+      if (enumList.includes(lc)) {
+        return {
+          success: true,
+          parsed: param,
+          lc,
+        };
+      } else {
+        return {
+          success: false,
+          message: `Param ${name} is not in the an allowed list: ${type}`,
+        };
+      }
+    }
+
+    return {
+      success: true,
+      parsed: param,
+      lc: param.toLowerCase(),
+      uc: param.toUpperCase(),
+    };
+  },
+
+  /**
+   * Pauses async function execution
+   * @param {Number} ms Pause duration
+   * @param {String} pauseReason Log message, optional
+   */
+  pauseAsync(ms, pauseReason) {
+    if (pauseReason) {
+      log.log(pauseReason);
+    }
+
+    return new Promise((resolve) => setTimeout(resolve, ms));
   },
 };
 

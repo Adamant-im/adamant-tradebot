@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const keys = require('adamant-api/src/helpers/keys');
 const isDev = process.argv.includes('dev');
+
 let config = {};
 
 // Validate config fields
@@ -305,8 +306,24 @@ try {
   });
 
   console.info(`${config.notifyName} successfully read the config-file '${configFile}'${isDev ? ' (dev)' : ''}.`);
+
+  // Create tradeParams for exchange
+  const exchangeTradeParams = path.join(__dirname, '.' + config.fileWithPath);
+  const defaultTradeParams = path.join(__dirname, '../trade/settings/tradeParams_Default.js');
+
+  if (fs.existsSync(exchangeTradeParams)) {
+    console.log(`The trading params file '${config.file}' already exists.`);
+  } else {
+    fs.copyFile(defaultTradeParams, exchangeTradeParams, (error) => {
+      if (error) {
+        exit(`Error while creating the trading params file '${config.file}': ${error}`);
+      }
+
+      console.info(`The trading params file '${config.file}' created from the default one.`);
+    });
+  }
 } catch (e) {
-  exit('Error reading config: ' + e);
+  exit(`Error reading config: ${e}`);
 }
 
 function exit(msg) {

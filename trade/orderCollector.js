@@ -27,6 +27,95 @@ module.exports = {
   },
 
   /**
+   * Get order key by purpose, case insensitive comparison
+   * @param {String} orderPurpose Order purpose
+   * @return {String} Order key
+   */
+  getOrderKeyByPurpose(orderPurpose) {
+    let orderKey;
+    orderPurpose = orderPurpose.replace(' Manual', '');
+    orderPurpose = orderPurpose.replace('Market-making', 'Market making');
+    Object.keys(this.orderPurposes).forEach((key) => {
+      if (utils.isStringEqualCI(this.orderPurposes[key], orderPurpose)) {
+        orderKey = key;
+      }
+    });
+
+    return orderKey;
+  },
+
+  /**
+   * Cancels buy-orders to free up quote-coins
+   * For the first trading account only
+   * Used when:
+   * - To achieve support price by any means
+   * @param {Boolean} includeMan If to cancel all of orders
+   * @param {Boolean} includeUnk If to cancel unk-orders as well in case of we leave man-orders
+   * @param {String} callerName For logger
+   * @param {String} reason For logger
+   * @param {Object} api Exchange API to use, can be a second trade account. If not set, the first account will be used.
+   * @return {Void} Nothing to return
+   */
+  async clearBuyOrdersToFreeQuoteCoin(includeMan, includeUnk, callerName, reason, api = traderapi) {
+    try {
+      const onWhichAccount = api.isSecondAccount ? ' on second account' : '';
+      const orderTypeToClear = 'buy';
+      const logString = `Order collector (run by ${callerName}): Cancelling %1${onWhichAccount} to free up ${config.coin2}. Reason: ${reason}.`;
+      if (includeMan) {
+        log.log(logString.replace('%1', 'all-orders'));
+        await this.clearAllOrders(config.pair, false, orderTypeToClear, `Order collector–${callerName}`, undefined, api);
+      } else {
+        log.log(logString.replace('%1', includeUnk ? 'all except man-orders' : 'all except man- and unk- orders'));
+
+        const orderPurposesToClear = utils.cloneObject(this.orderPurposes);
+        delete orderPurposesToClear['man'];
+        delete orderPurposesToClear['all'];
+        const orderPurposesToClearArray = Object.keys(orderPurposesToClear);
+
+        await this.clearLocalOrders(orderPurposesToClearArray, config.pair, false, orderTypeToClear, undefined, `Order collector–${callerName}`, undefined, api);
+        if (includeUnk) {
+          await this.clearUnknownOrders(config.pair, false, orderTypeToClear, `Order collector–${callerName}`, undefined, api);
+        }
+      }
+    } catch (e) {
+      log.error(`Error in clearBuyOrdersToFreeQuoteCoin() of ${utils.getModuleName(module.id)}: ${e}.`);
+    }
+  },
+
+  /**
+   * Cancels (locally stored) orders conditionally when moving a token price
+   * For the first trading account only
+   * Used when:
+   * - Not to create additional volume with Price watcher and Price maker. 90%+ of volume is created by pw and pm.
+   * - Not enough balance to buy/sell self orders
+   * @param {String} orderType If the bot 'buy' or 'sell'. When buying, we'll cancel 'sell' orders.
+   * @param {Object} thisStepPrice At what price the bot buys or sells
+   * @param {String} callerName For logger
+   * @param {String} reason For logger
+   * @param {Object} api Exchange API to use, can be a second trade account. If not set, the first account will be used.
+   * @return {Void} Nothing to return
+   */
+  async clearPriceStepOrders(orderType, thisStepPrice, callerName, reason, api = traderapi) {
+    try {
+      const onWhichAccount = api.isSecondAccount ? ' on second account' : '';
+      const filter = { };
+      let orderTypeToClear;
+      if (orderType === 'buy') {
+        orderTypeToClear = 'sell';
+        filter.price = { $lte: thisStepPrice };
+      } else {
+        orderTypeToClear = 'buy';
+        filter.price = { $gte: thisStepPrice };
+      }
+      const pairObj = orderUtils.parseMarket(config.pair);
+      log.log(`Order collector (run by ${callerName}): Cancelling liquidity and manual ${orderTypeToClear}-orders${onWhichAccount} up to ${thisStepPrice.toFixed(pairObj.coin2Decimals)} ${pairObj.coin2} price. Reason: ${reason}.`);
+      await this.clearLocalOrders('all', config.pair, false, orderTypeToClear, filter, `Order collector–${callerName}`, undefined, api);
+    } catch (e) {
+      log.error(`Error in clearPriceStepOrders() of ${utils.getModuleName(module.id)}: ${e}.`);
+    }
+  },
+
+  /**
    * Cancels a specific order. If dbOrders includes the order, marks it as closed.
    * @param {String|Object} orderId OrderId or ordersDb object
    * @param {String} pair Trade pair, optional
@@ -68,12 +157,7 @@ module.exports = {
       if (order) {
         orderType = order.type;
 
-        let subPurposeString = '';
-        if (order.subPurpose) {
-          subPurposeString = order.subPurpose === 'ss' ? '(spread support)' : '(depth)';
-        }
-
-        orderInfoString = `${order.purpose}-order${subPurposeString}${onWhichAccount} with id=${orderId}, type=${orderType}, targetType=${order.targetType}, pair=${pair}, price=${order.price}, coin1Amount=${order.coin1Amount}, coin2Amount=${order.coin2Amount}`;
+        orderInfoString = `${order.purpose}-order${order.subPurposeString || ''}${onWhichAccount} with id=${orderId}, type=${orderType}, targetType=${order.targetType}, pair=${pair}, price=${order.price}, coin1Amount=${order.coin1Amount} (${order.coin1AmountLeft} left), coin2Amount=${order.coin2Amount}`;
 
         if (isOrderFoundById) {
           if (order.isProcessed) {
@@ -225,7 +309,7 @@ module.exports = {
 
         for (const order of ordersToClear) {
           if (!clearedOrdersAll.includes(order._id)) {
-            const orderInfoString = `${order.purpose}-order with id=${order._id}, type=${order.type}, targetType=${order.targetType}, pair=${order.pair}, price=${order.price}, coin1Amount=${order.coin1Amount}, coin2Amount=${order.coin2Amount}`;
+            const orderInfoString = `${order.purpose}-order${order.subPurposeString || ''} with id=${order._id}, type=${order.type}, targetType=${order.targetType}, pair=${order.pair}, price=${order.price}, coin1Amount=${order.coin1Amount} (${order.coin1AmountLeft} left), coin2Amount=${order.coin2Amount}`;
 
             const cancelReq = await traderapi.cancelOrder(order._id, order.type, order.pair);
 
@@ -380,7 +464,9 @@ module.exports = {
       const totalOrdersCountAfterUpdate = dbOrders.length;
 
       const dbOrderIds = dbOrders.map((order) => {
-        return order._id;
+        // While dbOrders stores ids in native type (can be number), getOpenOrders always returns ids as strings
+        // Cast dbOrders ids to string for further comparison
+        return order._id.toString();
       });
 
       let clearedOrdersCountAll = 0;
