@@ -223,17 +223,17 @@ module.exports = function() {
 
     /**
      * Places a Limit order. P2PB2B doesn't support market orders.
-     * @param {String} market In P2PB2B format as ETH_USDT
-     * @param {String} amount Order amount
-     * @param {String} price Order price
-     * @param {String} side 'buy' or 'sell'
+     * @param {string} market In P2PB2B format as ETH_USDT
+     * @param {string} amount Order amount
+     * @param {string} price Order price
+     * @param {string} side 'buy' or 'sell'
      * https://github.com/P2B-team/p2b-api-docs/blob/master/api-doc.md#create-order
      */
     addOrder(market, amount, price, side) {
       const data = {
         market,
-        amount: String(amount),
-        price: String(price),
+        amount,
+        price,
         side,
       };
 

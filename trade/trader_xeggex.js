@@ -1,16 +1,16 @@
-const NonkycAPI = require('./api/nonkyc_api');
+const XeggeXAPI = require('./api/xeggex_api');
 const utils = require('../helpers/utils');
-const _networks = require('./../helpers/networks');
-const config = require('./../modules/configReader');
+const _networks = require('../helpers/networks');
+const config = require('../modules/configReader');
 
 /**
  * API endpoints:
- * https://api.nonkyc.io/api/v2
+ * https://api.xeggex.com/api/v2
  */
-const apiServer = 'https://api.nonkyc.io/api/v2';
-const exchangeName = 'NonKYC';
+const apiServer = 'https://api.xeggex.com/api/v2';
+const exchangeName = 'XeggeX';
 
-// Map NonKYC's order status -> Bot's status
+// Map XeggeX's order status -> Bot's status
 const orderStatusMap = {
   Active: 'new',
   New: 'new', // not described in docs, but was found during testing
@@ -32,9 +32,9 @@ module.exports = (
     coin1 = config.coin1,
     coin2 = config.coin2,
 ) => {
-  const nonkycApiClient = NonkycAPI();
+  const xeggexApiClient = XeggeXAPI();
 
-  nonkycApiClient.setConfig(apiServer, apiKey, secretKey, pwd, log, publicOnly);
+  xeggexApiClient.setConfig(apiServer, apiKey, secretKey, pwd, log, publicOnly);
 
   // Fulfill markets on initialization
   if (loadMarket) {
@@ -57,7 +57,7 @@ module.exports = (
     module.exports.gettingMarkets = true;
 
     return new Promise((resolve) => {
-      nonkycApiClient.markets().then((markets) => {
+      xeggexApiClient.markets().then((markets) => {
         try {
           const result = {};
 
@@ -115,7 +115,7 @@ module.exports = (
     module.exports.gettingCurrencies = true;
 
     return new Promise((resolve) => {
-      nonkycApiClient.currencies().then((currencies) => {
+      xeggexApiClient.currencies().then((currencies) => {
         try {
           const result = {};
 
@@ -148,6 +148,7 @@ module.exports = (
                 const [, rawNetwork] = child.ticker.split('-');
 
                 const network = formatNetworkName(child.network, currency.ticker);
+                const tokenOf = currencies.find((el) => el.id === child.tokenOf);
 
                 result[currency.ticker].networks[network] = {
                   chainName: rawNetwork,
@@ -158,7 +159,7 @@ module.exports = (
                   comment: child.maintenanceNotes || child.withdrawalNotes,
                   confirmations: +child.confirmsRequired,
                   withdrawalFee: +child.withdrawFee,
-                  withdrawalFeeCurrency: child.tokenOf?.ticker?.split('-')[0],
+                  withdrawalFeeCurrency: tokenOf?.ticker?.split('-')[0],
                   decimals: +child.withdrawDecimals,
                   precision: utils.getPrecision(+child.withdrawDecimals),
                 };
@@ -230,7 +231,7 @@ module.exports = (
     },
 
     /**
-     * Features available on NonKYC exchange
+     * Features available on XeggeX exchange
      * @returns {Object}
      */
     features() {
@@ -246,7 +247,7 @@ module.exports = (
         getFundHistoryImplemented: true,
         allowAmountForMarketBuy: true,
         amountForMarketOrderNecessary: true,
-        accountTypes: false, // NonKYC doesn't supports main, trade, margin accounts
+        accountTypes: false, // XeggeX doesn't supports main, trade, margin accounts
         withdrawAccountType: '', // Withdraw funds from single account
         withdrawalSuccessNote: false, // No additional action needed after a withdrawal by API
         supportTransferBetweenAccounts: false,
@@ -265,7 +266,7 @@ module.exports = (
       let balances;
 
       try {
-        balances = await nonkycApiClient.getBalances();
+        balances = await xeggexApiClient.getBalances();
       } catch (error) {
         log.warn(`API request getBalances(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${error}`);
         return undefined;
@@ -308,7 +309,7 @@ module.exports = (
       let orders;
 
       try {
-        orders = await nonkycApiClient.getOrders(coinPair.pairPlain, limit, offset);
+        orders = await xeggexApiClient.getOrders(coinPair.pairPlain, limit, offset);
       } catch (error) {
         log.warn(`API request getOpenOrdersPage(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${error}`);
         return undefined;
@@ -375,7 +376,7 @@ module.exports = (
       let order;
 
       try {
-        order = await nonkycApiClient.getOrder(orderId);
+        order = await xeggexApiClient.getOrder(orderId);
       } catch (error) {
         log.warn(`API request getOrderDetails(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${error}`);
         return undefined;
@@ -385,7 +386,7 @@ module.exports = (
         if (order.id) {
           const result = {
             orderId: order.id.toString(),
-            tradesCount: undefined, // NonKYC doesn't provide trades info
+            tradesCount: undefined, // XeggeX doesn't provide trades info
             price: +order.price, // filled price for market orders
             side: order.side.toLowerCase(), // 'buy' or 'sell'
             type: order.type.toLowerCase(), // 'limit' or 'market'
@@ -393,7 +394,7 @@ module.exports = (
             volume: +order.quantity * +order.price, // In coin2
             pairPlain: coinPair.pairPlain,
             pairReadable: coinPair.pairReadable,
-            totalFeeInCoin2: undefined, // NonKYC doesn't provide fee info
+            totalFeeInCoin2: undefined, // XeggeX doesn't provide fee info
             amountExecuted: +order.executedQuantity, // In coin1
             volumeExecuted: +order.executedQuantity * +order.price, // In coin2
             timestamp: +order.createdAt, // must be as utils.unixTimeStampMs(): 1641121688194 - 1 641 121 688 194
@@ -403,7 +404,7 @@ module.exports = (
 
           return result;
         } else {
-          const errorMessage = order.nonkycErrorInfo ?? 'No details.';
+          const errorMessage = order.xeggexErrorInfo ?? 'No details.';
           log.log(`Unable to get order ${orderId} details: ${JSON.stringify(errorMessage)}. Returning unknown order status.`);
 
           return {
@@ -420,8 +421,8 @@ module.exports = (
     /**
      * Cancel an order
      * @param {String} orderId Example: '655f28a1f6849a420b2e913d'
-     * @param {String} side Not used for NonKYC
-     * @param {String} pair Not used for NonKYC. In classic format as BTC/USDT
+     * @param {String} side Not used for XeggeX
+     * @param {String} pair Not used for XeggeX. In classic format as BTC/USDT
      * @returns {Promise<Boolean|undefined>}
      */
     async cancelOrder(orderId, side, pair) {
@@ -430,7 +431,7 @@ module.exports = (
       let order;
 
       try {
-        order = await nonkycApiClient.cancelOrder(orderId);
+        order = await xeggexApiClient.cancelOrder(orderId);
       } catch (error) {
         log.warn(`API request cancelOrder(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${error}`);
         return undefined;
@@ -442,7 +443,7 @@ module.exports = (
           log.log(`Cancelling order ${orderId} on ${pair} pair…`);
           return true;
         } else {
-          const errorMessage = order?.nonkycErrorInfo ?? 'No details';
+          const errorMessage = order?.xeggexErrorInfo ?? 'No details';
           log.log(`Unable to cancel order ${orderId} on ${pair} pair: ${errorMessage}.`);
           return false;
         }
@@ -465,7 +466,7 @@ module.exports = (
       let orders;
 
       try {
-        orders = await nonkycApiClient.cancelAllOrders(coinPair.pairPlain);
+        orders = await xeggexApiClient.cancelAllOrders(coinPair.pairPlain);
       } catch (error) {
         log.warn(`API request cancelAllOrders(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${error}`);
         return undefined;
@@ -476,7 +477,7 @@ module.exports = (
           log.log(`Cancelling ${orders.ids.length} orders on ${pair} pair…`);
           return true;
         } else {
-          const errorMessage = orders?.nonkycErrorInfo ?? 'No details';
+          const errorMessage = orders?.xeggexErrorInfo ?? 'No details';
           log.log(`Unable to cancel orders on ${pair} pair: ${errorMessage}.`);
           return false;
         }
@@ -498,7 +499,7 @@ module.exports = (
       let ticker;
 
       try {
-        ticker = await nonkycApiClient.ticker(coinPair.pairPlain);
+        ticker = await xeggexApiClient.ticker(coinPair.pairPlain);
       } catch (error) {
         log.warn(`API request getRates(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${error}`);
         return undefined;
@@ -524,7 +525,7 @@ module.exports = (
 
     /**
      * Places an order
-     * NonKYC supports both limit and market orders
+     * XeggeX supports both limit and market orders
      * @param {String} side 'buy' or 'sell'
      * @param {String} pair In classic format like BTC/USDT
      * @param {Number} price Order price
@@ -637,9 +638,9 @@ module.exports = (
       let errorMessage;
 
       try {
-        response = await nonkycApiClient.addOrder(marketInfo.pairPlain, coin1Amount, price, side, orderType);
+        response = await xeggexApiClient.addOrder(marketInfo.pairPlain, coin1Amount, price, side, orderType);
 
-        errorMessage = response?.nonkycErrorInfo;
+        errorMessage = response?.xeggexErrorInfo;
         orderId = response?.id;
       } catch (error) {
         message = `API request addOrder(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${error}.`;
@@ -678,7 +679,7 @@ module.exports = (
       let book;
 
       try {
-        book = await nonkycApiClient.orderBook(coinPair.pairPlain);
+        book = await xeggexApiClient.orderBook(coinPair.pairPlain);
       } catch (error) {
         log.warn(`API request getOrderBook(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${error}`);
         return undefined;
@@ -733,7 +734,7 @@ module.exports = (
       let trades;
 
       try {
-        trades = await nonkycApiClient.getTradesHistory(coinPair.pairPlain);
+        trades = await xeggexApiClient.getTradesHistory(coinPair.pairPlain);
       } catch (error) {
         log.warn(`API request getTradesHistory(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${error}`);
         return undefined;
@@ -791,18 +792,18 @@ module.exports = (
           paramString += ` -> ticker: ${ticker}`;
 
           try {
-            data = await nonkycApiClient.getDepositAddress(ticker);
+            data = await xeggexApiClient.getDepositAddress(ticker);
           } catch (error) {
             log.warn(`API request getDepositAddress(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${error}`);
             continue;
           }
 
           try {
-            if (!data.nonkycErrorInfo) {
+            if (!data.xeggexErrorInfo) {
               result.push({ network: networkName, address: data.address, memo: data.paymentid ? `paymentid: ${data.paymentid}` : '' });
             } else {
-              const nonkycErrorInfo = data.nonkycErrorInfo ?? 'No details.';
-              const errorMessage = `Unable to get ${ticker} deposit address. Details: ${JSON.stringify(nonkycErrorInfo)}.`;
+              const xeggexErrorInfo = data.xeggexErrorInfo ?? 'No details.';
+              const errorMessage = `Unable to get ${ticker} deposit address. Details: ${JSON.stringify(xeggexErrorInfo)}.`;
 
               log.log(errorMessage);
               result.push({ network: networkName, address: errorMessage });
@@ -821,7 +822,7 @@ module.exports = (
     },
 
     /**
-     * Withdraw coin from NonKYC
+     * Withdraw coin from XeggeX
      * @param {String} address Crypto address to withdraw funds to
      * @param {Number} amount Quantity to withdraw. Fee to be added, if provided.
      * @param {String} coin Unique symbol of the currency to withdraw from
@@ -837,18 +838,18 @@ module.exports = (
       }
 
       // There is an issue withdrawing asset USDT-ARB20
-      // Nonkyc processed a request to https://nonkyc.io/api/v2/createwithdrawal with data ticker=USDT-ARB20&quantity=0.0015&address=0x22137BbFfF376dD910d4040ed28E887bD6245151, but with error: 500 Internal Server Error, [No error code] No error message. Resolving…
+      // XeggeX processed a request to https://xeggex.com/api/v2/createwithdrawal with data ticker=USDT-ARB20&quantity=0.0015&address=0x22137BbFfF376dD910d4040ed28E887bD6245151, but with error: 500 Internal Server Error, [No error code] No error message. Resolving…
       // Withdrawals of DASH work good
 
       let data;
 
       try {
-        data = await nonkycApiClient.addWithdrawal(ticker, amount, address);
+        data = await xeggexApiClient.addWithdrawal(ticker, amount, address);
       } catch (error) {
         log.warn(`API request withdraw(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${error}`);
         return {
           success: undefined,
-          error: data?.nonkycErrorInfo ?? error,
+          error: data?.xeggexErrorInfo ?? error,
         };
       }
 
@@ -874,7 +875,7 @@ module.exports = (
         log.warn(`Error while processing withdraw(${paramString}) request result: ${JSON.stringify(data)}. ${error}`);
         return {
           success: false,
-          error: data?.nonkycErrorInfo ?? error,
+          error: data?.xeggexErrorInfo ?? error,
         };
       }
     },
@@ -906,7 +907,7 @@ module.exports = (
       let records;
 
       try {
-        records = await nonkycApiClient[apiMethod](coin, limit);
+        records = await xeggexApiClient[apiMethod](coin, limit);
       } catch (error) {
         log.warn(`API request ${apiMethod}(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${error}`);
         return {
@@ -984,20 +985,31 @@ function formatNetworkName(network, ticker) {
   const networksNameMap = {
     'Ethereum Main Chain (ETH)': _networks['ERC20'].code,
     'Ethereum Main Chain': _networks['ERC20'].code,
+    'Ethereum Mainnet (ETH)': _networks['ERC20'].code,
+    'Ethereum Mainnet': _networks['ERC20'].code,
     'Binance Smart Chain (BSC)': _networks['BEP20'].code,
     'Binance Smart Chain': _networks['BEP20'].code,
+    'Binance Smart Chain Mainnet (BSC)': _networks['BEP20'].code,
+    'Binance Smart Chain Mainnet': _networks['BEP20'].code,
     'Tron Network (TRC20)': _networks['TRC20'].code,
+    'Tron Mainnet (TRX)': _networks['TRC20'].code,
     'Polygon Main Chain (MATIC)': _networks['MATIC'].code,
     'Polygon Main Chain': _networks['MATIC'].code,
+    'Polygon Mainnet (MATIC)': _networks['MATIC'].code,
+    'Polygon Mainnet': _networks['MATIC'].code,
     'Arbitrum One Mainnet': _networks['ARBITRUM'].code,
+    'Arbitrum Mainnet': _networks['ARBITRUM'].code,
+    'Arbitrum Mainnet (ARB20)': _networks['ARBITRUM'].code,
     'Bitcoin Main Chain': _networks['BTC'].code,
+    'Bitcoin Mainnet': _networks['BTC'].code,
+    'Avalanche AVAX-C Chain': _networks['AVAX-C-CHAIN'].code,
   };
 
   return networksNameMap[network] || ticker || network;
 }
 
 /**
- * Returns pair in NonKYC format like 'BTC_USDT'
+ * Returns pair in XeggeX format like 'BTC_USDT'
  * @param pair Pair in any format
  * @returns {Object|Boolean} pairReadable, pairPlain, coin1, coin2
 */

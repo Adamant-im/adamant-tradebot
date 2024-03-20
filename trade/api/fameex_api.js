@@ -141,7 +141,7 @@ module.exports = function() {
         }
 
         if (httpCode === statusCodes.ok && !fameEXError?.isTemporary && data.data?.timestamp !== 0) {
-          log.log(`FameEX processed a request to ${url} with data ${reqParameters}, but with error: [${error.code}] ${error.msg}. Resolving…`);
+          log.log(`FameEX processed a request to ${url} with data ${reqParameters}, but with error: ${errorMessage}. Resolving…`);
           resolve(data);
         } else {
           log.warn(`Request to ${url} with data ${reqParameters} failed. details: ${errorMessage}. Rejecting…`);
@@ -222,6 +222,9 @@ module.exports = function() {
         params,
         method: type,
         timeout: 10000,
+        headers: {
+          'Accept-Encoding': 'application/gzip',
+        },
       };
 
       axios(httpOptions)
@@ -317,12 +320,12 @@ module.exports = function() {
     /**
      * Create order
      * https://fameex-docs.github.io/docs/api/spot/en/#new-order
-     * @param {String} symbol In FameEX format as 'BTC-USDT'
-     * @param {String} amount Entrusted quantity (trading amount when buying at market price) (amount >= 1)
-     * @param {String} quote Entrusted quantity (trading amount when buying at market price) (quote >= 1)
-     * @param {String} price Commission price
-     * @param {Number} side Order Direction 1-Buy 2-Sell
-     * @param {Number} orderType Order Type 1-Limit Price 2-Market Price 3-Take Profit and Stop Loss 4-Tracking Order 5-Maker Only
+     * @param {string} symbol In FameEX format as 'BTC-USDT'
+     * @param {string} amount Entrusted quantity (trading amount when buying at market price) (amount >= 1)
+     * @param {string} quote Entrusted quantity (trading amount when buying at market price) (quote >= 1)
+     * @param {string} price Commission price
+     * @param {number} side Order Direction 1-Buy 2-Sell
+     * @param {number} orderType Order Type 1-Limit Price 2-Market Price 3-Take Profit and Stop Loss 4-Tracking Order 5-Maker Only
      * @return {Promise<Object>}
      */
     addOrder(symbol, amount, quote, price, side, orderType) {
@@ -334,7 +337,7 @@ module.exports = function() {
       };
 
       if (price) {
-        data.price = String(price);
+        data.price = price;
       }
 
       return protectedRequest('post', `${versioning.v1}/api/spot/orders`, data);

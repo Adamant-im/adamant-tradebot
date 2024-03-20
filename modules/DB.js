@@ -19,6 +19,11 @@ mongoClient.connect()
       ordersCollection.createIndex([['isProcessed', 1], ['purpose', 1]]);
       ordersCollection.createIndex([['pair', 1], ['exchange', 1]]);
 
+      const fillsCollection = db.collection('fills');
+      fillsCollection.createIndex([['isProcessed', 1], ['purpose', 1]]);
+      fillsCollection.createIndex([['pair', 1], ['exchange', 1]]);
+
+      collections.fillsDb = model(fillsCollection);
       collections.ordersDb = model(ordersCollection);
       collections.incomingTxsDb = model(incomingTxsCollection);
       collections.systemDb = model(db.collection('systems'));

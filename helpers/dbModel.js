@@ -1,6 +1,13 @@
 module.exports = (db) => {
   class Model {
-    constructor(data = {}, shouldSave) {
+    /**
+     * Creates a Mongod record/document
+     * Note: The constructor is not async; if you want to store the data in the database, consider that it will take time.
+     * As a workaround, create a document with shouldSave=false and then do 'await record.save()'
+     * @param {*} data Data to store
+     * @param {boolean} [shouldSave=false] If store date in the database
+     */
+    constructor(data = {}, shouldSave = false) {
       this.db = db;
 
       Object.assign(this, data);
@@ -9,6 +16,7 @@ module.exports = (db) => {
         this.save();
       }
     }
+
     static get db() {
       return db;
     }

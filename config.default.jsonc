@@ -1,13 +1,13 @@
 {
   /**
-    The bot's secret passphrase. Create separate ADM account for the bot.
-    Bot's ADM address will correspond this passphrase.
+    The bot's secret passphrase. Create a separate ADM account for the bot.
+    Bot's ADM address will correspond to this passPhrase.
   **/
   "passPhrase": "distance expect praise frequent..",
 
   /**
     List of nodes to fetch transactions.
-    If one become unavailable, bot will choose live one.
+    If one becomes unavailable, the bot will choose a live one.
   **/
   "node_ADM": [
     "https://bid.adamant.im",
@@ -38,7 +38,7 @@
     "U123.."
   ],
 
-  /** Notify non-admins that they are not admins. If false, bot will be silent. **/
+  /** Notify non-admins that they are not admins. If false, the bot will be silent. **/
   "notify_non_admins": false,
 
   /** List of supported exchanges **/
@@ -48,7 +48,8 @@
     "StakeCube",
     "Coinstore",
     "FameEX",
-    "NonKYC"
+    "NonKYC",
+    "XeggeX"
   ],
 
   /** Exchange to work with. Case insensitive. **/
@@ -58,14 +59,30 @@
   "pair": "ADM/USDT",
 
   /**
-    Interval in minutes to clear all of Unknown (which are not placed by the bot) opened orders.
-    Some exchanges has API issues with closing or matching orders.
+    If an exchange doesn't publicly expose API for the pair, the bot can use private API.
+    Specific to exchange API implementation.
+  **/
+  "pair_hidden": false,
+
+  /**
+    Interval in minutes to clear all of the Unknown (which are not placed by the bot) opened orders.
+    Some exchanges have API issues with closing or matching orders.
     Because of this, your account can accumulate open orders and lead to frozen balances.
-    In such a case you can run "/clear unk" command manually, or set this parameter for automatic clearing.
-    Note: this command cancels all of Unknown orders for the pair, including ones you placed on exchange's website.
+    In such a case, you can run the "/clear unk" command manually or set this parameter for automatic clearing.
+    Note: this command cancels all Unknown orders for the pair, including ones you placed on an exchange's website.
     0 means disabled.
   **/
   "clearAllOrdersInterval": 0,
+
+  /** Exchange's custom restrictions to override `traderapi.features()`, if you have a special account **/
+  "exchange_restrictions": {
+    /** Max number of open orders. Set 'false' to skip **/
+    "orderNumberLimit": false,
+    /** If the exchange doesn't provide min order amount value, the bot uses the default one. Set 'false' to use DEFAULT_MIN_ORDER_AMOUNT_USD **/
+    "minOrderAmountUSD": false,
+    /** Same for the upper bound of the min order amount **/
+    "minOrderAmountUpperBoundUSD": false
+  },
 
   /**
     A short name which helps you to understand which exchange account you use.
@@ -82,7 +99,7 @@
   /** Exchange's account trade password or memo (if required by exchange) **/
   "apipassword": "YOUR-TRADE-PASS",
 
-  /** Override project name for notifications. Letters, digits, - and ~ only. By default, it's derived from a repository name, TradeBot. **/
+  /** Override project name for notifications. Letters, digits, - and ~ only. By default, it's derived from a repository name, TradeBot-me. **/
   "project_name": "",
 
   /** Bot's name for notifications. Keep it empty if you want the default format ADM/USDT@Coinstore-acc1 TradeBot **/
@@ -124,14 +141,14 @@
 
     /**
       Enables health API
-      Allows to check if bot is running with http://ip:port/ping
+      Allows to check if a bot is running with http://ip:port/ping
     **/
     "health": false,
 
     /**
       Enables debug API
       Do not set for live bots, use only for debugging.
-      Allows to get DBs records like http://ip:port/db?tb=incomingTxsDb
+      Allows to get DB records like http://ip:port/db?tb=incomingTxsDb
     **/
     "debug": false
   },

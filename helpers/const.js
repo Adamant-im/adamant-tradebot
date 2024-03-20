@@ -30,4 +30,8 @@ module.exports = {
   LADDER_PREVIOUS_FILLED_ORDER_STATES: [undefined, 'Not placed', 'Filled', 'Cancelled', 'To be removed', 'Removed'],
   REGEXP_WHOLE_NUMBER: /^[0-9]+$/,
   REGEXP_UUID: /^[a-f\d]{4}(?:[a-f\d]{4}-){4}[a-f\d]{12}$/,
+  DEFAULT_API_PROCESSING_DELAY_MS: 100,
+  DEFAULT_MIN_ORDER_AMOUNT_USD: 0.1,
+  DEFAULT_MIN_ORDER_AMOUNT_UPPER_BOUND_USD: 2,
+  OVER_LIQUIDITY_SPREAD_PERCENT: 0.7,
 };

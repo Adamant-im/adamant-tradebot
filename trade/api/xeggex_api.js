@@ -6,11 +6,11 @@ const {
 } = require('../../helpers/utils');
 
 /**
- * Docs: https://nonkyc.io/api
+ * Docs: https://xeggex.com/api
  */
 
 /**
- * Error codes: https://nonkyc.io/api
+ * Error codes: https://xeggex.com/api
  * isTemporary means that we consider the request is temporary failed and we'll repeat it later with success possibility
  */
 const errorCodeDescriptions = {
@@ -131,7 +131,7 @@ const errorCodeDescriptions = {
 };
 
 module.exports = function() {
-  let WEB_BASE = 'https://api.nonkyc.io/api/v2';
+  let WEB_BASE = 'https://api.xeggex.com/api/v2';
   let config = {
     apiKey: '',
     secret_key: '',
@@ -154,16 +154,16 @@ module.exports = function() {
 
     const data = responseOrError?.data ?? responseOrError?.response?.data;
 
-    const nonkycError = data?.error;
-    const nonkycErrorInfo = errorCodeDescriptions[nonkycError?.code];
+    const xeggexError = data?.error;
+    const xeggexErrorInfo = errorCodeDescriptions[xeggexError?.code];
     const httpCodeInfo = errorCodeDescriptions[httpCode];
 
-    const success = httpCode === 200 && !nonkycError;
+    const success = httpCode === 200 && !xeggexError;
 
     const error = {
-      code: nonkycError?.code ?? 'No error code',
-      description: trimAny(nonkycError?.message ?? nonkycErrorInfo?.description ?? '', ' .'),
-      details: trimAny(nonkycError?.description ?? nonkycErrorInfo?.details ?? '', ' .'),
+      code: xeggexError?.code ?? 'No error code',
+      description: trimAny(xeggexError?.message ?? xeggexErrorInfo?.description ?? '', ' .'),
+      details: trimAny(xeggexError?.description ?? xeggexErrorInfo?.details ?? '', ' .'),
     };
 
     error.message = error.description + (error.details ? ` (${error.details})` : '');
@@ -174,15 +174,15 @@ module.exports = function() {
       if (success) {
         resolve(data);
       } else {
-        const nonkycErrorInfoString = `[${error.code}] ${error.message || 'No error message'}`;
-        const errorMessage = httpCode ? `${httpCode} ${httpMessage}, ${nonkycErrorInfoString}` : String(responseOrError);
+        const xeggexErrorInfoString = `[${error.code}] ${error.message || 'No error message'}`;
+        const errorMessage = httpCode ? `${httpCode} ${httpMessage}, ${xeggexErrorInfoString}` : String(responseOrError);
 
         if (typeof data === 'object') {
-          data.nonkycErrorInfo = nonkycErrorInfoString;
+          data.xeggexErrorInfo = xeggexErrorInfoString;
         }
 
-        if (!httpCodeInfo?.isTemporary && !nonkycErrorInfo?.isTemporary) {
-          log.log(`Nonkyc processed a request to ${url} with data ${reqParameters}, but with error: ${errorMessage}. Resolving…`);
+        if (!httpCodeInfo?.isTemporary && !xeggexErrorInfo?.isTemporary) {
+          log.log(`XeggeX processed a request to ${url} with data ${reqParameters}, but with error: ${errorMessage}. Resolving…`);
 
           resolve(data);
         } else {
@@ -277,7 +277,7 @@ module.exports = function() {
 
     /**
      * Get detailed account balance information
-     * https://nonkyc.io/api#/Account/get_balances
+     * https://xeggex.com/api#/Account/get_balances
      * @return {Promise<[]>}
      */
     getBalances() {
@@ -286,8 +286,8 @@ module.exports = function() {
 
     /**
      * Get a list of your 'active' spot market orders
-     * https://nonkyc.io/api#/Account/get_getorders
-     * @param {String} symbol In NonKYC format as BTC_USDT
+     * https://xeggex.com/api#/Account/get_getorders
+     * @param {String} symbol In XeggeX format as BTC_USDT
      * @param {Number} [limit=500] Max: 500
      * @param {Number} [offset=0]
      * @return {Promise<[]>}
@@ -305,7 +305,7 @@ module.exports = function() {
 
     /**
      * Get an order by id
-     * https://nonkyc.io/api#/Account/get_getorder__orderId_
+     * https://xeggex.com/api#/Account/get_getorder__orderId_
      * @param {String} orderId Example: '655f28a1f6849a420b2e913d'
      * @returns {Promise<Object>}
      */
@@ -315,8 +315,8 @@ module.exports = function() {
 
     /**
      * Make a new spot market order
-     * https://nonkyc.io/api#/Account/post_createorder
-     * @param {String} symbol In NonKYC format as BTC_USDT
+     * https://xeggex.com/api#/Account/post_createorder
+     * @param {String} symbol In XeggeX format as BTC_USDT
      * @param {String} amount Base coin amount
      * @param {String} price Order price
      * @param {String} side buy or sell
@@ -337,7 +337,7 @@ module.exports = function() {
 
     /**
      * Cancel an open spot trade order
-     * https://nonkyc.io/api#/Account/post_cancelorder
+     * https://xeggex.com/api#/Account/post_cancelorder
      * @param {String} orderId Example: '655f28a1f6849a420b2e913d'
      * @return {Promise<Object>}
      */
@@ -351,8 +351,8 @@ module.exports = function() {
 
     /**
      * Cancel a batch of open orders in a spot market
-     * https://nonkyc.io/api#/Account/post_cancelallorders
-     * @param {String} symbol In NonKYC format as BTC_USDT
+     * https://xeggex.com/api#/Account/post_cancelallorders
+     * @param {String} symbol In XeggeX format as BTC_USDT
      * @param {String} [side='all'] 'buy', 'sell' or 'all'
      * @return {Promise<Object>}
      */
@@ -367,8 +367,8 @@ module.exports = function() {
 
     /**
      * Market related statistics for single market for the last 24 hours
-     * https://nonkyc.io/api#/Aggregator%20Datafeed%20Format/get_ticker__symbol_
-     * @param {String} symbol In NonKYC format as BTC_USDT
+     * https://xeggex.com/api#/Aggregator%20Datafeed%20Format/get_ticker__symbol_
+     * @param {String} symbol In XeggeX format as BTC_USDT
      * @return {Promise<Object>}
      */
     ticker(symbol) {
@@ -377,8 +377,8 @@ module.exports = function() {
 
     /**
      * Order book of any given market trading pair, split into two different arrays for bid and for ask orders
-     * https://nonkyc.io/api#/Aggregator%20Datafeed%20Format/get_orderbook
-     * @param {String} symbol In NonKYC format as BTC_USDT
+     * https://xeggex.com/api#/Aggregator%20Datafeed%20Format/get_orderbook
+     * @param {String} symbol In XeggeX format as BTC_USDT
      * @param {Number} [limit=400] Bids 1/2 and Asks 1/2. Default is 100.
      * @return {Promise<Object>}
      */
@@ -393,8 +393,8 @@ module.exports = function() {
 
     /**
      * Historical market trade data for any given trading pair
-     * https://nonkyc.io/api#/Aggregator%20Datafeed%20Format/get_historical_trades
-     * @param {String} symbol In NonKYC format as BTC_USDT
+     * https://xeggex.com/api#/Aggregator%20Datafeed%20Format/get_historical_trades
+     * @param {String} symbol In XeggeX format as BTC_USDT
      * @param {Number} [limit=500]
      * @return {Promise<[]>}
      */
@@ -409,7 +409,7 @@ module.exports = function() {
 
     /**
      * Get list of markets
-     * https://nonkyc.io/api#/Public/get_market_getlist
+     * https://xeggex.com/api#/Public/get_market_getlist
      * @return {Promise<[]>}
     */
     markets() {
@@ -418,7 +418,7 @@ module.exports = function() {
 
     /**
      * Get a list of assets
-     * https://nonkyc.io/api#/Public/get_asset_getlist
+     * https://xeggex.com/api#/Public/get_asset_getlist
      * @return {Promise<[]>}
     */
     currencies() {
@@ -427,7 +427,7 @@ module.exports = function() {
 
     /**
      * Get your deposit address
-     * https://nonkyc.io/api#/Account/get_getdepositaddress__ticker_
+     * https://xeggex.com/api#/Account/get_getdepositaddress__ticker_
      * @param {String} ticker As ETH-ERC20, ADM
      * @return {Promise<Object>}
      */
@@ -437,7 +437,7 @@ module.exports = function() {
 
     /**
      * Make a new withdrawal request
-     * https://nonkyc.io/api#/Account/post_createwithdrawal
+     * https://xeggex.com/api#/Account/post_createwithdrawal
      * @param {String} ticker As ETH-ERC20, ADM
      * @param {Number} quantity
      * @param {String} cryptoAddress Crypto address to withdraw funds to
@@ -455,7 +455,7 @@ module.exports = function() {
 
     /**
      * Get a list of your account withdrawals
-     * https://nonkyc.io/api#/Account/get_getwithdrawals
+     * https://xeggex.com/api#/Account/get_getwithdrawals
      * @param {String} coin As BTC
      * @param {Number} [limit=500] Min: 1. Max: 500.
      * @param {Number} [offset=0]
@@ -473,7 +473,7 @@ module.exports = function() {
 
     /**
      * Get a list of your account deposits
-     * https://nonkyc.io/api#/Account/get_getdeposits
+     * https://xeggex.com/api#/Account/get_getdeposits
      * @param {String} ticker As BTC
      * @param {Number} [limit=500] Min: 1. Max: 500.
      * @param {Number} [offset=0]

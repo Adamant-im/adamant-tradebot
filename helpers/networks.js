@@ -31,8 +31,15 @@ const networks = {
   },
   'AVAX-C-CHAIN': {
     code: 'AVAX-C-CHAIN',
+    altcode: 'AVAX-CCHAIN',
     name: 'Avalanche C-Chain',
     sampleAddress: '0xf41ca2e343a827403527c6b3c1fa91a9b134d45b',
+  },
+  'AVAX-X-CHAIN': {
+    code: 'AVAX-X-CHAIN',
+    altcode: 'AVAX-XCHAIN',
+    name: 'Avalanche X-Chain',
+    sampleAddress: 'X-avax1tzdcgj4ehsvhhgpl7zylwpw0gl2rxcg4r5afk5',
   },
   MATIC: {
     code: 'MATIC',
@@ -66,6 +73,7 @@ const networks = {
   },
   SOL: {
     code: 'SOL',
+    altcode: 'SPL',
     name: 'Solana',
     sampleAddress: '31Sof5r1xi7dfcaz4x9Kuwm8J9ueAdDduMcme59sP8gc',
   },
@@ -123,6 +131,16 @@ const networks = {
     code: 'XLM',
     name: 'Stellar',
     sampleAddress: 'GB5A3OA657UWF3BN7WU4XFFWT333HFP2KFK2OFAXPEL3BBGQ7QLRNASG',
+  },
+  CAP20: {
+    code: 'CAP20',
+    name: 'Chiliz Chain',
+    sampleAddress: '0x579391C9865545000d8922ACF71a660521cc6404',
+  },
+  BRC20: {
+    code: 'BRC20',
+    name: 'Ordinals',
+    sampleAddress: 'bc1pxaneaf3w4d27hl2y93fuft2xk6m4u3wc4rafevc6slgd7f5tq2dqyfgy06',
   },
 };
 

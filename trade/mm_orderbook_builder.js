@@ -10,7 +10,16 @@ const config = require('../modules/configReader');
 const log = require('../helpers/log');
 const notify = require('../helpers/notify');
 const tradeParams = require('./settings/tradeParams_' + config.exchange);
-const traderapi = require('./trader_' + config.exchange)(config.apikey, config.apisecret, config.apipassword, log);
+const traderapi = require('./trader_' + config.exchange)(
+    config.apikey,
+    config.apisecret,
+    config.apipassword,
+    log,
+    undefined,
+    undefined,
+    config.exchange_socket,
+    config.exchange_socket_pull,
+);
 const db = require('../modules/DB');
 const orderUtils = require('./orderUtils');
 const orderCollector = require('./orderCollector');
@@ -26,6 +35,8 @@ const INTERVAL_MAX = 3000;
 // Also depends on traderapi.features().orderNumberLimit
 const LIFETIME_MIN = 1500;
 const LIFETIME_KOEF = 0.5;
+
+const MAX_ORDERS_PER_ITERATION = 5; // Place up to 5 orders every iteration
 
 let isPreviousIterationFinished = true;
 
@@ -45,12 +56,6 @@ module.exports = {
     // const traderapi3 = TraderApi(config.apikey2, config.apisecret2, config.apipassword2, log);
     // const traderapi2 = require('./trader_' + 'azbit')(config.apikey, config.apisecret, config.apipassword, log);
 
-    // const ob = await traderapi.getOrderBook('DOGE/USD');
-    // console.log(ob);
-
-    // const req = await traderapi.getTradesHistory('eth/usdt');
-    // console.log(req);
-
     // setTimeout(() => {
     //   const traderapi = require('./trader_' + 'azbit')(config.apikey, config.apisecret, config.apipassword, log);
     //   console.log(require('./orderUtils').parseMarket('ADM/USDT', 'azbit'));
@@ -61,12 +66,50 @@ module.exports = {
     //     'order id', config.pair, undefined, 'Testing', 'Sample reason', undefined, traderapi);
     // console.log(cancellation);
 
-    // console.log(await traderapi.cancelAllOrders('BNB/USDT'));
-    // console.log(await traderapi.cancelOrder('5d13f3e8-dcb3-4a6d-88c1-16cf6e8d8179', undefined, 'DOGE/USDT'));
-    // console.log(await traderapi.cancelOrder('ODM54B-5CJUX-RSUKCK', undefined, 'DOGE/USDT'));
-    // console.log(traderapi.features().orderNumberLimit);
+    // console.log(await traderapi.markets);
+    // console.log(await traderapi.currencies);
+    // console.log(await traderapi.marketInfo('KCS/USDT'));
+    // console.log(await traderapi.currencyInfo('KCS'));
 
-    // console.log(await traderapi.getOrderDetails('11680204-90ca-4fd1-bb63-efed480d0632', 'ADM/USDT'));
+    // console.log(await traderapi.features());
+
+    // console.log(await traderapi.placeOrder('sell', 'KCS/BTC', null, 1, 0));
+
+    // const testOrderPrice = 0.0002162;
+    // const testOrderMarket = 'KCS/BTC';
+    // const partFilledOrder = await traderapi.placeOrder('sell', testOrderMarket, testOrderPrice, 0.2);
+    // await traderapi.placeOrder('buy', testOrderMarket, testOrderPrice, 0.1);
+    // await traderapi.getOpenOrders(testOrderMarket);
+
+    // console.log(await traderapi.getOrderDetails(119354495120, testOrderMarket));
+    // console.log(await traderapi.getOrderDetails('119353984789', testOrderMarket));
+    // console.log(await traderapi.getOrderDetails('65707c1285a72b0007ee2cbd2', testOrderMarket));
+    // console.log(await traderapi.getOrderDetails('123-any-order-number', testOrderMarket));
+    // console.log(await traderapi.getOrderDetails(undefined, testOrderMarket));
+
+    // console.log(await traderapi.getOrderDetails('65708f9e011c360007ad8129', testOrderMarket));
+    // console.log(await traderapi.getOrderDetails(partFilledOrder.orderId, testOrderMarket));
+
+    // console.log(await traderapi.cancelOrder('5d13f3e8-dcb3-4a6d-88c1-16cf6e8d8179', undefined, testOrderMarket));
+    // console.log(await traderapi.cancelOrder('ODM54B-5CJUX-RSUKCK', undefined, testOrderMarket));
+    // console.log(await traderapi.cancelOrder(119354495120, undefined, testOrderMarket));
+    // console.log(await traderapi.cancelOrder('119354495120', undefined, testOrderMarket));
+    // console.log(await traderapi.cancelOrder(undefined, undefined, testOrderMarket));
+
+    // console.log(await traderapi.cancelOrder('65708d8189f58f0007182278', undefined, testOrderMarket));
+
+    // console.log(await traderapi.cancelAllOrders('DOGE/USDT'));
+    // console.log(await traderapi.cancelAllOrders('ADM/USDT'));
+    // console.log(await traderapi.cancelAllOrders('KCS/BTC'));
+
+    // console.log(await traderapi.getRates('KCS/BTC'));
+    // console.log(await traderapi.getRates('ADM/BTC'));
+
+    // const ob = await traderapi.getOrderBook('KCS/USDT');
+    // console.log(ob);
+
+    // const req = await traderapi.getTradesHistory('kcs/btc');
+    // console.log(req);
   },
 
   run() {
@@ -75,7 +118,12 @@ module.exports = {
 
   async iteration() {
     const interval = setPause();
-    if (interval && tradeParams.mm_isActive && tradeParams.mm_isOrderBookActive) {
+    if (
+      interval &&
+      tradeParams.mm_isActive &&
+      tradeParams.mm_isOrderBookActive &&
+      constants.MM_POLICIES_REGULAR.includes(tradeParams.mm_Policy)
+    ) {
       if (isPreviousIterationFinished) {
         isPreviousIterationFinished = false;
         await this.buildOrderBook();
@@ -105,11 +153,17 @@ module.exports = {
 
       orderBookOrders = await orderUtils.updateOrders(orderBookOrders, config.pair, utils.getModuleName(module.id) + ':ob-'); // update orders which partially filled or not found
       orderBookOrders = await this.closeOrderBookOrders(orderBookOrders);
-      log.log(`Orderbook builder: ${orderBookOrders.length} ob-orders opened.`);
 
-      if (orderBookOrders.length < tradeParams.mm_orderBookOrdersCount) {
-        await this.placeOrderBookOrder(orderBookOrders.length);
+      let ordersToPlace = utils.randomValue(1, MAX_ORDERS_PER_ITERATION, true);
+      let orderBookOrdersCount = orderBookOrders.length;
+      while (ordersToPlace > 0 && orderBookOrdersCount < tradeParams.mm_orderBookOrdersCount) {
+        ordersToPlace--;
+        if (await this.placeOrderBookOrder(orderBookOrdersCount)) {
+          orderBookOrdersCount++;
+        }
       }
+
+      log.log(`Orderbook builder: ${orderBookOrdersCount} ob-orders opened.`);
     } catch (e) {
       log.error(`Error in buildOrderBook() of ${utils.getModuleName(module.id)} module: ` + e);
     }
@@ -215,8 +269,10 @@ module.exports = {
       }
 
       const orderReq = await traderapi.placeOrder(type, config.pair, price, coin1Amount, 1, null);
-      if (orderReq && orderReq.orderId) {
+
+      if (orderReq?.orderId) {
         const { ordersDb } = db;
+
         const order = new ordersDb({
           _id: orderReq.orderId,
           date: utils.unixTimeStampMs(),
@@ -231,12 +287,19 @@ module.exports = {
           price,
           coin1Amount,
           coin2Amount,
+          coin1AmountFilled: undefined,
+          coin2AmountFilled: undefined,
+          coin1AmountLeft: coin1Amount,
+          coin2AmountLeft: coin2Amount,
           LimitOrMarket: 1, // 1 for limit price. 0 for Market price.
           isProcessed: false,
           isExecuted: false,
           isCancelled: false,
           isClosed: false,
-        }, true);
+        });
+
+        await order.save();
+
         output = `${type} ${coin1Amount.toFixed(orderUtils.parseMarket(config.pair).coin1Decimals)} ${config.coin1} for ${coin2Amount.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${config.coin2} at ${price.toFixed(orderUtils.parseMarket(config.pair).coin2Decimals)} ${config.coin2}`;
         output += ` with ${Math.round(lifeTime/1000)} sec life time`;
         log.info(`Orderbook builder: Successfully placed ob-order to ${output}. Open ob-orders: ~${orderBookOrdersCount+1}.`);
