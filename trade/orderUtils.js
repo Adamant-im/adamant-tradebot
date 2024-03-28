@@ -68,7 +68,7 @@ module.exports = {
       onWhichAccount = ' on second account';
       balances = await api.getBalances(false);
     } else {
-      balances = await traderapi.getBalances(false);
+      balances = await this.getBalancesCached(false, utils.getModuleName(module.id));
     }
 
     if (!balances) {
@@ -419,7 +419,7 @@ module.exports = {
 
     try {
       const onWhichAccount = api.isSecondAccount ? ' (on second account)' : '';
-      const exchangeOrders = await traderapi.getOpenOrders(pair);
+      const exchangeOrders = await this.getOpenOrdersCached(pair, `${utils.getModuleName(module.id)}/${moduleName}`, noCache, api);
 
       log.log(`orderUtils: Updating ${dbOrders.length} ${samePurpose}dbOrders on ${pair} for ${moduleName}, noCache: ${noCache}, hideNotOpened: ${hideNotOpened}… Received ${exchangeOrders?.length} orders from the exchange.`);
 
@@ -693,5 +693,95 @@ module.exports = {
     }
 
     return updatedOrders;
+  },
+
+  /**
+   * Refers to traderapi.getOpenOrders. A stub for cache.
+  */
+  async getOpenOrdersCached(pair, moduleName, noCache = false, api = traderapi) {
+    let result;
+
+    try {
+      const onWhichAccount = api.isSecondAccount ? ' on second account' : '';
+
+      const exchangeOrders = await api.getOpenOrders(pair);
+
+      const maxRateCounter = exchangeOrders?.[0]?.maxRateCounter;
+      const rateCounterString = utils.isPositiveOrZeroInteger(maxRateCounter) ? ` Rate limit counter: ${maxRateCounter}.` : '';
+      log.log(`orderUtils: Getting fresh open orders${onWhichAccount} for ${moduleName}… ${exchangeOrders?.length} orders received.${rateCounterString}`);
+
+      if (exchangeOrders) {
+        result = utils.cloneArray(exchangeOrders);
+      } else {
+        log.warn(`orderUtils: Unable to get open orders${onWhichAccount} in getOpenOrdersCached().`);
+        return undefined;
+      }
+    } catch (e) {
+      log.error(`Error in getOpenOrdersCached() of ${utils.getModuleName(module.id)} module: ` + e);
+    }
+
+    return result;
+  },
+
+  /**
+   * Refers to traderapi.getOrderBook. A stub for cache.
+  */
+  async getOrderBookCached(pair, moduleName, noCache = false) {
+    let result;
+
+    try {
+      const pairObj = this.parseMarket(pair);
+
+      const exchangeOrderBook = await traderapi.getOrderBook(pairObj.pair);
+      const bid_low = exchangeOrderBook?.bids?.[0]?.price;
+      const ask_high = exchangeOrderBook?.asks?.[0]?.price;
+      if (bid_low && ask_high) {
+        const spread = ask_high - bid_low;
+        const priceAvg = (ask_high + bid_low) / 2;
+        const spreadPercent = spread / priceAvg * 100;
+        const precision = utils.getPrecision(pairObj.coin2Decimals);
+        const spreadNumber = Math.round(spread / precision);
+        const orderBookSpreadInfo = `Spread is ${spreadPercent.toFixed(4)}% (${spread.toFixed(pairObj.coin2Decimals)} ${pairObj.coin2}, ${spreadNumber} units)`;
+        let logMessage = `orderUtils: Received fresh order book for ${moduleName} — ${exchangeOrderBook.bids.length} bids and ${exchangeOrderBook.asks.length} asks at ${pairObj.pair}.`;
+        logMessage += ` Highest bid and lowest ask are ${exchangeOrderBook.bids[0].price.toFixed(pairObj.coin2Decimals)}–${exchangeOrderBook.asks[0].price.toFixed(pairObj.coin2Decimals)} ${pairObj.coin2}.`;
+        logMessage += ` ${orderBookSpreadInfo}.`;
+        log.log(logMessage);
+        result = utils.cloneObject(exchangeOrderBook);
+      } else {
+        log.warn('orderUtils: Unable to get order book in getOrderBookCached().');
+        return undefined;
+      }
+    } catch (e) {
+      log.error(`Error in getOrderBookCached() of ${utils.getModuleName(module.id)} module: ` + e);
+    }
+
+    return result;
+  },
+
+  /**
+   * Refers to traderapi.getBalances. A stub for cache.
+  */
+  async getBalancesCached(nonzero = true, moduleName, noCache = false, params, api = traderapi) {
+    let result;
+    const accountTypeString = params?.[0] ? ` '${params?.[0]}'-type` : '';
+    const onWhichAccount = api.isSecondAccount ? ' on second account' : '';
+
+    try {
+      log.log(`orderUtils: Getting fresh${accountTypeString} balances${onWhichAccount} for ${moduleName}…`);
+      const balances = await api.getBalances(false, params?.[0]);
+      if (balances) {
+        result = utils.cloneArray(balances);
+      } else {
+        log.warn(`orderUtils: Unable to get${accountTypeString} balances${onWhichAccount} in getBalancesCached().`);
+        return undefined;
+      }
+    } catch (e) {
+      log.error(`Error in getBalancesCached() of ${utils.getModuleName(module.id)} module: ` + e);
+    }
+    if (nonzero) {
+      result = result.filter((crypto) => crypto.free || crypto.freezed);
+    }
+
+    return result;
   },
 };
