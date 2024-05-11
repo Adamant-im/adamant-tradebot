@@ -493,11 +493,6 @@ module.exports = {
             log.info(`${targetPriceString} ${logMessage} ${this.getPwRangeString()}`);
 
             const placedOrder = await this.placePriceWatcherOrder(targetPrice, orderBookInfo, currentPrice);
-            if (placedOrder) {
-              // Maintain spread tiny in case of 'orderbook' market making
-              const sm = require('./mm_spread_maintainer');
-              await sm.maintainSpreadAfterPriceChange(orderBookInfo.typeTargetPrice, targetPrice, 'Price watcher', orderBook);
-            }
           }
         } else {
           // Current price is within the Pw range. Log only.
