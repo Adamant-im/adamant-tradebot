@@ -528,6 +528,16 @@ module.exports = {
   },
 
   /**
+   * Replaces large numbers with strings. E.g., {"orderId":1796423068260855809} with {"orderId":"1796423068260855809"}.
+   * @param {string} jsonString String to parse
+   * @return {object} JSON object or false, if unable to parse
+   */
+  jsonWrapLargeNumbersInQuotes(jsonString, field) {
+    const regex = new RegExp(`"${field}":(\\d+)`, 'g');
+    return this.tryParseJSON(jsonString.replace(regex, `"${field}":"$1"`));
+  },
+
+  /**
    * Compares two objects
    * @param {object} object1
    * @param {object} object2
