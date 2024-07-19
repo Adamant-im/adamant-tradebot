@@ -1,7 +1,7 @@
 const jsonminify = require('jsonminify');
 const fs = require('fs');
 const path = require('path');
-const keys = require('adamant-api/src/helpers/keys');
+const { createKeypairFromPassphrase, createAddressFromPublicKey } = require('adamant-api');
 const isDev = process.argv.includes('dev');
 
 let config = {};
@@ -271,12 +271,12 @@ try {
 
   if (config.passPhrase) {
     try {
-      keyPair = keys.createKeypairFromPassPhrase(config.passPhrase);
+      keyPair = createKeypairFromPassphrase(config.passPhrase);
     } catch (e) {
       exit(`Bot's config is wrong. Invalid passPhrase. Error: ${e}. Cannot start the Bot.`);
     }
 
-    address = keys.createAddressFromPublicKey(keyPair.publicKey);
+    address = createAddressFromPublicKey(keyPair.publicKey);
     config.keyPair = keyPair;
     config.publicKey = keyPair.publicKey.toString('hex');
     config.address = address;

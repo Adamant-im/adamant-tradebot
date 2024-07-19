@@ -14,7 +14,10 @@ function initServices() {
       const api = require('./modules/api');
       const txParser = require('./modules/incomingTxsParser');
 
-      api.socket.initSocket({ socket: config.socket, wsType: config.ws_type, onNewMessage: txParser, admAddress: config.address });
+      if (config.socket) {
+        api.initSocket({ wsType: config.ws_type, admAddress: config.address });
+        api.socket.on(txParser);
+      }
     }
 
     // Debug and health API init

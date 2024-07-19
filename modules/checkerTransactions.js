@@ -5,6 +5,7 @@ const log = require('../helpers/log');
 const config = require('./configReader');
 const constants = require('../helpers/const');
 const utils = require('../helpers/utils');
+const { TransactionType } = require("adamant-api");
 
 async function check() {
 
@@ -17,16 +18,18 @@ async function check() {
     }
 
     const queryParams = {
-      'and:recipientId': config.address, // get only Txs for the bot
-      'and:types': '0,8', // get direct transfers and messages
-      'and:fromHeight': lastProcessedBlockHeight + 1, // from current height if the first run, or from the last processed block
-      returnAsset: '1', // get messages' contents
+      and: {
+        recipientId: config.address,
+        types: [TransactionType.SEND, TransactionType.CHAT_MESSAGE],
+        fromHeight: lastProcessedBlockHeight + 1,
+      },
+      returnAsset: 1, // get messages' contents
       orderBy: 'timestamp:desc', // latest Txs
     };
 
-    const txTrx = await api.get('transactions', queryParams);
+    const txTrx = await api.getTransactions(queryParams);
     if (txTrx.success) {
-      for (const tx of txTrx.data.transactions) {
+      for (const tx of txTrx.transactions) {
         await txParser(tx);
       }
     } else {
