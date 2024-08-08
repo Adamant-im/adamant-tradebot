@@ -43,75 +43,6 @@ let isPreviousIterationFinished = true;
 module.exports = {
   readableModuleName: 'Order book builder',
 
-  async test() {
-    console.log('==========================');
-
-    // const { ordersDb } = db;
-    // const order = await ordersDb.findOne({
-    //   _id: 'orderId',
-    // });
-
-    // const TraderApi = require('../trade/trader_' + config.exchange);
-
-    // const traderapi3 = TraderApi(config.apikey2, config.apisecret2, config.apipassword2, log);
-    // const traderapi2 = require('./trader_' + 'azbit')(config.apikey, config.apisecret, config.apipassword, log);
-
-    // setTimeout(() => {
-    //   const traderapi = require('./trader_' + 'azbit')(config.apikey, config.apisecret, config.apipassword, log);
-    //   console.log(require('./orderUtils').parseMarket('ADM/USDT', 'azbit'));
-    // }, 3000);
-
-    // const orderCollector = require('./orderCollector');
-    // const cancellation = await orderCollector.clearOrderById(
-    //     'order id', config.pair, undefined, 'Testing', 'Sample reason', undefined, traderapi);
-    // console.log(cancellation);
-
-    // console.log(await traderapi.markets);
-    // console.log(await traderapi.currencies);
-    // console.log(await traderapi.marketInfo('KCS/USDT'));
-    // console.log(await traderapi.currencyInfo('KCS'));
-
-    // console.log(await traderapi.features());
-
-    // console.log(await traderapi.placeOrder('sell', 'KCS/BTC', null, 1, 0));
-
-    // const testOrderPrice = 0.0002162;
-    // const testOrderMarket = 'KCS/BTC';
-    // const partFilledOrder = await traderapi.placeOrder('sell', testOrderMarket, testOrderPrice, 0.2);
-    // await traderapi.placeOrder('buy', testOrderMarket, testOrderPrice, 0.1);
-    // await traderapi.getOpenOrders(testOrderMarket);
-
-    // console.log(await traderapi.getOrderDetails(119354495120, testOrderMarket));
-    // console.log(await traderapi.getOrderDetails('119353984789', testOrderMarket));
-    // console.log(await traderapi.getOrderDetails('65707c1285a72b0007ee2cbd2', testOrderMarket));
-    // console.log(await traderapi.getOrderDetails('123-any-order-number', testOrderMarket));
-    // console.log(await traderapi.getOrderDetails(undefined, testOrderMarket));
-
-    // console.log(await traderapi.getOrderDetails('65708f9e011c360007ad8129', testOrderMarket));
-    // console.log(await traderapi.getOrderDetails(partFilledOrder.orderId, testOrderMarket));
-
-    // console.log(await traderapi.cancelOrder('5d13f3e8-dcb3-4a6d-88c1-16cf6e8d8179', undefined, testOrderMarket));
-    // console.log(await traderapi.cancelOrder('ODM54B-5CJUX-RSUKCK', undefined, testOrderMarket));
-    // console.log(await traderapi.cancelOrder(119354495120, undefined, testOrderMarket));
-    // console.log(await traderapi.cancelOrder('119354495120', undefined, testOrderMarket));
-    // console.log(await traderapi.cancelOrder(undefined, undefined, testOrderMarket));
-
-    // console.log(await traderapi.cancelOrder('65708d8189f58f0007182278', undefined, testOrderMarket));
-
-    // console.log(await traderapi.cancelAllOrders('DOGE/USDT'));
-    // console.log(await traderapi.cancelAllOrders('ADM/USDT'));
-    // console.log(await traderapi.cancelAllOrders('KCS/BTC'));
-
-    // console.log(await traderapi.getRates('KCS/BTC'));
-    // console.log(await traderapi.getRates('ADM/BTC'));
-
-    // const ob = await traderapi.getOrderBook('KCS/USDT');
-    // console.log(ob);
-
-    // const req = await traderapi.getTradesHistory('kcs/btc');
-    // console.log(req);
-  },
-
   run() {
     this.iteration();
   },
@@ -213,7 +144,7 @@ module.exports = {
     try {
       const type = setType();
 
-      const orderBook = await traderapi.getOrderBook(config.pair);
+      const orderBook = await orderUtils.getOrderBookCached(config.pair, utils.getModuleName(module.id), true);
       if (!orderBook || !orderBook.asks[0] || !orderBook.bids[0]) {
         log.warn(`Orderbook builder: Order books are empty for ${config.pair}, or temporary API error. Unable to check if I need to place ob-order.`);
         return;
@@ -341,7 +272,7 @@ function setType() {
  *  message: error message
  */
 async function isEnoughCoins(coin1, coin2, amount1, amount2, type) {
-  const balances = await traderapi.getBalances(false);
+  const balances = await orderUtils.getBalancesCached(false, utils.getModuleName(module.id));
   let balance1free; let balance2free;
   let balance1freezed; let balance2freezed;
   let isBalanceEnough = true;
@@ -421,32 +352,53 @@ async function setPrice(type, position, orderList) {
     }
 
     let price = utils.randomValue(low, high);
-    let priceBeforePwCorrection;
+    let pwLowPrice; let pwHighPrice; let priceBeforePwCorrection;
 
     const pw = require('./mm_price_watcher');
-    if (pw.getIsPriceActualAndEnabled()) {
-      const lowPrice = pw.getLowPrice();
-      const highPrice = pw.getHighPrice();
 
-      if (type === 'sell') {
-        if (price < lowPrice) {
-          priceBeforePwCorrection = price;
-          const maxVisiblePrice = orderList[tradeParams.mm_orderBookHeight]?.price;
-          if (lowPrice < maxVisiblePrice) {
-            price = utils.randomValue(lowPrice, maxVisiblePrice);
-          } else {
-            price = utils.randomValue(lowPrice, maxVisiblePrice * 1.05);
-          }
-        }
+    if (pw.getIsPriceWatcherEnabled()) {
+      const orderInfo = `${type} ob-order at ${price.toFixed(coin2Decimals)} ${config.coin2}`;
+
+      if (pw.getIsPriceAnomaly()) {
+        log.log(`Orderbook builder: Skipped placing ${orderInfo}. Price watcher reported a price anomaly.`);
+
+        return {
+          price: undefined,
+        };
+      } else if (pw.getIsPriceActual()) {
+        pwLowPrice = pw.getLowPrice();
+        pwHighPrice = pw.getHighPrice();
       } else {
-        if (price > highPrice) {
-          priceBeforePwCorrection = price;
-          const minVisiblePrice = orderList[tradeParams.mm_orderBookHeight]?.price;
-          if (minVisiblePrice < highPrice) {
-            price = utils.randomValue(minVisiblePrice, highPrice);
-          } else {
-            price = utils.randomValue(highPrice * 0.95, highPrice);
-          }
+        if (pw.getIgnorePriceNotActual()) {
+          log.log(`Orderbook builder: While placing ${orderInfo}, the Price watcher reported the price range is not actual. According to settings, ignore and treat this like the Pw is disabled.`);
+        } else {
+          log.log(`Orderbook builder: Skipped placing ${orderInfo}. Price watcher reported the price range is not actual.`);
+
+          return {
+            price: undefined,
+          };
+        }
+      }
+    }
+
+    if (type === 'sell') {
+      if (pwLowPrice && price < pwLowPrice) {
+        priceBeforePwCorrection = price;
+        const maxVisiblePrice = orderList[tradeParams.mm_orderBookHeight]?.price;
+        if (pwLowPrice < maxVisiblePrice) {
+          price = utils.randomValue(pwLowPrice, maxVisiblePrice);
+        } else {
+          price = utils.randomValue(pwLowPrice, maxVisiblePrice * 1.05);
+        }
+      }
+    } else {
+      if (pwHighPrice && price > pwHighPrice) {
+        priceBeforePwCorrection = price;
+        const minVisiblePrice = orderList[tradeParams.mm_orderBookHeight]?.price;
+        if (minVisiblePrice < pwHighPrice) {
+          price = utils.randomValue(minVisiblePrice, pwHighPrice);
+        } else {
+          price = utils.randomValue(pwHighPrice * 0.95, pwHighPrice);
         }
       }
     }
