@@ -412,7 +412,7 @@ module.exports = {
 
   /**
    * Parses time value, like 5sec, 5 secs, 5 min
-   * @param {number} value Time to parse
+   * @param {string} value Time to parse
    * @return {Object} isTime and time itself
    */
   parseSmartTime(value) {
@@ -528,16 +528,6 @@ module.exports = {
   },
 
   /**
-   * Replaces large numbers with strings. E.g., {"orderId":1796423068260855809} with {"orderId":"1796423068260855809"}.
-   * @param {string} jsonString String to parse
-   * @return {object} JSON object or false, if unable to parse
-   */
-  jsonWrapLargeNumbersInQuotes(jsonString, field) {
-    const regex = new RegExp(`"${field}":(\\d+)`, 'g');
-    return this.tryParseJSON(jsonString.replace(regex, `"${field}":"$1"`));
-  },
-
-  /**
    * Compares two objects
    * @param {object} object1
    * @param {object} object2
@@ -638,6 +628,24 @@ module.exports = {
       return m;
     }, { });
     return Object.keys(map);
+  },
+
+  /**
+   * Loops through the object keys.
+   * Returns a value where a search string include its key, case insensitive.
+   * E.g., string 'The order is in Pending status please try after some time' includes key 'order is in pending status'.
+   * @param {Object} object The object to search through
+   * @param {string} str A string which may include a key
+   * @return {any|undefined} Found value or undefined
+   */
+  findObjectEntry(object, str) {
+    if (this.isObjectNotEmpty(object) && typeof str === 'string') {
+      for (const [key, value] of Object.entries(object)) {
+        if (str.toLowerCase().includes(key.toLowerCase())) {
+          return value;
+        }
+      }
+    }
   },
 
   /**
@@ -1580,7 +1588,7 @@ module.exports = {
     try {
       const pw = require('../trade/mm_price_watcher');
 
-      if (pw.getIsPriceActualAndEnabled()) {
+      if (pw.getIsPriceActualConsistentAndEnabled()) {
         const lowPrice = pw.getLowPrice();
         const highPrice = pw.getHighPrice();
 

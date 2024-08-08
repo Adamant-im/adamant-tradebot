@@ -5,7 +5,7 @@ const log = require('../helpers/log');
 const config = require('./configReader');
 const constants = require('../helpers/const');
 const utils = require('../helpers/utils');
-const { TransactionType } = require("adamant-api");
+const { TransactionType } = require('adamant-api');
 
 async function check() {
 

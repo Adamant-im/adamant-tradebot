@@ -3,7 +3,7 @@ const log = require('../../helpers/log');
 const constants = require('../const');
 const config = require('../../modules/configReader');
 const utils = require('../utils');
-const { MessageType } = require("adamant-api");
+const { MessageType } = require('adamant-api');
 
 const baseCoin = require('./baseCoin');
 
