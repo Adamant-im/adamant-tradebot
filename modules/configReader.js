@@ -2,7 +2,6 @@ const jsonminify = require('jsonminify');
 const fs = require('fs');
 const path = require('path');
 const { createKeypairFromPassphrase, createAddressFromPublicKey } = require('adamant-api');
-const isDev = process.argv.includes('dev');
 
 let config = {};
 
@@ -19,11 +18,16 @@ const fields = {
   },
   passPhrase: {
     type: String,
-    isRequired: true,
+    isRequired: false,
+  },
+  manageTelegramBotToken: {
+    type: String,
+    default: '',
+    isRequired: false,
   },
   node_ADM: {
     type: Array,
-    isRequired: true,
+    isRequired: false,
   },
   infoservice: {
     type: Array,
@@ -80,6 +84,10 @@ const fields = {
     type: Array,
     default: [],
   },
+  admin_telegram: {
+    type: Array,
+    default: [],
+  },
   notify_non_admins: {
     type: Boolean,
     default: false,
@@ -111,6 +119,11 @@ const fields = {
   slack_priority: {
     type: Array,
     default: [],
+  },
+  telegramBotToken: {
+    type: String,
+    default: '',
+    isRequired: false,
   },
   telegram: {
     type: Array,
@@ -181,30 +194,47 @@ const fields = {
 };
 
 try {
+  // Determine dev, doClearDB and configCustom args/params
+  const dev =
+      config.dev ||
+      process.argv.includes('dev') ||
+      process.argv.includes('test') ||
+      process.env.DEV === 'true';
+
+  const doClearDB = process.argv.includes('clear_db');
+  const configCustom = process.argv.find((arg) => !arg.includes('/') && arg !== 'clear_db');
+
+  // Determine which config file to use
   let configFile;
 
-  if (isDev || process.env.JEST_WORKER_ID) {
-    configFile = '../config.test.jsonc';
+  const configFileDefault = '../config.default.jsonc';
+  const configFileMain = `../config.jsonc`;
+
+  if (configCustom) {
+    configFile = `../config.${configCustom}.jsonc`;
   } else {
-    if (fs.existsSync(path.join(__dirname, '../config.jsonc'))) {
-      configFile = '../config.jsonc';
-    } else {
-      configFile = '../config.default.jsonc';
-    }
+    const configExists = fs.existsSync(path.join(__dirname, configFileMain));
+
+    configFile = configExists ? configFileMain : configFileDefault;
   }
+
+  console.log(`Config reader: Reading the config-file '${configFile}'${dev ? ' (dev)' : ''}…`);
 
   // __dirname = ./modules
   config = JSON.parse(jsonminify(fs.readFileSync(path.join(__dirname, configFile), 'utf-8')));
+
+  config.dev = dev;
+  config.doClearDB = doClearDB;
+  config.configFile = configFile;
 
   if (config.passPhrase?.length < 35) {
     config.passPhrase = undefined;
   }
 
-  if (!config.cli) {
-    if (process.env.CLI_MODE_ENABLED) {
-      exit('TradeBot CLI is disabled in the config.');
-    }
+  const isCliEnabled = config.cli;
+  const isTgEnabled = config.manageTelegramBotToken;
 
+  if (!isCliEnabled && !isTgEnabled) {
     if (!config.passPhrase) {
       exit('Bot\'s config is wrong. ADAMANT passPhrase is invalid.');
     }
@@ -213,6 +243,11 @@ try {
       exit('Bot\'s config is wrong. ADM nodes are not set. Cannot start the Bot.');
     }
   }
+
+  if (process.env.CLI_MODE_ENABLED && !isCliEnabled) {
+    exit('You are running the bot in CLI mode, but it\'s disabled in the config.');
+  }
+
 
   let keyPair;
   let address;
@@ -305,7 +340,7 @@ try {
     });
   });
 
-  console.info(`${config.notifyName} successfully read the config-file '${configFile}'${isDev ? ' (dev)' : ''}.`);
+  console.info(`${config.notifyName} successfully read the config-file '${configFile}'${dev ? ' (dev)' : ''}.`);
 
   // Create tradeParams for exchange
   const exchangeTradeParams = path.join(__dirname, '.' + config.fileWithPath);
@@ -327,9 +362,8 @@ try {
 }
 
 function exit(msg) {
-  console.error(msg);
+  console.error(`Config reader: ${msg}`);
   process.exit(-1);
 }
 
-config.isDev = isDev;
 module.exports = config;

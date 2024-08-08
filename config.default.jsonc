@@ -1,5 +1,12 @@
 {
   /**
+    States if this config file is for development (not a production bot).
+    Config files 'config.dev.jsonc' and 'config.test.jsonc' considered as dev independent of this option.
+    You can also add 'dev' or 'test' command argument, or set env DEV=true.
+  **/
+  "dev": false,
+  
+  /**
     The bot's secret passphrase. Create a separate ADM account for the bot.
     Bot's ADM address will correspond to this passPhrase.
   **/
@@ -78,7 +85,7 @@
   "exchange_restrictions": {
     /** Max number of open orders. Set 'false' to skip **/
     "orderNumberLimit": false,
-    /** If the exchange doesn't provide min order amount value, the bot uses the default one. Set 'false' to use DEFAULT_MIN_ORDER_AMOUNT_USD **/
+    /** If an exchange doesn't provide a minimum order amount value, the bot uses the DEFAULT_MIN_ORDER_AMOUNT_USD const. You can override it with any positive value. **/
     "minOrderAmountUSD": false,
     /** Same for the upper bound of the min order amount **/
     "minOrderAmountUpperBoundUSD": false
