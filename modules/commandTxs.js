@@ -207,10 +207,10 @@ function start(params) {
     params[1] = '';
   }
   const newPolicy = (params[1] || tradeParams.mm_Policy || 'optimal').toLowerCase();
-  if (!['optimal', 'spread', 'orderbook'].includes(newPolicy)) {
+  if (!constants.MM_POLICIES.includes(newPolicy)) {
     return {
       msgNotify: '',
-      msgSendBack: 'Wrong market making policy. It should be _spread_, _orderbook_, _optimal_. Example: */start mm spread*.',
+      msgSendBack: `Wrong market making policy. It may be ${constants.MM_POLICIES.join(', ')}. Example: */start mm spread*.`,
       notifyType: 'log',
     };
   }
@@ -366,6 +366,7 @@ async function enable(params, {}, isWebApi = false) {
 
     } else if (type === 'liq') {
 
+      // Parse ±depth%
       const spreadString = params[1];
       if (!spreadString || (spreadString.slice(-1) !== '%')) {
         return {
@@ -544,11 +545,17 @@ async function enable(params, {}, isWebApi = false) {
         // Test if we can retrieve order book for the specific pair on the exchange
         let orderBook;
         if (exchange.toLowerCase() === config.exchange) {
-          orderBook = await traderapi.getOrderBook(pairObj.pair);
+          orderBook = await orderUtils.getOrderBookCached(pairObj.pair, utils.getModuleName(module.id));
         } else {
-          // We already created pairObj.exchangeApi when orderUtils.parseMarket()
+          if (!pairObj.exchangeApi.markets) {
+            // We already created pairObj.exchangeApi when orderUtils.parseMarket(), but markets are probably still loading
+            const pauseMs = 4000;
+            await utils.pauseAsync(pauseMs, `${pauseMs} msec pause to ensure the ${exchangeName} loaded markets…`);
+          }
+
           orderBook = await pairObj.exchangeApi.getOrderBook(pairObj.pair);
         }
+
         if (!orderBook || !orderBook.asks[0] || !orderBook.bids[0]) {
           const noOrderBookInfo = `Unable to receive an order book for ${pairObj.pair} at ${exchangeName} exchange.`;
           log.warn(noOrderBookInfo);
@@ -613,12 +620,14 @@ async function enable(params, {}, isWebApi = false) {
 
       } else {
         // Watch price in coin
+        const rangeOrValueExample = 'Example: */enable pw 0.1—0.2 USDT fill* or */enable pw 0.5 USDT 1% fill*.';
+        const valueExample = 'Example: */enable pw 0.5 USDT 1% fill*.';
 
         rangeOrValue = utils.parseRangeOrValue(params[1]);
         if (!rangeOrValue.isRange && !rangeOrValue.isValue) {
           return {
             msgNotify: '',
-            msgSendBack: isWebApi ? 'Set correct source' : 'Set a price range or value. Example: */enable pw 0.1—0.2 USDT* or */enable pw 0.5 USDT 1%*.',
+            msgSendBack: isWebApi ? 'Set correct source' : `Set a price range or value. ${rangeOrValueExample}`,
             notifyType: 'log',
             isError: true,
             errorField: 'source',
@@ -629,7 +638,7 @@ async function enable(params, {}, isWebApi = false) {
         if (!coin || !coin.length || coin.toUpperCase() === config.coin1) {
           return {
             msgNotify: '',
-            msgSendBack: isWebApi ? 'Incorrect currency' : 'Incorrect currency. Example: */enable pw 0.1—0.2 USDT* or */enable pw 0.5 USDT 1%*.',
+            msgSendBack: isWebApi ? 'Incorrect currency' : `Incorrect currency. ${rangeOrValueExample}`,
             notifyType: 'log',
             errorField: 'currency',
             isError: true,
@@ -640,12 +649,14 @@ async function enable(params, {}, isWebApi = false) {
         if (!exchangerUtils.hasTicker(coin)) {
           return {
             msgNotify: '',
-            msgSendBack: isWebApi ? 'Incorrect currency' : `I don't know currency ${coin}. Example: */enable pw 0.1—0.2 USDT* or */enable pw 0.5 USDT 1%*.`,
+            msgSendBack: isWebApi ? 'Incorrect currency' : `I don't know currency ${coin}. ${rangeOrValueExample}`,
             notifyType: 'log',
             errorField: 'currency',
             isError: true,
           };
         }
+
+        let pwActionParam;
 
         if (rangeOrValue.isRange) {
           pwLowPrice = rangeOrValue.from;
@@ -653,30 +664,35 @@ async function enable(params, {}, isWebApi = false) {
           pwMidPrice = (pwLowPrice + pwHighPrice) / 2;
           pwDeviationPercent = (pwHighPrice - pwLowPrice) / 2 / pwMidPrice * 100;
           pwSource = coin;
+          pwActionParam = params[3];
         }
 
         if (rangeOrValue.isValue) {
           percentString = params[3];
+
           if (!percentString || (percentString.slice(-1) !== '%')) {
             return {
               msgNotify: '',
-              msgSendBack: 'Set a deviation in percentage. Example: */enable pw 0.5 USDT 1%*.',
+              msgSendBack: `Set a deviation in percentage. ${valueExample}`,
               notifyType: 'log',
             };
           }
+
           percentValue = +percentString.slice(0, -1);
           if (!percentValue || percentValue === Infinity || percentValue <= 0 || percentValue > 90) {
             return {
               msgNotify: '',
-              msgSendBack: 'Set correct deviation in percentage. Example: */enable pw 0.5 USDT 1%*.',
+              msgSendBack: `Set correct deviation in percentage. ${valueExample}`,
               notifyType: 'log',
             };
           }
+
           pwLowPrice = rangeOrValue.value * (1 - percentValue/100);
           pwHighPrice = rangeOrValue.value * (1 + percentValue/100);
           pwMidPrice = rangeOrValue.value;
           pwDeviationPercent = percentValue;
           pwSource = coin;
+          pwActionParam = params[4];
         }
 
         let convertedString;
@@ -699,7 +715,17 @@ async function enable(params, {}, isWebApi = false) {
         if (!utils.isPositiveNumber(pwLowPriceInCoin2)) {
           return {
             msgNotify: '',
-            msgSendBack: `Unable to convert ${coin} to ${config.coin2}. Command works like this: */enable pw 0.1—0.2 USDT* or */enable pw 0.5 USDT 1%*.`,
+            msgSendBack: `Unable to convert ${coin} to ${config.coin2}. ${rangeOrValueExample}`,
+            notifyType: 'log',
+          };
+        }
+
+        // Validate action
+        pwAction = pwActionParam?.toLowerCase();
+        if (!['fill', 'prevent'].includes(pwAction)) {
+          return {
+            msgNotify: '',
+            msgSendBack: `Wrong Pw action. Allowed _fill_ or _prevent_. ${rangeOrValueExample}`,
             notifyType: 'log',
           };
         }
@@ -712,7 +738,7 @@ async function enable(params, {}, isWebApi = false) {
           };
         }
 
-        infoString = ` from ${pwLowPrice.toFixed(marketDecimals)} to ${pwHighPrice.toFixed(marketDecimals)} ${sourceString}—${pwDeviationPercent.toFixed(2)}% price deviation`;
+        infoString = ` from ${pwLowPrice.toFixed(marketDecimals)} to ${pwHighPrice.toFixed(marketDecimals)} ${sourceString}—${pwDeviationPercent.toFixed(2)}% price deviation and _${pwAction}_ action`;
       }
 
       optionsString = 'Price watching';
@@ -1187,9 +1213,11 @@ async function fill(params) {
     };
   }
 
+  const api = traderapi;
+
   const onWhichAccount = '';
 
-  const balances = await traderapi.getBalances(false);
+  const balances = await orderUtils.getBalancesCached(false, utils.getModuleName(module.id), undefined, undefined, api);
   let balance;
   let isBalanceEnough = true;
   if (balances) {
@@ -1305,7 +1333,7 @@ async function fill(params) {
   let placedOrders = 0; let notPlacedOrders = 0;
   let order;
   for (let i = 0; i < orderList.length; i++) {
-    order = await orderUtils.addGeneralOrder(type, pairObj.pair, orderList[i].price, orderList[i].amount, 1, null, pairObj, 'man');
+    order = await orderUtils.addGeneralOrder(type, pairObj.pair, orderList[i].price, orderList[i].amount, 1, null, pairObj, 'man', api);
     if (order?._id) {
       placedOrders += 1;
       total1 += +orderList[i].amount;
@@ -1447,6 +1475,8 @@ function getBuySellParams(params, type) {
     }
   }
 
+  const api = traderapi;
+
   let pair = params[0];
   if (!pair || pair.indexOf('/') === -1) {
     pair = config.pair;
@@ -1503,6 +1533,7 @@ function getBuySellParams(params, type) {
     price,
     quote,
     pairObj,
+    api,
   };
 }
 
@@ -1517,24 +1548,35 @@ async function buy_sell(params, type) {
     params.quote = params.amount * params.price;
   }
 
-  let result; let msgNotify; let msgSendBack;
-  if (params.price === 'market') {
-    result = await orderUtils.addGeneralOrder(type, params.pairObj.pair, null,
-        params.amount, 0, params.quote, params.pairObj, 'man', params.api);
-  } else {
-    result = await orderUtils.addGeneralOrder(type, params.pairObj.pair, params.price,
-        params.amount, 1, params.quote, params.pairObj, 'man', params.api);
-  }
+  let msgNotify; let msgSendBack;
+  const isMarketOrder = params.price === 'market';
+
+  const result = await orderUtils.addGeneralOrder(
+      type,
+      params.pairObj.pair,
+      isMarketOrder ? null : params.price,
+      params.amount,
+      isMarketOrder ? 0 : 1,
+      params.quote,
+      params.pairObj,
+      'man',
+      params.api,
+  );
 
   if (result !== undefined) {
     msgSendBack = result.message;
+
     if (result?._id) {
       msgNotify = `${config.notifyName}: ${result.message}`;
     }
   } else {
     const onWhichAccount = params.api?.isSecondAccount ? ' (on second account)' : '';
-    msgSendBack = `Request to place an order${onWhichAccount} with params ${JSON.stringify(params)} failed. It looks like an API temporary error. Try again.`;
+    const paramsInfo = `type=${type}, amount=${params.amount}, quote=${params.quote}, price=${params.price}, pair=${JSON.stringify(params.pairObj.pair)}`;
+
+    msgSendBack = `Request to place an order${onWhichAccount} with params [${paramsInfo}] failed. It looks like an API temporary error. Try again.`;
     msgNotify = '';
+
+    log.error(`Error in buy_sell() of ${utils.getModuleName(module.id)} module: ${msgSendBack}`);
   }
 
   return {
@@ -1754,7 +1796,7 @@ async function stats(params) {
     }
 
     // Second, get order book information
-    const orderBook = await traderapi.getOrderBook(pairObj.pair);
+    const orderBook = await orderUtils.getOrderBookCached(pairObj.pair, utils.getModuleName(module.id));
     const orderBookInfo = utils.getOrderBookInfo(orderBook);
     if (orderBook && orderBookInfo) {
       const delta = orderBookInfo.smartAsk-orderBookInfo.smartBid;
@@ -1917,7 +1959,7 @@ async function getOrdersInfo(accountNo = 0, tx = {}, pair) {
 
   const api = traderapi;
   const ordersByType = await orderStats.ordersByType(pairObj.pair, api);
-  const openOrders = await traderapi.getOpenOrders(pairObj.pair);
+  const openOrders = await orderUtils.getOpenOrdersCached(pairObj.pair, utils.getModuleName(module.id), false, api);
 
   if (openOrders) {
 
@@ -2215,7 +2257,7 @@ async function make(params, tx, isWebApi = false) {
             This will not work using 2-keys trading, as we have to cancel this order to avoid SELF_TRADE later
         */
         const reliabilityKoef = utils.randomValue(1.05, 1.1);
-        const orderBook = await traderapi.getOrderBook(config.pair);
+        const orderBook = await orderUtils.getOrderBookCached(config.pair, utils.getModuleName(module.id), true);
         const orderBookInfo = utils.getOrderBookInfo(orderBook, tradeParams.mm_liquiditySpreadPercent, targetPrice);
         orderBookInfo.amountTargetPrice *= reliabilityKoef;
         orderBookInfo.amountTargetPriceQuote *= reliabilityKoef;
@@ -2287,8 +2329,6 @@ async function make(params, tx, isWebApi = false) {
           }
         } else {
           // Ask for confirmation
-          pendingConfirmation.command = `/make ${params.join(' ')}`;
-          pendingConfirmation.timestamp = Date.now();
           msgNotify = '';
           let pwWarning = ' ';
           const pw = require('../trade/mm_price_watcher');
@@ -2309,6 +2349,7 @@ async function make(params, tx, isWebApi = false) {
           msgSendBack = isWebApi ? `Are you sure to make ${priceString}? ${actionNoteString} **${actionString}**.${pwWarning}` :`Are you sure to make ${priceString}? ${actionNoteString} **${actionString}**.${pwWarning}Confirm with **/y** command or ignore.\n\n${priceInfoString}`;
         }
 
+        setPendingConfirmation(`/make ${params.join(' ')}`);
       } catch (e) {
         log.error(`Error in make()-price of ${utils.getModuleName(module.id)} module: ${e}`);
       }
@@ -2555,7 +2596,7 @@ function buildStatusString(coinOrNetwork) {
 
   if (coinOrNetwork.depositStatus || coinOrNetwork.withdrawalStatus) {
     if (coinOrNetwork.status !== coinOrNetwork.depositStatus || coinOrNetwork.status !== coinOrNetwork.withdrawalStatus) {
-      statusString += ` (deposits: ${coinOrNetwork.depositStatus}, withdrawals: ${coinOrNetwork.depositStatus})`;
+      statusString += ` (deposits: ${coinOrNetwork.depositStatus}, withdrawals: ${coinOrNetwork.withdrawalStatus})`;
     }
   }
 
