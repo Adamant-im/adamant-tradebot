@@ -3,6 +3,7 @@ const log = require('../../helpers/log');
 const constants = require('../const');
 const config = require('../../modules/configReader');
 const utils = require('../utils');
+const { MessageType } = require("adamant-api");
 
 const baseCoin = require('./baseCoin');
 
@@ -35,10 +36,10 @@ module.exports = class admCoin extends baseCoin {
     if (cached) {
       return cached;
     }
-    const blocks = await api.get('blocks', { limit: 1 });
+    const blocks = await api.getBlocks({ limit: 1 });
     if (blocks.success) {
-      this.cache.cacheData('lastBlock', blocks.data.blocks[0]);
-      return blocks.data.blocks[0];
+      this.cache.cacheData('lastBlock', blocks.blocks[0]);
+      return blocks.blocks[0];
     } else {
       log.warn(`Failed to get last block in getLastBlock() of ${utils.getModuleName(module.id)} module. ${blocks.errorMessage}.`);
     }
@@ -62,10 +63,10 @@ module.exports = class admCoin extends baseCoin {
     if (cached) {
       return utils.satsToADM(cached);
     }
-    const account = await api.get('accounts', { address: config.address });
+    const account = await api.getAccountBalance(config.address);
     if (account.success) {
-      this.cache.cacheData('balance', account.data.account.balance);
-      return utils.satsToADM(account.data.account.balance);
+      this.cache.cacheData('balance', account.balance);
+      return utils.satsToADM(account.balance);
     } else {
       log.warn(`Failed to get account info in getBalance() of ${utils.getModuleName(module.id)} module; returning outdated cached balance. ${account.errorMessage}.`);
       return utils.satsToADM(cached);
@@ -100,20 +101,20 @@ module.exports = class admCoin extends baseCoin {
    * Not used, additional info: hash (already known), blockId, fee
    */
   async getTransaction(txid) {
-    const tx = await api.get('transactions/get', { id: txid });
+    const tx = await api.getTransaction(txid);
     if (tx.success) {
-      log.log(`Tx status: ${this.formTxMessage(tx.data.transaction)}.`);
+      log.log(`Tx status: ${this.formTxMessage(tx.transaction)}.`);
       return {
-        status: tx.data.transaction.confirmations > 0 ? true : undefined,
-        height: tx.data.transaction.height,
-        blockId: tx.data.transaction.blockId,
-        timestamp: utils.toTimestamp(tx.data.transaction.timestamp),
-        hash: tx.data.transaction.id,
-        senderId: tx.data.transaction.senderId,
-        recipientId: tx.data.transaction.recipientId,
-        confirmations: tx.data.transaction.confirmations,
-        amount: utils.satsToADM(tx.data.transaction.amount), // in ADM
-        fee: utils.satsToADM(tx.data.transaction.fee), // in ADM
+        status: tx.transaction.confirmations > 0 ? true : undefined,
+        height: tx.transaction.height,
+        blockId: tx.transaction.blockId,
+        timestamp: utils.toTimestamp(tx.transaction.timestamp),
+        hash: tx.transaction.id,
+        senderId: tx.transaction.senderId,
+        recipientId: tx.transaction.recipientId,
+        confirmations: tx.transaction.confirmations,
+        amount: utils.satsToADM(tx.transaction.amount), // in ADM
+        fee: utils.satsToADM(tx.transaction.fee), // in ADM
       };
     } else {
       log.warn(`Unable to get Tx ${txid} in getTransaction() of ${utils.getModuleName(module.id)} module. It's expected, if the Tx is new. ${tx.errorMessage}.`);
@@ -122,15 +123,17 @@ module.exports = class admCoin extends baseCoin {
   }
 
   async send(params) {
+    const isAmountInADM = true; // Sending ADM
+
     params.try = params.try || 1;
     const tryString = ` (try number ${params.try})`;
     const { address, value, comment } = params;
-    const payment = await api.sendMessage(config.passPhrase, address, comment, 'basic', value);
+    const payment = await api.sendMessage(config.passPhrase, address, comment, MessageType.Chat, value, isAmountInADM);
     if (payment.success) {
-      log.log(`Successfully sent ${value} ADM to ${address} with comment '${comment}'${tryString}, Tx hash: ${payment.data.transactionId}.`);
+      log.log(`Successfully sent ${value} ADM to ${address} with comment '${comment}'${tryString}, Tx hash: ${payment.transactionId}.`);
       return {
-        success: payment.data.success,
-        hash: payment.data.transactionId,
+        success: payment.success,
+        hash: payment.transactionId,
       };
     } else {
       log.warn(`Failed to send ${value} ADM to ${address} with comment '${comment}'${tryString} in send() of ${utils.getModuleName(module.id)} module. ${payment.errorMessage}.`);

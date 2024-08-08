@@ -3,6 +3,7 @@ const log = require('../helpers/log');
 const notify = require('../helpers/notify');
 const utils = require('../helpers/utils');
 const api = require('./api');
+const { decodeMessage } = require("adamant-api");
 const config = require('./configReader');
 const constants = require('../helpers/const');
 const transferTxs = require('./transferTxs');
@@ -35,7 +36,7 @@ module.exports = async (tx) => {
   let decryptedMessage = '';
   const chat = tx.asset ? tx.asset.chat : '';
   if (chat) {
-    decryptedMessage = api.decodeMsg(chat.message, tx.senderPublicKey, config.passPhrase, chat.own_message).trim();
+    decryptedMessage = decodeMessage(chat.message, tx.senderPublicKey, config.passPhrase, chat.own_message).trim();
   }
 
   let commandFix = '';
