@@ -27,6 +27,12 @@ const networks = {
   ERC20: {
     code: 'ERC20',
     name: 'Ethereum',
+    altcode: 'Ether',
+    sampleAddress: '0xF110E32D351Cedba6400E85f3bfa308DC606e079',
+  },
+  'ZKSYNC-ERA': {
+    code: 'ZKSYNC-ERA',
+    name: 'zkSync Era',
     sampleAddress: '0xF110E32D351Cedba6400E85f3bfa308DC606e079',
   },
   'AVAX-C-CHAIN': {

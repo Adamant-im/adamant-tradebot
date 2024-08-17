@@ -2,11 +2,9 @@ node_modules/
 logs/
 .vscode/
 tests.js
-config.test
-config.test.json
-config.test.jsonc
-config.json
+config.*.jsonc
 config.jsonc
+!config.default.jsonc
 .DS_Store
 .idea/
 test_*.js
@@ -18,5 +16,5 @@ trade/tests/debug_trader.js
 client.py
 test_encode.py
 coverage/
-trade/settings/
+trade/settings/*
 !trade/settings/tradeParams_Default.js

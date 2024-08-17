@@ -4,11 +4,12 @@ const mongoClient = new MongoClient('mongodb://127.0.0.1:27017/', { serverSelect
 const model = require('../helpers/dbModel');
 const config = require('./configReader');
 
+const dbName = 'tradebotdb';
 const collections = {};
 
 mongoClient.connect()
     .then((client) => {
-      const db = client.db('tradebotdb');
+      const db = client.db(dbName);
 
       collections.db = db;
 
@@ -28,7 +29,7 @@ mongoClient.connect()
       collections.incomingTxsDb = model(incomingTxsCollection);
       collections.systemDb = model(db.collection('systems'));
 
-      log.log(`${config.notifyName} successfully connected to 'tradebotdb' MongoDB.`);
+      log.log(`${config.notifyName} successfully connected to '${dbName}' MongoDB.`);
     })
     .catch((error) => {
       log.error(`Unable to connect to MongoDB: ${error}`);

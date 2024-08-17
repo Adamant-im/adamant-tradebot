@@ -1,6 +1,5 @@
 const config = require('./modules/configReader');
 const db = require('./modules/DB');
-const doClearDB = process.argv.includes('clear_db');
 
 // It may take up to a second to create trading params file 'tradeParams_{exchange}.js' from the default one
 setTimeout(initServices, 1000);
@@ -14,7 +13,10 @@ function initServices() {
       const api = require('./modules/api');
       const txParser = require('./modules/incomingTxsParser');
 
-      api.socket.initSocket({ socket: config.socket, wsType: config.ws_type, onNewMessage: txParser, admAddress: config.address });
+      if (config.socket) {
+        api.initSocket({ wsType: config.ws_type, admAddress: config.address });
+        api.socket.on(txParser);
+      }
     }
 
     // Debug and health API init
@@ -32,15 +34,18 @@ function startModules() {
   try {
     const notify = require('./helpers/notify');
 
-    if (doClearDB) {
-      console.log('Clearing database…');
+    if (config.doClearDB) {
+      console.log(`${config.notifyName}: Clearing database…`);
 
       db.systemDb.db.drop();
       db.incomingTxsDb.db.drop();
+      db.incomingTgTxsDb.db.drop();
+      db.incomingCLITxsDb.db.drop();
       db.ordersDb.db.drop();
       db.fillsDb.db.drop();
+      db.webTerminalMessages.drop();
 
-      notify(`*${config.notifyName}: database cleared*. Manually stop the Bot now.`, 'info');
+      console.log(`${config.notifyName}: Database cleared. Manually stop the Bot now.`);
     } else {
       if (config.passPhrase) {
         const checker = require('./modules/checkerTransactions');
@@ -51,7 +56,10 @@ function startModules() {
       require('./trade/mm_orderbook_builder').run();
       require('./trade/mm_liquidity_provider').run();
       require('./trade/mm_price_watcher').run();
-      // require('./trade/mm_orderbook_builder').test();
+
+      if (config.dev) {
+        require('./trade/tests/manual.test').run();
+      }
 
       const addressInfo = config.address ? ` for address _${config.address}_` : ' in CLI mode';
       notify(`${config.notifyName} *started*${addressInfo} (${config.projectBranch}, v${config.version}).`, 'info');

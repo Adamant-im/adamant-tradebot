@@ -517,11 +517,31 @@ async function setPrice(type, orderBookInfo, subPurpose, subPurposeString, isOve
     let priceBeforePwCorrection; let priceBeforeTwapCorrection;
 
     const pw = require('./mm_price_watcher');
-    if (pw.getIsPriceActualAndEnabled()) {
-      pwLowPrice = pw.getLowPrice();
-      pwHighPrice = pw.getHighPrice();
-    }
 
+    if (pw.getIsPriceWatcherEnabled()) {
+      const orderInfo = `${type} liq-order${subPurposeString}`;
+
+      if (pw.getIsPriceAnomaly()) {
+        log.log(`Liquidity: Skipped placing ${orderInfo}. Price watcher reported a price anomaly.`);
+
+        return {
+          price: undefined,
+        };
+      } else if (pw.getIsPriceActual()) {
+        pwLowPrice = pw.getLowPrice();
+        pwHighPrice = pw.getHighPrice();
+      } else {
+        if (pw.getIgnorePriceNotActual()) {
+          log.log(`Liquidity: While placing ${orderInfo}, the Price watcher reported the price range is not actual. According to settings, ignore and treat this like the Pw is disabled.`);
+        } else {
+          log.log(`Liquidity: Skipped placing ${orderInfo}. Price watcher reported the price range is not actual.`);
+
+          return {
+            price: undefined,
+          };
+        }
+      }
+    }
 
     // Keep spread enough for in-spread trading
     const delta = constants.MM_POLICIES_IN_SPREAD_TRADING.includes(tradeParams.mm_Policy) ? precision * 3 : precision;

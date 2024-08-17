@@ -561,6 +561,9 @@ async function setPrice(type, coin1Amount) {
 
     let mmCurrentAction; // doNotExecute, executeInSpread, executeInOrderBook
 
+    let lowHighString = `Low: ${bid_low.toFixed(coin2Decimals)}, high: ${ask_high.toFixed(coin2Decimals)} ${config.coin2}`;
+    const checkObString = 'Check the order book and the Price watcher parameters.';
+
     let isSpreadCorrectedByPriceWatcher = false;
     let skipNotify = false;
 
@@ -568,60 +571,81 @@ async function setPrice(type, coin1Amount) {
      * Check if Price Watcher allows to trade, and set bid_low–ask_high
      */
     const pw = require('./mm_price_watcher');
-    if (pw.getIsPriceActualAndEnabled()) {
-      const lowPrice = pw.getLowPrice();
-      const highPrice = pw.getHighPrice();
 
-      if (type === 'buy') {
-        if (bid_low > highPrice) {
+    if (pw.getIsPriceWatcherEnabled()) {
+      const orderInfo = 'mm-order';
 
-          output = `Refusing to buy higher than ${highPrice.toFixed(coin2Decimals)}. Mm-order cancelled. Low: ${bid_low.toFixed(coin2Decimals)}, high: ${ask_high.toFixed(coin2Decimals)} ${config.coin2}. ${pw.getPwRangeString()} Check current order books and the price watcher parameters.`;
-          skipNotify = true;
-          mmCurrentAction = 'doNotExecute';
+      if (pw.getIsPriceAnomaly()) {
+        output = `Refusing to place ${orderInfo}. Price watcher reported a price anomaly.`;
+        skipNotify = true;
 
-        } else if (ask_high > highPrice) {
+        mmCurrentAction = 'doNotExecute';
+      } else if (pw.getIsPriceActual()) {
+        const pwLowPrice = pw.getLowPrice();
+        const pwHighPrice = pw.getHighPrice();
 
-          output = `Price watcher corrected spread to buy not higher than ${highPrice.toFixed(coin2Decimals)} while placing mm-order.`;
-          if (mmPolicy === 'orderbook') {
-            mmCurrentAction = 'doNotExecute';
-            output += ` Market making settings deny trading in spread. Unable to set a price for ${config.pair}. Mm-order cancelled. Low: ${bid_low.toFixed(coin2Decimals)}, high: ${ask_high.toFixed(coin2Decimals)} ${config.coin2}. ${pw.getPwRangeString()} Check current order books and the price watcher parameters.`;
+        if (type === 'buy') {
+          if (bid_low > pwHighPrice) {
+            output = `Refusing to buy higher than ${pwHighPrice.toFixed(coin2Decimals)}. Mm-order cancelled. ${lowHighString}. ${pw.getPwRangeString()} ${checkObString}`;
             skipNotify = true;
-          } else {
-            mmPolicy = 'spread';
-            output += ` Will trade in spread. Low: ${bid_low.toFixed(coin2Decimals)}, high: ${ask_high.toFixed(coin2Decimals)} ${config.coin2}. ${pw.getPwRangeString()} Check current order books and the price watcher parameters.`;
-            log.log(`Market-making: ${output}`);
-            output = '';
-            isSpreadCorrectedByPriceWatcher = true;
-          }
-          ask_high = highPrice;
 
+            mmCurrentAction = 'doNotExecute';
+          } else if (ask_high > pwHighPrice) {
+            output = `Price watcher corrected spread to buy not higher than ${pwHighPrice.toFixed(coin2Decimals)} while placing mm-order.`;
+
+            if (mmPolicy === 'orderbook') {
+              output += ` Market making settings deny trading in spread. Unable to set a price for ${config.pair}. Mm-order cancelled. ${lowHighString}. ${pw.getPwRangeString()} ${checkObString}`;
+              skipNotify = true;
+
+              mmCurrentAction = 'doNotExecute';
+            } else {
+              output += ` Will trade in spread. ${lowHighString}. ${pw.getPwRangeString()} ${checkObString}`;
+              log.log(`Market-making: ${output}`);
+              output = '';
+
+              isSpreadCorrectedByPriceWatcher = true;
+              mmPolicy = 'spread';
+            }
+
+            ask_high = pwHighPrice;
+          }
+        } else if (type === 'sell') {
+          if (ask_high < pwLowPrice) {
+            output = `Refusing to sell lower than ${pwLowPrice.toFixed(coin2Decimals)}. Mm-order cancelled. ${lowHighString}. ${pw.getPwRangeString()} ${checkObString}`;
+            skipNotify = true;
+
+            mmCurrentAction = 'doNotExecute';
+          } else if (bid_low < pwLowPrice) {
+            output = `Price watcher corrected spread to sell not lower than ${pwLowPrice.toFixed(coin2Decimals)} while placing mm-order.`;
+
+            if (mmPolicy === 'orderbook') {
+              output += ` Market making settings deny trading in spread. Unable to set a price for ${config.pair}. Mm-order cancelled. ${lowHighString}. ${pw.getPwRangeString()} ${checkObString}`;
+              skipNotify = true;
+
+              mmCurrentAction = 'doNotExecute';
+            } else {
+              output += ` Will trade in spread. ${lowHighString}. ${pw.getPwRangeString()} ${checkObString}`;
+              log.log(`Market-making: ${output}`);
+              output = '';
+
+              isSpreadCorrectedByPriceWatcher = true;
+              mmPolicy = 'spread';
+            }
+
+            bid_low = pwLowPrice;
+          }
         }
-      } else if (type === 'sell') {
-        if (ask_high < lowPrice) {
-
-          output = `Refusing to sell lower than ${lowPrice.toFixed(coin2Decimals)}. Mm-order cancelled. Low: ${bid_low.toFixed(coin2Decimals)}, high: ${ask_high.toFixed(coin2Decimals)} ${config.coin2}. ${pw.getPwRangeString()} Check current order books and the price watcher parameters.`;
+      } else {
+        if (pw.getIgnorePriceNotActual()) {
+          log.log(`Market-making: While placing ${orderInfo}, the Price watcher reported the price range is not actual. According to settings, ignore and treat this like the Pw is disabled.`);
+        } else {
+          output = `Refusing to place ${orderInfo}. Price watcher reported the price range is not actual.`;
           skipNotify = true;
+
           mmCurrentAction = 'doNotExecute';
-
-        } else if (bid_low < lowPrice) {
-
-          output = `Price watcher corrected spread to sell not lower than ${lowPrice.toFixed(coin2Decimals)} while placing mm-order.`;
-          if (mmPolicy === 'orderbook') {
-            mmCurrentAction = 'doNotExecute';
-            output += ` Market making settings deny trading in spread. Unable to set a price for ${config.pair}. Mm-order cancelled. Low: ${bid_low.toFixed(coin2Decimals)}, high: ${ask_high.toFixed(coin2Decimals)} ${config.coin2}. ${pw.getPwRangeString()} Check current order books and the price watcher parameters.`;
-            skipNotify = true;
-          } else {
-            mmPolicy = 'spread';
-            output += ` Will trade in spread. Low: ${bid_low.toFixed(coin2Decimals)}, high: ${ask_high.toFixed(coin2Decimals)} ${config.coin2}. ${pw.getPwRangeString()} Check current order books and the price watcher parameters.`;
-            log.log(`Market-making: ${output}`);
-            output = '';
-            isSpreadCorrectedByPriceWatcher = true;
-          }
-          bid_low = lowPrice;
-
         }
       }
-    } // Price Watcher checks
+    }
 
     const spread = ask_high - bid_low;
     const priceAvg = (ask_high + bid_low) / 2;
@@ -676,19 +700,23 @@ async function setPrice(type, coin1Amount) {
      * Set a price and trade amount according to mmCurrentAction
      * Or cancel a trade, if 'doNotExecute'
      */
+    lowHighString = `Low: ${bid_low.toFixed(coin2Decimals)}, high: ${ask_high.toFixed(coin2Decimals)} ${config.coin2}`;
+
     if (mmCurrentAction === 'doNotExecute') {
       if (!output) {
         if (isSpreadCorrectedByPriceWatcher) {
-          output = `Refusing to place mm-order because of price watcher. Corrected spread is too small. Low: ${bid_low.toFixed(coin2Decimals)}, high: ${ask_high.toFixed(coin2Decimals)} ${config.coin2}. ${pw.getPwRangeString()} Check current order books and the price watcher parameters.`;
+          output = `Refusing to place mm-order because of price watcher. Corrected spread is too small. ${lowHighString}. ${pw.getPwRangeString()} ${checkObString}`;
           skipNotify = true;
         } else {
-          output = `No spread currently, and market making settings deny trading in the order book. Low: ${bid_low.toFixed(coin2Decimals)}, high: ${ask_high.toFixed(coin2Decimals)} ${config.coin2}. Unable to set a price for ${config.pair}. Update settings or create spread manually.`;
+          output = `No spread currently, and market making settings deny trading in the order book. ${lowHighString}. Unable to set a price for ${config.pair}. Update settings or create spread manually.`;
         }
       }
+
       if (skipNotify) {
         log.log(`Market-making: ${output}`);
         output = '';
       }
+
       return {
         price: false,
         message: output,

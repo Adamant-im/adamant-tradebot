@@ -68,7 +68,7 @@ module.exports = {
       onWhichAccount = ' on second account';
       balances = await api.getBalances(false);
     } else {
-      balances = await traderapi.getBalances(false);
+      balances = await this.getBalancesCached(false, utils.getModuleName(module.id));
     }
 
     if (!balances) {
@@ -181,12 +181,12 @@ module.exports = {
         // Use constants if an exchange doesn't provide min amounts
 
         const defaultMinOrderAmountUSD =
-            config.exchange_restrictions?.minOrderAmountUSD ??
+            config.exchange_restrictions?.minOrderAmountUSD ||
             constants.DEFAULT_MIN_ORDER_AMOUNT_USD;
         minOrderAmount = exchangerUtils.convertCryptos('USD', config.coin1, defaultMinOrderAmountUSD).outAmount;
 
         const defaultMinOrderAmountUpperBoundUSD =
-            config.exchange_restrictions?.minOrderAmountUpperBoundUSD ??
+            config.exchange_restrictions?.minOrderAmountUpperBoundUSD ||
             constants.DEFAULT_MIN_ORDER_AMOUNT_UPPER_BOUND_USD;
         upperBound = exchangerUtils.convertCryptos('USD', config.coin1, defaultMinOrderAmountUpperBoundUSD).outAmount;
       }
@@ -202,17 +202,17 @@ module.exports = {
 
   /**
    * Parses a market from string.
-   * Then retrieves static info for a specific exchange: coin1, coin2, and decimals.
-   * If an exchange is external, connect and retrieve market info, no socket
-   * @param {String} pair String to parse, e.g., 'ETH/USDT'
-   * @param {String} exchange Exchange to request market info. Optional, default to config.exchange.
-   * @param {Boolean} noWarn Don't warn if we didn't receive market info. It may be because getMarkets() is not yet finished.
-   * @return {Object|Boolean} { pair, coin1, coin2, coin1Decimals, coin2Decimals, isParsed, marketInfoSupported, exchangeApi } or false
+   * Retrieves static info for this pair on a specific exchange.
+   * If an exchange is external, connects and retrieves market info (no socket is used, REST only).
+   * @param {string} pair String to parse a market, e.g., 'ETH/USDT'
+   * @param {string} [exchange] Exchange to request market info. Optional, default to config.exchange.
+   * @param {boolean} [noWarn=false] Don't warn if we didn't receive market info. It may be because the getMarkets() is not yet finished.
+   * @return {Object} { pair, coin1, coin2, coin1Decimals, coin2Decimals, isParsed, marketInfoSupported, exchangeApi } or false
    */
   parseMarket(pair, exchange, noWarn = false) {
     try {
       if (!pair || pair.indexOf('/') === -1) {
-        log.warn(`orderUtils: parseMarket() is unable to parse a market pair from string '${pair}'. Returning 'false'.`);
+        log.warn(`orderUtils: parseMarket() is unable to parse a market pair from the string '${pair}'.`);
         return false;
       }
 
@@ -231,7 +231,7 @@ module.exports = {
             false, // Don't connect socket
             false, // Don't connect socket
             undefined, // Use accountNo by default
-            coin1, // Doesn't mean anything as we don't connect socket
+            coin1, // DEX connectors may use this to fetch the market info
             coin2,
         );
       } else {
@@ -246,16 +246,14 @@ module.exports = {
       }
 
       let isParsed = false;
-      let coin1Decimals = 8; let coin2Decimals = 8;
+      let coin1Decimals = 8; let coin2Decimals = 8; // Fallback in case if we can't find the market
 
-      if (!marketInfo) {
-        if (marketInfoSupported && !noWarn) {
-          log.warn(`orderUtils: parseMarket() is unable to get info about ${pair} market on ${exchange} exchange. Returning default values for decimal places.`);
-        }
-      } else {
+      if (marketInfo) {
         coin1Decimals = marketInfo.coin1Decimals;
         coin2Decimals = marketInfo.coin2Decimals;
         isParsed = true;
+      } else if (marketInfoSupported && !noWarn) {
+        log.warn(`orderUtils: parseMarket() is unable to get info about the ${pair} market on the ${exchange} exchange. Returning default values for decimal places.`);
       }
 
       return {
@@ -267,9 +265,10 @@ module.exports = {
         isParsed,
         marketInfoSupported,
         exchangeApi,
+        isReversed: marketInfo?.isReversed,
       };
     } catch (e) {
-      log.warn(`Error in parseMarket() of ${utils.getModuleName(module.id)} module: ${e}. Returning 'false'.`);
+      log.warn(`Error in parseMarket() of ${utils.getModuleName(module.id)} module: ${e}.`);
       return false;
     }
   },
@@ -419,7 +418,7 @@ module.exports = {
 
     try {
       const onWhichAccount = api.isSecondAccount ? ' (on second account)' : '';
-      const exchangeOrders = await traderapi.getOpenOrders(pair);
+      const exchangeOrders = await this.getOpenOrdersCached(pair, `${utils.getModuleName(module.id)}/${moduleName}`, noCache, api);
 
       log.log(`orderUtils: Updating ${dbOrders.length} ${samePurpose}dbOrders on ${pair} for ${moduleName}, noCache: ${noCache}, hideNotOpened: ${hideNotOpened}… Received ${exchangeOrders?.length} orders from the exchange.`);
 
@@ -517,6 +516,7 @@ module.exports = {
                     coin2AmountFilled,
                     price: dbOrder.price,
                     subPurpose: dbOrder.subPurpose,
+                    subPurposeString: dbOrder.subPurposeString,
                   });
 
                   const filledPercent = (dbOrder.coin1AmountFilled / dbOrder.coin1Amount * 100).toFixed(2);
@@ -550,6 +550,7 @@ module.exports = {
           coin2AmountFilled: coin1AmountBeforeIteration * dbOrder.price,
           price: dbOrder.price,
           subPurpose: dbOrder.subPurpose,
+          subPurposeString: dbOrder.subPurposeString,
         });
 
         if (dbOrder.purpose === 'ld') {
@@ -597,6 +598,7 @@ module.exports = {
             coin2AmountFilled: coin1AmountBeforeIteration * dbOrder.price,
             price: dbOrder.price,
             subPurpose: dbOrder.subPurpose,
+            subPurposeString: dbOrder.subPurposeString,
           });
         }
       }
@@ -693,5 +695,95 @@ module.exports = {
     }
 
     return updatedOrders;
+  },
+
+  /**
+   * Refers to traderapi.getOpenOrders. A stub for cache.
+  */
+  async getOpenOrdersCached(pair, moduleName, noCache = false, api = traderapi) {
+    let result;
+
+    try {
+      const onWhichAccount = api.isSecondAccount ? ' on second account' : '';
+
+      const exchangeOrders = await api.getOpenOrders(pair);
+
+      const maxRateCounter = exchangeOrders?.[0]?.maxRateCounter;
+      const rateCounterString = utils.isPositiveOrZeroInteger(maxRateCounter) ? ` Rate limit counter: ${maxRateCounter}.` : '';
+      log.log(`orderUtils: Getting fresh open orders${onWhichAccount} for ${moduleName}… ${exchangeOrders?.length} orders received.${rateCounterString}`);
+
+      if (exchangeOrders) {
+        result = utils.cloneArray(exchangeOrders);
+      } else {
+        log.warn(`orderUtils: Unable to get open orders${onWhichAccount} in getOpenOrdersCached().`);
+        return undefined;
+      }
+    } catch (e) {
+      log.error(`Error in getOpenOrdersCached() of ${utils.getModuleName(module.id)} module: ` + e);
+    }
+
+    return result;
+  },
+
+  /**
+   * Refers to traderapi.getOrderBook. A stub for cache.
+  */
+  async getOrderBookCached(pair, moduleName, noCache = false) {
+    let result;
+
+    try {
+      const pairObj = this.parseMarket(pair);
+
+      const exchangeOrderBook = await traderapi.getOrderBook(pairObj.pair);
+      const bid_low = exchangeOrderBook?.bids?.[0]?.price;
+      const ask_high = exchangeOrderBook?.asks?.[0]?.price;
+      if (bid_low && ask_high) {
+        const spread = ask_high - bid_low;
+        const priceAvg = (ask_high + bid_low) / 2;
+        const spreadPercent = spread / priceAvg * 100;
+        const precision = utils.getPrecision(pairObj.coin2Decimals);
+        const spreadNumber = Math.round(spread / precision);
+        const orderBookSpreadInfo = `Spread is ${spreadPercent.toFixed(4)}% (${spread.toFixed(pairObj.coin2Decimals)} ${pairObj.coin2}, ${spreadNumber} units)`;
+        let logMessage = `orderUtils: Received fresh order book for ${moduleName} — ${exchangeOrderBook.bids.length} bids and ${exchangeOrderBook.asks.length} asks at ${pairObj.pair}.`;
+        logMessage += ` Highest bid and lowest ask are ${exchangeOrderBook.bids[0].price.toFixed(pairObj.coin2Decimals)}–${exchangeOrderBook.asks[0].price.toFixed(pairObj.coin2Decimals)} ${pairObj.coin2}.`;
+        logMessage += ` ${orderBookSpreadInfo}.`;
+        log.log(logMessage);
+        result = utils.cloneObject(exchangeOrderBook);
+      } else {
+        log.warn('orderUtils: Unable to get order book in getOrderBookCached().');
+        return undefined;
+      }
+    } catch (e) {
+      log.error(`Error in getOrderBookCached() of ${utils.getModuleName(module.id)} module: ` + e);
+    }
+
+    return result;
+  },
+
+  /**
+   * Refers to traderapi.getBalances. A stub for cache.
+  */
+  async getBalancesCached(nonzero = true, moduleName, noCache = false, params, api = traderapi) {
+    let result;
+    const accountTypeString = params?.[0] ? ` '${params?.[0]}'-type` : '';
+    const onWhichAccount = api.isSecondAccount ? ' on second account' : '';
+
+    try {
+      log.log(`orderUtils: Getting fresh${accountTypeString} balances${onWhichAccount} for ${moduleName}…`);
+      const balances = await api.getBalances(false, params?.[0]);
+      if (balances) {
+        result = utils.cloneArray(balances);
+      } else {
+        log.warn(`orderUtils: Unable to get${accountTypeString} balances${onWhichAccount} in getBalancesCached().`);
+        return undefined;
+      }
+    } catch (e) {
+      log.error(`Error in getBalancesCached() of ${utils.getModuleName(module.id)} module: ` + e);
+    }
+    if (nonzero) {
+      result = result.filter((crypto) => crypto.free || crypto.freezed);
+    }
+
+    return result;
   },
 };

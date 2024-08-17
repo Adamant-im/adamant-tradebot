@@ -412,7 +412,7 @@ module.exports = {
 
   /**
    * Parses time value, like 5sec, 5 secs, 5 min
-   * @param {number} value Time to parse
+   * @param {string} value Time to parse
    * @return {Object} isTime and time itself
    */
   parseSmartTime(value) {
@@ -628,6 +628,24 @@ module.exports = {
       return m;
     }, { });
     return Object.keys(map);
+  },
+
+  /**
+   * Loops through the object keys.
+   * Returns a value where a search string include its key, case insensitive.
+   * E.g., string 'The order is in Pending status please try after some time' includes key 'order is in pending status'.
+   * @param {Object} object The object to search through
+   * @param {string} str A string which may include a key
+   * @return {any|undefined} Found value or undefined
+   */
+  findObjectEntry(object, str) {
+    if (this.isObjectNotEmpty(object) && typeof str === 'string') {
+      for (const [key, value] of Object.entries(object)) {
+        if (str.toLowerCase().includes(key.toLowerCase())) {
+          return value;
+        }
+      }
+    }
   },
 
   /**
@@ -1570,7 +1588,7 @@ module.exports = {
     try {
       const pw = require('../trade/mm_price_watcher');
 
-      if (pw.getIsPriceActualAndEnabled()) {
+      if (pw.getIsPriceActualConsistentAndEnabled()) {
         const lowPrice = pw.getLowPrice();
         const highPrice = pw.getHighPrice();
 
