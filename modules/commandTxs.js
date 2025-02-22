@@ -17,11 +17,6 @@ const config = require('./configReader');
 const log = require('../helpers/log');
 const notify = require('../helpers/notify');
 const api = require('./api');
-const escapeMarkdownTelegram = require('../helpers/telegram/format');
-const telegramBotApi = require('../bot/api');
-const { botInterchange } = require('./botInterchange');
-const { encrypt, decrypt } = require('../helpers/encryption');
-const axios = require('axios');
 
 const tradeParams = require('../trade/settings/tradeParams_' + config.exchange);
 const orderCollector = require('../trade/orderCollector');
