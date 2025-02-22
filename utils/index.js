@@ -12,4 +12,6 @@ const formatPairName = (pair) => {
   };
 };
 
-module.exports = { formatPairName };
+module.exports = {
+  formatPairName,
+};
