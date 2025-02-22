@@ -1,3 +1,8 @@
+/**
+ * @module helpers/utils
+ * @typedef {import('types/bot/parsedMarket.d').ParsedMarket} ParsedMarket
+ */
+
 const config = require('../modules/configReader');
 const log = require('./log');
 let tradeParams = require('../trade/settings/tradeParams_' + config.exchange);
@@ -9,6 +14,10 @@ const { diff } = require('deep-object-diff');
 const AVERAGE_SPREAD_DEVIATION = 0.15;
 
 module.exports = {
+  get moduleName() {
+    return this.getModuleName(/** @type {NodeJS.Module} */ (module).id);
+  },
+
   /**
    * Reads a trade config file and transforms it to a JSON-readable string
    * @return {String}
@@ -151,7 +160,7 @@ module.exports = {
   /**
    * Converts provided `time` (ms) to timeZone's timestamp (ms)
    * @param {number} ms Timestamp to convert
-   * @param {number} timeZone Time zone to convert
+   * @param {string} timeZone Time zone to convert
    * @return {number}
    */
   formatUnixtimeTimeZone(ms, timeZone) {
@@ -177,17 +186,16 @@ module.exports = {
   /**
    * Converts ADAMANT's sats to ADM value
    * @param {number|string} sats Sats to convert
-   * @param {number} decimals Round up to
+   * @param {number} [decimals=8] Round up to
    * @return {number} Value in ADM
    */
   satsToADM(sats, decimals = 8) {
     try {
-      let adm = (+sats / SAT).toFixed(decimals);
-      adm = +adm;
+      const admString = (+sats / SAT).toFixed(decimals);
 
-      return adm;
+      return +admString;
     } catch (e) {
-      // Silent
+      log.error(`Error in satsToADM() of ${this.moduleName} module: ${e}`);
     }
   },
 
@@ -198,12 +206,11 @@ module.exports = {
    */
   AdmToSats(adm) {
     try {
-      let sats = (+adm * SAT).toFixed(0);
-      sats = +sats;
+      const satsString = (+adm * SAT).toFixed(0);
 
-      return sats;
+      return +satsString;
     } catch (e) {
-      // Silent
+      log.error(`Error in AdmToSats() of ${this.moduleName} module: ${e}`);
     }
   },
 
@@ -240,29 +247,33 @@ module.exports = {
 
   /**
    * Returns random of (min-max)
-   * @param {number} min Minimum is inclusive
-   * @param {number} max Maximum is inclusive
-   * @param {number} doRound If to return integer (rounded value)
+   * @param {number} low Minimum is inclusive
+   * @param {number} high Maximum is inclusive
+   * @param {boolean} [doRound=false] Return integer (rounded value)
    * @return {number} Random of (min-max)
    */
   randomValue(low, high, doRound = false) {
     let random = Math.random() * (high - low) + low;
+
     if (doRound) {
       random = Math.round(random);
     }
+
     return random;
   },
 
   /**
    * Returns random of near number with deviation %
    * @param {number} number Value near which to return a random
-   * @param {number} deviation Deviation in %/100 from number
+   * @param {number} deviation Deviation in %/100 from number, e.g., 0.1 is 10%
+   * @param {boolean} [doRound=false] Return integer (rounded value)
    * @return {number} Random of number+-deviation
    */
-  randomDeviation(number, deviation) {
+  randomDeviation(number, deviation, doRound = false) {
     const min = number - number * deviation;
     const max = number + number * deviation;
-    return Math.random() * (max - min) + min;
+
+    return this.randomValue(min, max, doRound);
   },
 
   /**
@@ -272,7 +283,8 @@ module.exports = {
    */
   isNumeric(str) {
     if (typeof str !== 'string') return false;
-    return !isNaN(str) && !isNaN(parseFloat(str));
+
+    return !isNaN(+str) && !isNaN(parseFloat(str));
   },
 
   /**
@@ -355,41 +367,51 @@ module.exports = {
 
   /**
    * Parses number, including 500k, 10.3m or 5b
-   * @param {number} value Number to parse
-   * @return {Object} isNumber and number itself
+   * @param {number | string} value Number to parse
+   * @return {{ isNumber: boolean, fancyNumberString?: string, number?: number }}
+   *   E.g., 500K -> isNumber: true, fancyNumberString?: 500k, number?: 500_000
    */
   parsePositiveSmartNumber(value) {
-    if (!value) {
+    if (
+      !value ||
+      (typeof value !== 'string' && typeof value !== 'number')
+    ) {
       return {
         isNumber: false,
       };
     }
+
     value = value.toString()?.toLowerCase();
+
     const multiplierDigit = value.slice(-1);
     let number;
 
     if (['k', 'm', 'b'].includes(multiplierDigit)) {
       number = +value.slice(0, -1);
+
       if (!this.isPositiveNumber(number)) {
         return {
           isNumber: false,
         };
       }
+
       let multiplier;
       switch (multiplierDigit) {
         case 'k':
-          multiplier = 1000;
+          multiplier = 1_000;
           break;
         case 'm':
-          multiplier = 1000000;
+          multiplier = 1_000_000;
           break;
         case 'b':
-          multiplier = 1000000000;
+          multiplier = 1_000_000_000;
           break;
         default:
           break;
       }
+
       number *= multiplier;
+
       return {
         isNumber: true,
         fancyNumberString: value,
@@ -397,14 +419,16 @@ module.exports = {
       };
     } else {
       number = +value;
+
       if (!this.isPositiveNumber(number)) {
         return {
           isNumber: false,
         };
       }
+
       return {
         isNumber: true,
-        fancyNumberString: number,
+        fancyNumberString: value,
         number,
       };
     }
@@ -520,7 +544,7 @@ module.exports = {
       if (o && typeof o === 'object') {
         return o;
       }
-    } catch (e) {
+    } catch {
       // Silent
     }
 
@@ -631,24 +655,6 @@ module.exports = {
   },
 
   /**
-   * Loops through the object keys.
-   * Returns a value where a search string include its key, case insensitive.
-   * E.g., string 'The order is in Pending status please try after some time' includes key 'order is in pending status'.
-   * @param {Object} object The object to search through
-   * @param {string} str A string which may include a key
-   * @return {any|undefined} Found value or undefined
-   */
-  findObjectEntry(object, str) {
-    if (this.isObjectNotEmpty(object) && typeof str === 'string') {
-      for (const [key, value] of Object.entries(object)) {
-        if (str.toLowerCase().includes(key.toLowerCase())) {
-          return value;
-        }
-      }
-    }
-  },
-
-  /**
    * Returns array with unique objects
    * @param {array} items Input array
    * @param {array|string} propNames 'property' or ['property1', 'property2']
@@ -664,10 +670,10 @@ module.exports = {
   },
 
   /**
-   * Splits a string into chunks
+   * Splits a string into limited by length chunks
    * @param {string} str
    * @param {number} length
-   * @return {array<string>} Array of strings
+   * @return {string[]} Chunks
    */
   chunkString(str, length) {
     // return str.match(new RegExp('.{1,' + length + '}', 'g'));
@@ -735,12 +741,12 @@ module.exports = {
   },
 
   /**
-   * Formats number to a pretty string
-   * @param {Number|String} num Number to format, e.g., 3134234.778
-   * @param {Boolean} doBold If to add **bold** markdown for an integer part
-   * @return {String} Formatted number, like '3 134 234.778'
+   * Formats a number to a pretty string, 3134234.778 -> 3 134 234.778
+   * @param {number | string} num Number to format, e.g., 3134234.778
+   * @param {boolean} [makeBold=false] Apply **bold** markdown for an integer part
+   * @return {string} Formatted number
    */
-  formatNumber(num, doBold) {
+  formatNumber(num, makeBold = false) {
     const parts = String(+num).split('.');
 
     const main = parts[0];
@@ -758,7 +764,7 @@ module.exports = {
     }
 
     if (parts.length > 1) {
-      if (doBold) {
+      if (makeBold) {
         output = `**${output}**.${parts[1]}`;
       } else {
         output = `${output}.${parts[1]}`;
@@ -770,55 +776,68 @@ module.exports = {
 
   /**
    * Calculates average value in array
-   * @param {Array of Number} arr Array of number
-   * @param {Number} maxLength Use only first maxLength items (optional)
-   * @return {Number} Average value
+   * @param {number[]} arr Array of numbers
+   * @param {number} [maxLength] Use only first maxLength items (optional)
+   * @return {number|false} Average value
    */
   arrayAverage(arr, maxLength) {
-    if (!Array.isArray(arr) || arr.length === 0) return false;
+    if (!Array.isArray(arr) || arr.length === 0) {
+      return false;
+    }
+
     if (!maxLength) maxLength = arr.length - 1;
     const arrToCalc = arr.slice(0, maxLength);
     const total = arrToCalc.reduce((acc, c) => acc + c, 0);
+
     return total / arrToCalc.length;
   },
 
   /**
    * Calculates Root mean square value in array
-   * @param {Array of Number} arr Array of number
-   * @param {Number} maxLength Use only first maxLength items (optional)
-   * @return {Number} RMS value
+   * @param {number[]} arr Array of numbers
+   * @param {number} [maxLength] Use only first maxLength items (optional)
+   * @return {number|false} RMS value
    */
   arrayRMS(arr, maxLength) {
-    if (!Array.isArray(arr) || arr.length === 0) return false;
+    if (!Array.isArray(arr) || arr.length === 0) {
+      return false;
+    }
+
     if (!maxLength) maxLength = arr.length - 1;
     const arrToCalc = arr.slice(0, maxLength);
     const squares = arrToCalc.map((val) => (val*val));
     const total = squares.reduce((acc, c) => acc + c, 0);
+
     return Math.sqrt(total / squares.length);
   },
 
   /**
    * Calculates median value in array
-   * @param {Array of Number} arr Array of number
-   * @param {Number} maxLength Use only first maxLength items (optional)
-   * @return {Number} Median value
+   * @param {number[]} arr Array of numbers
+   * @param {number} [maxLength] Use only first maxLength items (optional)
+   * @return {number|false} Median value
    */
   arrayMedian(arr, maxLength) {
-    if (!Array.isArray(arr) || arr.length === 0) return false;
+    if (!Array.isArray(arr) || arr.length === 0) {
+      return false;
+    }
+
     if (!maxLength) maxLength = arr.length - 1;
     const arrToCalc = arr.slice(0, maxLength);
     arrToCalc.sort((a, b) => {
       return a - b;
     });
+
     const lowMiddle = Math.floor( (arrToCalc.length - 1) / 2);
     const highMiddle = Math.ceil( (arrToCalc.length - 1) / 2);
+
     return (arrToCalc[lowMiddle] + arrToCalc[highMiddle]) / 2;
   },
 
   /**
    * Calculates history trades metrics within the interval, like max and min price, price deviation
-   * @param {Array of object} lastTrades Last trades, received using traderapi.getTradesHistory()
-   * @param {Number} startDate Timestamp from to filter trades
+   * @param {Object[]} lastTrades Last trades, received using traderapi.getTradesHistory()
+   * @param {number} [startDate] Timestamp from to filter trades. Default is 1 minute before now().
    * @return {Object} History trades metrics
    */
   getHistoryTradesInfo(lastTrades, startDate) {
@@ -827,7 +846,9 @@ module.exports = {
       if (!this.isPositiveNumber(startDate)) {
         startDate = Date.now() - defaultInterval;
       }
+
       lastTrades = lastTrades.filter((trade) => trade.date > startDate);
+
       const tradesCount = lastTrades.length;
       const intervalMs = Date.now() - startDate;
       const minPrice = Math.min(...lastTrades.map((trade) => trade.price));
@@ -836,6 +857,7 @@ module.exports = {
       const priceDeltaPercent = this.numbersDifferencePercent(minPrice, maxPrice);
       const coin1Volume = lastTrades.reduce((total, trade) => total + trade.coin1Amount, 0);
       const coin2Volume = lastTrades.reduce((total, trade) => total + trade.coin2Amount, 0);
+
       const tradesInfo = {
         tradesCount,
         intervalMs,
@@ -846,18 +868,18 @@ module.exports = {
         coin1Volume,
         coin2Volume,
       };
+
       return tradesInfo;
     } catch (e) {
-      log.error(`Error in getHistoryTradesInfo() of ${this.getModuleName(module.id)} module: ${e}.`);
-      return false;
+      log.error(`Error in getHistoryTradesInfo() of ${this.moduleName} module: ${e}`);
     }
   },
 
   /**
    * Aggregates (sum) array of objects by field
-   * @param {Array of Object} arr Array of objects to aggregate
-   * @param {String} field Field to aggregate by
-   * @return {Array of Object} Aggregated array
+   * @param {Object[]} arr Array of objects to aggregate
+   * @param {string} field Field to aggregate by
+   * @return {Object[]} Aggregated array
    */
   aggregateArrayByField(arr, field) {
     try {
@@ -881,8 +903,7 @@ module.exports = {
 
       return Object.values(dictionary);
     } catch (e) {
-      log.error(`Error in aggregateArrayByField() of ${this.getModuleName(module.id)} module: ${e}.`);
-      return false;
+      log.error(`Error in aggregateArrayByField() of ${this.moduleName} module: ${e}`);
     }
   },
 
@@ -952,6 +973,39 @@ module.exports = {
       let middleAveragePrice = averagePrice - this.randomValue(-AVERAGE_SPREAD_DEVIATION, AVERAGE_SPREAD_DEVIATION) * spread;
       if (middleAveragePrice >= lowestAsk || middleAveragePrice <= highestBid) {
         middleAveragePrice = averagePrice;
+      }
+
+      const cumulative = {
+        bids: [],
+        asks: [],
+      };
+
+      // Calculate cumulative amounts and quotes for bids
+      let cumulativeBidAmount = 0;
+      let cumulativeBidQuote = 0;
+
+      for (const bid of orderBook.bids) {
+        cumulativeBidAmount += bid.amount;
+        cumulativeBidQuote += bid.amount * bid.price;
+
+        cumulative.bids.push({
+          amount: cumulativeBidAmount,
+          quote: cumulativeBidQuote,
+        });
+      }
+
+      // Calculate cumulative amounts and quotes for asks
+      let cumulativeAskAmount = 0;
+      let cumulativeAskQuote = 0;
+
+      for (const ask of orderBook.asks) {
+        cumulativeAskAmount += ask.amount;
+        cumulativeAskQuote += ask.amount * ask.price;
+
+        cumulative.asks.push({
+          amount: cumulativeAskAmount,
+          quote: cumulativeAskQuote,
+        });
       }
 
       const liquidity = [];
@@ -1220,53 +1274,60 @@ module.exports = {
       }
 
       return {
-        bids,
-        asks,
-        highestBid,
-        lowestAsk,
-        highestBidAggregatedAmount,
-        highestBidAggregatedQuote,
-        lowestAskAggregatedAmount,
-        lowestAskAggregatedQuote,
-        smartBid,
-        smartAsk,
-        cleanBid,
-        cleanAsk,
-        spread,
-        spreadPercent,
-        averagePrice,
-        liquidity,
-        downtrendAveragePrice,
-        uptrendAveragePrice,
-        middleAveragePrice,
-        typeTargetPrice,
-        amountTargetPrice,
-        amountTargetPriceQuote,
-        targetPriceOrdersCount,
-        amountTargetPriceExcluded,
-        amountTargetPriceQuoteExcluded,
-        targetPriceOrdersCountExcluded,
-        targetPriceExcluded,
-        bidIntervals,
-        askIntervals,
-        avgBidInterval,
-        avgAskInterval,
-        rmsBidInterval,
-        rmsAskInterval,
-        medianBidInterval,
-        medianAskInterval,
-        placedAmountCountBid,
-        placedAmountSumBid,
-        placedAmountPriceBid,
-        placedAmountReachedBid,
-        placedAmountCountAsk,
-        placedAmountSumAsk,
-        placedAmountPriceAsk,
-        placedAmountReachedAsk,
-        optimalQhBid,
+        bids, // Number of bids in the order book
+        asks, // Number of asks in the order book
+        highestBid, // Highest bid price
+        lowestAsk, // Lowest ask price
+        highestBidAggregatedAmount, // Total amount at the highest bid price
+        highestBidAggregatedQuote, // Total quote at the highest bid price
+        lowestAskAggregatedAmount, // Total amount at the lowest ask price
+        lowestAskAggregatedQuote, // Total quote at the lowest ask price
+        cumulative, // Cumulative .bids[] and .asks[]: amount, quote
+        smartBid, // See getSmartPrice()
+        smartAsk, // See getSmartPrice()
+        cleanBid, // See getCleanPrice()
+        cleanAsk, // See getCleanPrice()
+        spread, // Absolute spread between highest bid and lowest ask
+        spreadPercent, // Percentage spread relative to average price
+        averagePrice, // Average price between highest bid and lowest ask
+        liquidity, // Liquidity metrics for different spread percentages:
+        /**
+          bidsCount, amountBids, amountBidsQuote,
+          asksCount, amountAsks, amountAsksQuote,
+          totalCount, amountTotal, amountTotalQuote,
+          lowPrice, highPrice, spread
+          */
+        downtrendAveragePrice, // Adjusted average price for downtrend scenario
+        uptrendAveragePrice, // Adjusted average price for uptrend scenario
+        middleAveragePrice, // Adjusted middle average price
+        typeTargetPrice, // Type of target price (inSpread, sell, buy)
+        amountTargetPrice, // Amount required to reach the target price
+        amountTargetPriceQuote, // Quote required to reach the target price
+        targetPriceOrdersCount, // Number of orders at the target price
+        amountTargetPriceExcluded, // Amount excluded for the target price
+        amountTargetPriceQuoteExcluded, // Quote excluded for the target price
+        targetPriceOrdersCountExcluded, // Number of orders excluded at the target price
+        targetPriceExcluded, // Excluded target price
+        bidIntervals, // Bid price intervals: previousPrice, priceInterval, nextPrice
+        askIntervals, // Ask price intervals: previousPrice, priceInterval, nextPrice
+        avgBidInterval, // Average bid price interval
+        avgAskInterval, // Average ask price interval
+        rmsBidInterval, // RMS bid price interval
+        rmsAskInterval, // RMS ask price interval
+        medianBidInterval, // Median bid price interval
+        medianAskInterval, // Median ask price interval
+        placedAmountCountBid, // Number of bid orders to fill placed amount
+        placedAmountSumBid, // Cumulative bid amount to fill placed amount
+        placedAmountPriceBid, // Bid price when placed amount is reached
+        placedAmountReachedBid, // Whether placed amount is reached with bids
+        placedAmountCountAsk, // Number of ask orders to fill placed amount
+        placedAmountSumAsk, // Cumulative ask amount to fill placed amount
+        placedAmountPriceAsk, // Ask price when placed amount is reached
+        placedAmountReachedAsk, // Whether placed amount is reached with asks
+        optimalQhBid, // Optimal Quote Hunter bid
       };
     } catch (e) {
-      log.error(`Error in getOrderBookInfo() of ${this.getModuleName(module.id)} module: ${e}.`);
+      log.error(`Error in getOrderBookInfo() of ${this.moduleName} module: ${e}`);
       return false;
     }
   },
@@ -1358,8 +1419,7 @@ module.exports = {
 
       return smartPrice;
     } catch (e) {
-      log.error(`Error in getSmartPrice() of ${this.getModuleName(module.id)} module: ${e}.`);
-      return false;
+      log.error(`Error in getSmartPrice() of ${this.moduleName} module: ${e}`);
     }
   },
 
@@ -1381,7 +1441,7 @@ module.exports = {
 
     if (!this.isPositiveNumber(smartPrice)) {
       log.warn(`Utils/Cleaner: Received unexpected smart price: ${smartPrice}. Unable to calculate clean price.`);
-      return false;
+      return;
     }
 
     try {
@@ -1461,46 +1521,58 @@ module.exports = {
 
       return cleanPrice;
     } catch (e) {
-      log.error(`Error in getCleanPrice() of ${this.getModuleName(module.id)} module: ${e}.`);
-      return false;
+      log.error(`Error in getCleanPrice() of ${this.moduleName} module: ${e}`);
     }
   },
 
   /**
-   * Returns precision for number of decimals. getPrecision(3) = 0.001
+   * Returns precision for number of decimals
+   * 3 -> 0.001
+   * 1 -> 0.1
+   * 0 -> 1
+   * Works with negative decimals: -3 -> 1000
    * @param {number} decimals Number of decimals
    * @return {number} Precision
    */
   getPrecision(decimals) {
-    return +(Math.pow(10, -decimals).toFixed(decimals));
+    let precision = Math.pow(10, -decimals);
+
+    if (this.isPositiveOrZeroInteger(decimals)) {
+      precision = +precision.toFixed(decimals);
+    }
+
+    return precision;
   },
 
   /**
    * Returns decimals for precision
    * 0.00001 -> 5
-   * 1000 -> 0
-   * 1 -> 0
    * 0 -> undefined
-   * @param {Number|String} precision e.g. 0.00001
-   * @returns {number} returns 5
+   * 1 -> 0
+   * 1000 -> 0
+   * @param {number | string} precision E.g. 0.00001
+   * @returns {number} E.g. 5
    */
   getDecimalsFromPrecision(precision) {
     if (!precision) return;
-    if (precision > 1) return 0;
+    if (+precision > 1) return 0;
+
     return Math.round(Math.abs(Math.log10(+precision)));
   },
 
   /**
    * Returns decimals for precision for number greater than 1
    * 0.00001 -> 5
-   * 1000 -> -3
-   * 1 -> 0
    * 0 -> undefined
-   * @param {Number|String} precision e.g. 0.00001
-   * @returns {number} returns 5
+   * 1 -> 0
+   * 1000 -> -3
+   * Note: 1051.toFixed(-2) doesn't work
+   * @param {number | string} precision E.g. 0.00001
+   * @returns {number} E.g. 5
    */
   getDecimalsFromPrecisionForBigNumbers(precision) {
     if (!precision) return;
+
     return Math.round(-Math.log10(+precision));
   },
 
@@ -1510,13 +1582,13 @@ module.exports = {
    * 1000.00001 -> 5
    * 1 -> 0
    * 0 -> 0
-   * @param {Number|String} number
-   * @returns {Number|undefined}
+   * @param {number|string} number
+   * @returns {number|undefined}
    */
   getDecimalsFromNumber(number) {
     number = number?.toString();
 
-    if (!isFinite(number)) return undefined;
+    if (!isFinite(+number)) return undefined;
 
     const split = number.split('.');
 
@@ -1529,9 +1601,9 @@ module.exports = {
 
   /**
    * Checks if order price is out of order book custom percent (as mm_liquiditySpreadPercent) spread
-   * @param order Object of ordersDb
-   * @param obInfo Object of utils.getOrderBookInfo()
-   * @returns {Boolean}
+   * @param {Object} order Object of ordersDb
+   * @param {Object} obInfo Object of utils.getOrderBookInfo()
+   * @returns {Object}
    */
   isOrderOutOfSpread(order, obInfo) {
     try {
@@ -1574,8 +1646,7 @@ module.exports = {
 
       return outOfSpreadInfo;
     } catch (e) {
-      log.error(`Error in isOrderOutOfSpread() of ${this.getModuleName(module.id)} module: ${e}.`);
-      return false;
+      log.error(`Error in isOrderOutOfSpread() of ${this.moduleName} module: ${e}`);
     }
   },
 
@@ -1600,7 +1671,7 @@ module.exports = {
         }
       }
     } catch (e) {
-      log.error(`Error in isOrderOutOfPriceWatcherRange() of ${this.getModuleName(module.id)} module: ${e}.`);
+      log.error(`Error in isOrderOutOfPriceWatcherRange() of ${this.moduleName} module: ${e}`);
     }
 
     return false;
@@ -1622,7 +1693,7 @@ module.exports = {
         return true;
       }
     } catch (e) {
-      log.error(`Error in isOrderOutOfTwapRange() of ${this.getModuleName(module.id)} module: ${e}.`);
+      log.error(`Error in isOrderOutOfTwapRange() of ${this.moduleName} module: ${e}`);
     }
 
     return false;
@@ -1646,21 +1717,36 @@ module.exports = {
   },
 
   /**
-   * Parses number or number range from string like 1.25–2.90
+   * Returns probable caller function using Error call stack
+   * Usage: console.log('Called by:', utils.getFunctionCaller(new Error()));
+   * @param {Error} errorInstance Error instance created inside the function
+   * @return {string} E.g. 'at Object.<anonymous> (../adamant-tradebot-me/modules/commandTxs.js:59:14)'
+   */
+  getFunctionCaller(errorInstance) {
+    const stack = errorInstance.stack.split('\n');
+
+    return stack[2].trim();
+  },
+
+  /**
+   * Parses number or number range/interval from string like 1.25–2.90
    * It considers a separator can be hyphen, dash, minus, long dash
    * All numbers should be positive and finite
-   * @param {String} str String to parse
-   * @return {Object} isRange, isValue, from, to
+   * @param {string} str String to parse
+   * @return {{ isRange: boolean, isValue: boolean, value?: number,
+   *     from?: number, to?: number, fromStr?: string, toStr?: string }}
    */
   parseRangeOrValue(str) {
-    if (!str) {
+    if (typeof str !== 'string') {
       return {
         isRange: false,
         isValue: false,
       };
     }
 
-    let from; let to; let value;
+    let from; let to;
+    let value;
+
     if (str.indexOf('-') > -1) { // hyphen
       [from, to] = str.split('-');
     } else if (str.indexOf('—') > -1) { // long dash
@@ -1672,6 +1758,7 @@ module.exports = {
     } else {
       // It's a number
       value = +str;
+
       if (!this.isPositiveNumber(value)) {
         return {
           isRange: false,
@@ -1686,10 +1773,13 @@ module.exports = {
       }
     }
 
-    from = +from;
-    to = +to;
+    from = this.parsePositiveSmartNumber(from);
+    to = this.parsePositiveSmartNumber(to);
 
-    if (!this.isPositiveNumber(from) || !this.isPositiveNumber(to) || from > to) {
+    const fromNumber = from.number;
+    const toNumber = to.number;
+
+    if (!from.isNumber || !to.isNumber || fromNumber > toNumber) {
       return {
         isRange: false,
         isValue: false,
@@ -1699,19 +1789,23 @@ module.exports = {
     return {
       isRange: true,
       isValue: false,
-      from,
-      to,
+      from: fromNumber,
+      to: toNumber,
+      fromStr: from.fancyNumberString,
+      toStr: to.fancyNumberString,
     };
   },
 
   /**
    * Searches difference between current and previous balances
-   * @param {Array of Object} a Current balances
-   * @param {Array of Object} b Previous balances
-   * @return {Array of Object} Difference
+   * @param {Object[]} a Current balances
+   * @param {Object[]} b Previous balances
+   * @return {Object[]} Difference
    */
   differenceInBalances(a, b) {
-    if (!a || !b || !a[0] || !b[0]) return false;
+    if (!a || !b || !a[0] || !b[0]) {
+      return;
+    }
 
     let obj2;
     const diff = [];
@@ -1750,9 +1844,9 @@ module.exports = {
 
   /**
    * Creates a difference string for current and previous balances
-   * @param {Array of Object} a Current balances
+   * @param {Object[]} a Current balances
    * @param {Object<timestamp, balances>} b Previous balances with timestamp
-   * @return {String} Difference string
+   * @return {string} Difference string
    */
   differenceInBalancesString(a, b, marketInfo) {
     let output = '';
@@ -1811,7 +1905,7 @@ module.exports = {
         });
 
         // Show the total holdings change: Market value of all known coins, including coin1 (Trading coin)
-        if (Math.abs(deltaTotalUSD)> 0.01 || Math.abs(deltaTotalBTC > 0.00000009)) {
+        if (Math.abs(deltaTotalUSD)> 0.01 || Math.abs(deltaTotalBTC) > 0.00000009) {
           output += `Total holdings ${signTotalUSD}${this.formatNumber(+deltaTotalUSD.toFixed(2), true)} _USD_ or ${signTotalBTC}${this.formatNumber(deltaTotalBTC.toFixed(8), true)} _BTC_`;
         } else {
           output += 'Total holdings ~ No changes';
@@ -1839,10 +1933,10 @@ module.exports = {
   },
 
   /**
-   * Sums balances by code for two accounts
-   * @param {Array of Object} arr1 Balances for 1 account
-   * @param {Array of Object} arr2 Balances for 2 account
-   * @return {Array of Object} arr1 + arr2
+   * Summarizes balances by code for two accounts
+   * @param {Object[]} arr1 Balances for 1 account
+   * @param {Object[]} arr2 Balances for 2 account
+   * @return {Object[]} arr1 + arr2
    */
   sumBalances(arr1, arr2) {
     // Combine all the cryptos in the only object
@@ -2017,12 +2111,12 @@ module.exports = {
 
   /**
    * Inclines a number
-   * @param {Number} number Number to incline
-   * @return {String} 0th, 1st, 2d, 3d, 4th, 10th, 20th, 21st, 22d, 23d, 30th
+   * @param {number} number Number to incline
+   * @return {string} 0th, 1st, 2d, 3d, 4th, 10th, 20th, 21st, 22d, 23d, 30th
    */
   inclineNumber(number) {
     if (!this.isPositiveOrZeroInteger(number)) {
-      return number;
+      return String(number);
     }
 
     if (number % 10 === 1 && number !== 11) {
@@ -2209,14 +2303,27 @@ module.exports = {
   },
 
   /**
+   * XOR operand (exclusive or)
+   * @param {boolean | any} a Value a
+   * @param {boolean | any} b Value b
+   * @returns {boolean} a xor b
+   */
+  xor(a, b) {
+    return (a || b) && !(a && b);
+  },
+
+  /**
    * Parses command params array
    * E.g., BTC/USDT sell amount=10 minprice=32k time=50m interval=30sec strategy=Stepdown
-   * @param {String[]} params Param list
-   * @param {Number} min Minimum param count
+   * @param {string[]} params Command param list
+   * @param {number} [min=0] Minimum allowed param count
    * @returns {Object} Parsed params
    */
-  parseCommandParams(params, min) {
-    if (!Array.isArray(params) || params.length < min) {
+  parseCommandParams(params, min = 0) {
+    const paramCount = params?.length;
+    let paramCountWoMarkers = paramCount; // Subtract -y and -2
+
+    if (!Array.isArray(params) || paramCount < min) {
       return;
     }
 
@@ -2224,52 +2331,221 @@ module.exports = {
       more: [],
     };
 
-    for (let index = 0; index < params.length; index++) {
+    for (let index = 0; index < paramCount; index++) {
       const param = params[index];
+      const paramNext = params[index+1];
 
       const paramLc = param.toLowerCase();
       const paramUc = param.toUpperCase();
 
-      if (param.includes('/')) {
+      let knownParam = true;
+
+      // Check if param is an order purpose like 'ld2' or 'man'
+
+      const parsedPurpose = require('../trade/orderCollector').parsePurpose(paramLc);
+
+      if (parsedPurpose.parsed) {
+        delete parsedPurpose.parsed;
+        Object.assign(parsed, parsedPurpose);
+      }
+
+      // Test a param for more standard values
+
+      if (this.isPerpetual(param)) {
+        parsed.pair = param.toUpperCase();
+        parsed.perpetual = true;
+      } else if (param.includes('/')) {
         parsed.pair = paramUc;
       } else if (param.includes('=')) {
         const [key, value] = param.split('=');
-        parsed[key.toLowerCase()] = value;
+
+        const keyLc = key.toLowerCase();
+        parsed[keyLc] = value.trim();
+        parsed[`${keyLc}__index`] = index; // Plain indexing, including not knownParams in more[]
+      } else if (param.endsWith('%')) {
+        const percent = this.parsePercent(param, false);
+
+        if (percent.parsed) {
+          parsed.percent = percent.percent;
+        }
+      } else if (param.startsWith('>') || param.startsWith('<')) {
+        parsed.condition = {};
+
+        const operator = param.charAt(0);
+        const value = +param.substring(1);
+
+        if (!this.isPositiveOrZeroNumber(value)) {
+          parsed.condition.isValid = false;
+          parsed.condition.error = `Indicate price after '${operator}'`;
+        }
+
+        parsed.condition.string = param;
+        parsed.condition.operator = operator;
+        parsed.condition.value = value;
+
+        const valueCoin = paramNext?.toUpperCase();
+        if (/^[A-Z0-9]+$/i.test(valueCoin)) {
+          parsed.condition.valueCoin = valueCoin;
+        }
+
+        const mongoFilter = {};
+        if (operator === '<') {
+          mongoFilter.value = { $lt: value };
+        } else {
+          mongoFilter.value = { $gt: value };
+        }
+
+        parsed.condition.mongoFilter = mongoFilter;
       } else if (paramLc === '-y') {
         parsed.isConfirmed = true;
+
+        paramCountWoMarkers -= 1;
       } else if (param === '-2') {
         parsed.useSecondAccount = true;
+
+        paramCountWoMarkers -= 1;
       } else if (['buy', 'sell'].includes(paramLc)) {
         parsed.orderType = paramLc;
+      } else if (index === 0 && /^[A-Z0-9]+$/i.test(param)) { // Treat the first param as coin
+        parsed.possibleCoin = param.toUpperCase();
+        knownParam = false;
       } else {
+        knownParam = false;
+      }
+
+      // Include not known params in parsed.more[]
+
+      if (!knownParam) {
+        const intervalChars = ['-', '–', '—'];
+
         parsed.more.push({
-          param,
-          index,
+          param: paramLc,
+          paramPlain: param,
+          paramUc,
+          index, // Plain indexing, including knownParams like param=value
           isFirst: index === 0,
           isLast: index === params.length - 1,
-          isInteger: this.isInteger(param),
+          isInteger: this.isInteger(+param),
           isNumeric: this.isNumeric(param),
-          isInterval: ['-', '–', '—'].includes(param),
+          isInterval: intervalChars.some((char) => param.includes(char)),
         });
       }
     }
+
+    parsed.paramCount = paramCount;
+    parsed.paramCountWoMarkers = paramCountWoMarkers; // Don't count -2 and -y
+    parsed.exactParamsCount = paramCountWoMarkers === min; // Check if params don't include nothing unexpected
+
+    parsed.pairErrored = !parsed.pair && paramCount > 0; // There are params, but non of them is trading pair or perpetual contract
+    parsed.pairOrCoinErrored = !parsed.pair && !parsed.possibleCoin && paramCount > 0; // Non of them is trading pair, perpetual contract, or a coin
+
+    parsed.is = (paramName) => parsed.more.some((param) => param.param === paramName); // If additional (not knownParams) params include paramName
+    parsed.moreByName = (paramName) => parsed.more.find((param) => param.param === paramName); // Get param from more[] by param name
+    parsed.moreByIndex = (index) => parsed.more.find((param) => param.index === index); // Get param from more[] by plain index
+
+    parsed.indexOf = (paramName) => parsed[`${paramName}__index`] ?? parsed.moreByName(paramName)?.index; // Get plain param index
+
+    parsed.nextTo = (paramName) => { // Get param from more[] next to specific param
+      const paramIndex = parsed.indexOf(paramName);
+      return parsed.moreByIndex(paramIndex+1);
+    };
+    parsed.prevTo = (paramName) => { // Get param from more[] before specific param
+      const paramIndex = parsed.indexOf(paramName);
+      return parsed.moreByIndex(paramIndex-1);
+    };
+
+    // Check if command params include amount or quote, but not both of them
+
+    parsed.xorAmounts = this.xor(+parsed.amount, +parsed.quote);
+    if (parsed.xorAmounts) {
+      if (+parsed.amount) {
+        parsed.amountType = 'amount';
+        parsed.qty = +parsed.amount;
+      } else {
+        parsed.amountType = 'quote';
+        parsed.qty = +parsed.quote;
+      }
+    }
+
+    parsed.paramString = params.join(' ');
 
     return parsed;
   },
 
   /**
    * Verifies command param
-   * @param {String} name Param name
-   * @param {String} param Param value
-   * @param {String} type Param type, e.g., 'number'
-   * @returns {Object} Verification results
+   * Error messages includes markdown
+   * @param {string} name Param name
+   * @param {string} param Param value
+   * @param {'' | 'integer' | 'positive integer' | 'positive or zero integer' | 'number' | 'positive number' | 'positive or zero number' | 'time' | string} type Param type, e.g., 'number'
+   * @param {boolean} [isOptional=false] Allow undefined
+   * @returns {{ success: boolean, parsed?: any, plain?: string, lc?: string, uc?: string, message?: string }} Verification results
    */
-  verifyParam(name, param, type) {
+  verifyParam(name, param, type, isOptional = false) {
+    if (isOptional && param === undefined) {
+      return {
+        success: true,
+        plain: param,
+        parsed: param,
+      };
+    }
+
     if (!param) {
       return {
         success: false,
-        message: `Param ${name} is not set`,
+        message: `Param _${name}_ is not set`,
       };
+    }
+
+    if (type === 'integer') {
+      const parsed = Number(param);
+
+      if (this.isInteger(parsed)) {
+        return {
+          success: true,
+          plain: param,
+          parsed,
+        };
+      } else {
+        return {
+          success: false,
+          message: `Param _${name}_ is not an integer: _${param}_`,
+        };
+      }
+    }
+
+    if (type === 'positive or zero integer') {
+      const parsed = Number(param);
+
+      if (this.isPositiveOrZeroInteger(parsed)) {
+        return {
+          success: true,
+          plain: param,
+          parsed,
+        };
+      } else {
+        return {
+          success: false,
+          message: `Param _${name}_ is not a positive or zero integer: _${param}_`,
+        };
+      }
+    }
+
+    if (type === 'positive integer') {
+      const parsed = Number(param);
+
+      if (this.isPositiveInteger(parsed)) {
+        return {
+          success: true,
+          plain: param,
+          parsed,
+        };
+      } else {
+        return {
+          success: false,
+          message: `Param _${name}_ is not a positive integer: _${param}_`,
+        };
+      }
     }
 
     if (type === 'number') {
@@ -2284,7 +2560,7 @@ module.exports = {
       } else {
         return {
           success: false,
-          message: `Param ${name} is not a number`,
+          message: `Param _${name}_ is not a number: _${param}_`,
         };
       }
     }
@@ -2302,13 +2578,30 @@ module.exports = {
         } else {
           return {
             success: false,
-            message: `Param ${name} is not a valid number`,
+            message: `Param _${name}_ is not a valid number: _${param}_`,
           };
         }
       } else {
         return {
           success: false,
-          message: `Param ${name} is not a number`,
+          message: `Param _${name}_ is not a number: _${param}_`,
+        };
+      }
+    }
+
+    if (type === 'positive or zero number') {
+      const parsed = Number(param);
+
+      if (this.isPositiveOrZeroNumber(parsed)) {
+        return {
+          success: true,
+          plain: param,
+          parsed,
+        };
+      } else {
+        return {
+          success: false,
+          message: `Param _${name}_ is not a positive or zero number: _${param}_`,
         };
       }
     }
@@ -2325,7 +2618,7 @@ module.exports = {
       } else {
         return {
           success: false,
-          message: `Param ${name} is not a time value`,
+          message: `Param _${name}_ is not a time value: _${param}_`,
         };
       }
     }
@@ -2344,7 +2637,7 @@ module.exports = {
       } else {
         return {
           success: false,
-          message: `Param ${name} is not in the an allowed list: ${type}`,
+          message: `Param _${name}_ is not in the allowed list _${type}_: _${param}_`,
         };
       }
     }
@@ -2368,6 +2661,286 @@ module.exports = {
     }
 
     return new Promise((resolve) => setTimeout(resolve, ms));
+  },
+
+  /**
+   * @returns {Array<string>} List of possible perpetuals
+   */
+  perpetuals() {
+    return ['USDT', 'USDC', 'USD'];
+  },
+
+  /**
+   * Checks if str is a perpetual pair
+   * @param {string} str E.g., 'ETHUSDT'
+   * @param {string|[string]} [types] Type of contract. E.g. 'USDT' or ['USDT', 'TUSD']. If omitted, checks all possible perpetuals.
+   * @returns {string|boolean} Formatted (upper case) perpetual contract ticker or 'false'
+   */
+  isPerpetual(str, types = this.perpetuals()) {
+    try {
+      if (typeof types === 'string') {
+        types = [types];
+      }
+
+      for (const type of types) {
+        // Check that str matches the perpetual pair template case insensitive
+        if (
+          /^[A-Z0-9]+$/i.test(str) &&
+          str.toLowerCase().endsWith(type.toLowerCase()) &&
+          str.length > type.length
+        ) {
+          return str.toUpperCase();
+        }
+      }
+    } catch {
+      // Nothing here
+    }
+
+    return false;
+  },
+
+  /**
+   * List of popular stable coins
+   * Used generally not to overwhelm messages like 'Are you sure to convert 10k USDC worth ~10 000 USD to USD?'
+   * @returns {Array<string>} Stables
+   */
+  stables() {
+    return ['USDT', 'USDC', 'USD', 'TUSD'];
+  },
+
+  /**
+   * Checks if str is a stable coin ticker
+   * @param {string} str E.g. USDC, case insensitive
+   * @param {string | [string]} [tickers] List of allowed stable coin tickers. E.g. 'USDT' or ['USDT', 'TUSD']. If omitted, checks with a default stable coin list.
+   * @returns {string | boolean} Formatted (upper case) ticker or 'false'
+   */
+  isStableCoin(str, tickers = this.stables()) {
+    try {
+      if (typeof tickers === 'string') {
+        tickers = [tickers];
+      }
+
+      str = str.toUpperCase();
+
+      return tickers.includes(str);
+    } catch {
+      // Nothing here
+    }
+
+    return false;
+  },
+
+  /**
+   * Formats text as block code using markdown ```
+   * Adds \n before and after
+   * @param {string} text Text to format
+   * @param {boolean} [addOuterLineBreaks=true] Whether to add \n before and after code block
+   * @returns {string}
+   */
+  codeBlock(text, addOuterLineBreaks = true) {
+    let code = '```\n' + this.trimAny(text, '\n') + '\n```';
+
+    if (addOuterLineBreaks) {
+      code = '\n' + code + '\n';
+    }
+
+    return code;
+  },
+
+  /**
+   * Formats string as block using markdown `
+   * Adds no surrounding spaces
+   * @param {string} str String to format
+   * @returns {string}
+   */
+  codeString(str) {
+    return '`' + str + '`';
+  },
+
+  /**
+   * Creates total-available-frozen string for a coin
+   * 29 528.7105 ADM (6 937.2207 available & 22 591.4898 frozen)
+   * TODO: parse decimals depending on spot/perpetual pair
+   * @param {Object} coin Coin balance data
+   * @param {boolean} [format=false] Format with markdown
+   * @param {'total-free-frozen' | 'free-frozen'} [type='total-free-frozen'] Balance info type
+   * @param {boolean} [parseDecimals=false] Parse decimals or use a constant
+   * @returns {string}
+   */
+  formCoinBalancesString(coin, format = false, type = 'total-free-frozen', parseDecimals = false) {
+    let output;
+    let formattedPair;
+
+    let coinDecimals = 8;
+
+    const isConfigCoin = coin.code === config.coin1 || coin.code === config.coin2;
+
+    if (parseDecimals && isConfigCoin) {
+      const orderUtils = require('../trade/orderUtils');
+      formattedPair = /** @type {ParsedMarket} */ (orderUtils.parseMarket(config.defaultPair));
+
+      coinDecimals = coin.code === config.coin1 ?
+          formattedPair.coin1Decimals :
+          formattedPair.coin2Decimals;
+    }
+
+    const code = format ? `_${coin.code}_` : coin.code;
+    const total = this.formatNumber(coin.total?.toFixed(coinDecimals), format);
+    const free = this.formatNumber(coin.free?.toFixed(coinDecimals), format);
+    const freezed = this.formatNumber(coin.freezed?.toFixed(coinDecimals), format);
+
+    if (type === 'total-free-frozen') {
+      output = `${total} ${code}`;
+
+      if (coin.total !== coin.free) {
+        output += ` (${free} available`;
+
+        if (coin.freezed > 0) {
+          output += ` & ${freezed} frozen`;
+        }
+
+        output += ')';
+      }
+    } else {
+      output = `Free: ${free} ${code}, frozen: ${freezed} ${code}`;
+    }
+
+    return output;
+  },
+
+  /**
+   * Returns balances info on specific coins
+   * @param {Object} balances Balances object, received by getBalances()
+   * @param {string | ParsedMarket} pair ADM/USDT, ADMUSDT, or formattedPair from parseMarket()
+   * @returns {Object | undefined}
+   */
+  balanceHelper(balances, pair) {
+    try {
+      let formattedPair;
+
+      if (typeof pair === 'string') {
+        const orderUtils = require('../trade/orderUtils');
+        formattedPair = /** @type {ParsedMarket} */ (orderUtils.parseMarket(pair));
+      } else {
+        formattedPair = pair;
+      }
+
+      const getCoinData = (code) => balances.find((coin) => coin.code === code) || { total: 0, free: 0, freezed: 0 };
+
+      const coin1Data = getCoinData(formattedPair.coin1);
+      const coin2Data = getCoinData(formattedPair.coin2);
+
+      const free1 = coin1Data.free;
+      const free2 = coin2Data.free;
+      const freezed1 = coin1Data.freezed;
+      const freezed2 = coin2Data.freezed;
+      const total1 = coin1Data.total;
+      const total2 = coin2Data.total;
+
+      const free1s = free1.toFixed(formattedPair.coin1Decimals);
+      const free2s = free2.toFixed(formattedPair.coin2Decimals);
+      const freezed1s = freezed1.toFixed(formattedPair.coin1Decimals);
+      const freezed2s = freezed2.toFixed(formattedPair.coin2Decimals);
+      const total1s = total1.toFixed(formattedPair.coin1Decimals);
+      const total2s = total2.toFixed(formattedPair.coin2Decimals);
+
+      const coin1s = this.formCoinBalancesString(coin1Data, false);
+      const coin2s = this.formCoinBalancesString(coin2Data, false);
+
+      const coin1sf = this.formCoinBalancesString(coin1Data, true);
+      const coin2sf = this.formCoinBalancesString(coin2Data, true);
+
+      const coin1s2 = this.formCoinBalancesString(coin1Data, false, 'free-frozen');
+      const coin2s2 = this.formCoinBalancesString(coin2Data, false, 'free-frozen');
+
+      return {
+        coin1Data,
+        coin2Data,
+
+        free1,
+        free2,
+        freezed1,
+        freezed2,
+        total1,
+        total2,
+
+        free1s,
+        free2s,
+        freezed1s,
+        freezed2s,
+        total1s,
+        total2s,
+
+        coin1s,
+        coin2s,
+        coin1sf,
+        coin2sf,
+
+        coin1s2,
+        coin2s2,
+      };
+    } catch (e) {
+      log.error(`Error in balanceHelper() of ${this.moduleName} module: ${e}`);
+      return undefined;
+    }
+  },
+
+  /**
+   * Generates table
+   * @param header {Array<String>} Table header row
+   * @param content {Array<Array<String>>|Array<Array<Number>>} Table content rows. Use array of '---' to add separator
+   * @return {String}
+   */
+  generateTable(header, content) {
+    const data = [header, ...content];
+
+    const columnsWidth = data[0].map((_, index) =>
+      Math.max(...data.map((row) => row[index] === '---' ? 0 : row[index].toString().length)),
+    );
+
+    const separator = '+-' + columnsWidth.map((width) => '-'.repeat(width)).join('-+-') + '-+';
+
+    const formatRow = (row) => {
+      return '| ' + row.map((cell, index) => {
+        const cellContent = cell.toString();
+        return cellContent + ' '.repeat(columnsWidth[index] - cellContent.length);
+      }).join(' | ') + ' |';
+    };
+
+    const formattedTable = [
+      separator,
+      formatRow(header),
+      separator,
+      ...content.map((row) => row.includes('---') ? separator : formatRow(row)),
+      separator,
+    ];
+
+    return formattedTable.join('\n');
+  },
+
+  /**
+   * Parses percent number from 'number%' string
+   * @param {string} str String with number%
+   * @param {boolean} [allowZeroAndNegative=true] Zero and negative percent values allowed
+   * @returns {{ parsed: boolean, percent?: number }}
+   */
+  parsePercent(str, allowZeroAndNegative = true) {
+    if (typeof str === 'string' && str.endsWith('%')) {
+      const percent = +str.slice(0, -1);
+
+      const condition = allowZeroAndNegative ? this.isNumber(percent) : this.isPositiveNumber(percent);
+
+      if (condition) {
+        return {
+          parsed: true,
+          percent,
+        };
+      }
+    }
+
+    return {
+      parsed: false,
+    };
   },
 };
 
