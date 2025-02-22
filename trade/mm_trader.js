@@ -1,12 +1,16 @@
 /**
- * Make trades for market-making
- * It places two orders on case of 'executeInSpread' or one order if 'executeInOrderBook'
- * Policies (mm_Policy):
- * - spread: Trade in spread only. If there is no spread, the bot will not trade.
- * - orderbook: Trade in orderbook only. Looks amazing when spread/liquidity is supported as well.
- * - optimal: Combines spread and orderbook. If chooses one or another depending on several parameters.
- * - others: Don't do Market-taking.
- *   Also: don't restore Pw's range; don't place cl-orders; don't run fund balancer; don't calculate volume volatility koef.
+ * Makes trades to create volume
+ * It places two orders in the spread when 'executeInSpread', or one order in the order book when 'executeInOrderBook'
+ * Policies (mm_Policy): MM_POLICIES_VOLUME
+ * - spread | wash: Trade in the spread only. If there is no spread, the bot will not trade.
+ * - orderbook: Trade in the order book only. Looks amazing when the spread and enough liquidity are supported as well.
+ * - optimal: Combines spread and orderbook. A choice of one or another depends on several parameters.
+ * - depth: Don't create trading volume. Also: don't restore Pw's range; don't place cl-orders; don't run fund balancer; don't calculate volume volatility koef.
+*/
+
+/**
+ * @module trade/mm_orderbook_builder
+ * @typedef {import('types/bot/parsedMarket.d').ParsedMarket} ParsedMarket
  */
 
 const constants = require('../helpers/const');
@@ -15,10 +19,27 @@ const config = require('../modules/configReader');
 const log = require('../helpers/log');
 const notify = require('../helpers/notify');
 const tradeParams = require('./settings/tradeParams_' + config.exchange);
-const traderapi = require('./trader_' + config.exchange)(config.apikey, config.apisecret, config.apipassword, log);
 const db = require('../modules/DB');
 const orderCollector = require('./orderCollector');
 const orderUtils = require('./orderUtils');
+
+const TraderApi = require('./trader_' + config.exchange);
+const isPerpetual = Boolean(config.perpetual);
+
+const traderapi = isPerpetual ?
+    require('../modules/perpetualApi')() :
+    TraderApi(
+        config.apikey,
+        config.apisecret,
+        config.apipassword,
+        log,
+        undefined,
+        undefined,
+        config.exchange_socket,
+        config.exchange_socket_pull,
+    );
+
+let traderapi2;
 
 let lastNotifyBalancesTimestamp = 0;
 let lastNotifyPriceTimestamp = 0;
@@ -32,6 +53,16 @@ const EXECUTE_IN_ORDER_BOOK_PERCENT_WITH_LIQ_ENABLED_MAX = 0.8;
 const EXECUTE_IN_ORDER_BOOK_PERCENT_WO_LIQ_ENABLED_MIN = 0.2;
 const EXECUTE_IN_ORDER_BOOK_PERCENT_WO_LIQ_ENABLED_MAX = 0.5;
 const EXECUTE_IN_ORDER_BOOK_ORDER_TYPE_REPEAT_PERCENT = 80; // repeat same order type ('buy' or 'sell') with 80% chance
+
+const formattedPair = /** @type {ParsedMarket} */ (orderUtils.parseMarket(config.defaultPair));
+const coin1 = formattedPair.coin1;
+const coin2 = formattedPair.coin2;
+const coin1Decimals = formattedPair.coin1Decimals;
+const coin2Decimals = formattedPair.coin2Decimals;
+const pair = formattedPair.pair;
+const exchange = config.exchange;
+
+const useSecondAccount = traderapi2 && !isPerpetual;
 
 module.exports = {
   readableModuleName: 'Market-making',
@@ -65,56 +96,56 @@ module.exports = {
   },
 
   /**
-  * Main part of Trader
-  * 1. Set an order type, buy or sell. Not a random function.
-  * 2. Set amount to trade from mm_minAmount to mm_maxAmount multiplied by volatilityKoef
-  * 3. Set trade price. Returns price, coin1Amount (corrected),
+  * The main part of Trader
+  * 1. Sets an order type, buy or sell. Not a random function.
+  * 2. Sets an amount to trade from mm_minAmount to mm_maxAmount multiplied by volatilityKoef
+  * 3. Sets a trade price. Returns price, coin1Amount (corrected),
   *    mmCurrentAction: 'executeInSpread', 'executeInOrderBook' or 'doNotExecute'
-  * 4. Check for balances
-  * 5. Place two orders to match itself in case of executeInSpread.
-  * 6. Place one order in case of executeInOrderBook
-  *    Maintain spread tiny in case of 'orderbook' mm_Policy: Place Spread maintainer order
-  *    Remove gaps in order book (extraordinary iteration with no cache)
+  * 4. Checks for balances
+  * 5. Places two orders to match itself in case of executeInSpread
+  * 6. Places one order in case of executeInOrderBook
+  *    Maintains the spread tiny in case of 'orderbook' mm_Policy: Place Spread maintainer order
+  *    Removes gaps in order book (extraordinary iteration with no cache)
   *    Clears second account order, if any left
   */
   async executeMmOrder() {
     try {
-      const coin1Decimals = orderUtils.parseMarket(config.pair).coin1Decimals;
-      const coin2Decimals = orderUtils.parseMarket(config.pair).coin2Decimals;
-
       const type = setType();
       let coin1Amount = setAmount();
 
-      const priceReq = await setPrice(type, coin1Amount); // it may update coin1Amount
+      const priceReq = await setPrice(type, coin1Amount); // It may change coin1Amount
       const price = priceReq.price;
-      if (priceReq.coin1Amount) coin1Amount = priceReq.coin1Amount;
-      const coin2Amount = coin1Amount * price;
-
-      let output = '';
-      let orderParamsString = '';
+      const priceError = priceReq.message;
 
       if (!price) {
-        if (priceReq.message) {
-          if ((Date.now()-lastNotifyPriceTimestamp > constants.HOUR)) {
+        if (priceError) {
+          if (Date.now()-lastNotifyPriceTimestamp > constants.HOUR) {
             notify(`${config.notifyName}: ${priceReq.message}`, 'warn');
             lastNotifyPriceTimestamp = Date.now();
           } else {
             log.log(`Market-making: ${priceReq.message}`);
           }
         }
+
         return;
       }
 
-      orderParamsString = `type=${type}, pair=${config.pair}, price=${price}, mmCurrentAction=${priceReq.mmCurrentAction}, coin1Amount=${coin1Amount}, coin2Amount=${coin2Amount}`;
+      if (priceReq.coin1Amount) coin1Amount = priceReq.coin1Amount;
+      const coin2Amount = coin1Amount * /** @type {number} */ (price);
+
+      let output = '';
+      let orderParamsString = '';
+
+      orderParamsString = `type=${type}, pair=${pair}, price=${price}, mmCurrentAction=${priceReq.mmCurrentAction}, coin1Amount=${coin1Amount}, coin2Amount=${coin2Amount}`;
       if (!type || !price || !coin1Amount || !coin2Amount) {
         log.warn(`Market-making: Unable to run mm-order with params: ${orderParamsString}.`);
         return;
       }
 
-      log.log(`Market-making: Placing order with params ${orderParamsString}.`);
+      log.log(`Market-making: Placing the mm-order with params ${orderParamsString}…`);
 
       // Check balances
-      const balances = await isEnoughCoins(config.coin1, config.coin2, coin1Amount, coin2Amount, type, priceReq.mmCurrentAction);
+      const balances = await isEnoughCoins(coin1, coin2, coin1Amount, coin2Amount, type, priceReq.mmCurrentAction);
       if (!balances.result) {
         if (balances.message) {
           if (Date.now()-lastNotifyBalancesTimestamp > constants.HOUR) {
@@ -124,20 +155,24 @@ module.exports = {
             log.log(`Market-making: ${balances.message}`);
           }
         }
+
         return;
       }
 
       let order1; let order2;
       let order1Details; let order2Details;
+      let order1Status; let order2Status;
 
-      const takerApi = traderapi;
+      const takerApi = useSecondAccount ? traderapi2 : traderapi;
       const makerOrderType = orderUtils.crossType(type);
 
       if (priceReq.mmCurrentAction === 'executeInSpread') {
 
         // First, (maker) we place crossType-order using first account
 
-        order1 = await traderapi.placeOrder(makerOrderType, config.pair, price, coin1Amount, 1, null);
+        order1 = isPerpetual ?
+            await traderapi.placeOrder(makerOrderType, pair, price, coin1Amount, 'limit', null) :
+            await traderapi.placeOrder(makerOrderType, pair, price, coin1Amount, 1, null);
 
         if (order1?.orderId) {
           const { ordersDb } = db;
@@ -150,10 +185,10 @@ module.exports = {
             mmOrderAction: priceReq.mmCurrentAction, // executeInSpread or executeInOrderBook
             type: makerOrderType,
             targetType: type,
-            exchange: config.exchange,
-            pair: config.pair,
-            coin1: config.coin1,
-            coin2: config.coin2,
+            exchange,
+            pair,
+            coin1,
+            coin2,
             price,
             coin1Amount,
             coin2Amount,
@@ -165,18 +200,20 @@ module.exports = {
             isProcessed: false,
             isExecuted: false,
             isCancelled: false,
-            orderMakerAccount: '',
-            orderTakerAccount: '',
+            orderMakerAccount: useSecondAccount ? 'first' : '',
+            orderTakerAccount: useSecondAccount ? 'second' : '',
             isSecondAccountOrder: false,
           });
 
           // Last, (taker) we place type-order using second account (in case of 2-keys trading)
 
-          order2 = await takerApi.placeOrder(type, config.pair, price, coin1Amount, 1, null);
+          order2 = isPerpetual ?
+              await takerApi.placeOrder(type, pair, price, coin1Amount, 'limit', null) :
+              await takerApi.placeOrder(type, pair, price, coin1Amount, 1, null);
 
           if (order2?.orderId) {
-            output = `${type} ${coin1Amount.toFixed(coin1Decimals)} ${config.coin1} for ${coin2Amount.toFixed(coin2Decimals)} ${config.coin2} at ${price.toFixed(coin2Decimals)} ${config.coin2}`;
-            log.info(`Market-making: Successfully executed mm-order to ${output}. Action: executeInSpread.`);
+            output = `${type} ${coin1Amount.toFixed(coin1Decimals)} ${coin1} for ${coin2Amount.toFixed(coin2Decimals)} ${coin2} at ${price.toFixed(coin2Decimals)} ${coin2}`;
+            log.info(`Market-making: Successfully executed mm-order${useSecondAccount ? ' (using two accounts)' : ''} to ${output}. Action: executeInSpread.`);
 
             lastOrderType = type;
 
@@ -194,14 +231,19 @@ module.exports = {
 
             // Check mm-orders status to understand if they're filled or not
 
-            order1Details = await traderapi.getOrderDetails?.call(this, order1.orderId, order.pair);
-            order2Details = await takerApi.getOrderDetails?.call(this, order2.orderId, order.pair);
+            order1Details = traderapi.getOrderDetails ? await traderapi.getOrderDetails(order1.orderId, order.pair) : undefined;
+            order2Details = takerApi.getOrderDetails ? await takerApi.getOrderDetails(order2.orderId, order.pair) : undefined;
 
-            if (!order1Details?.status || !order2Details?.status) {
+            order1Status = order1Details?.status;
+            order2Status = order2Details?.status;
+
+            const orderStatusesInfo = `The maker mm-order is ${order1Status}, and the taker mm-order is ${order2Status}`;
+
+            if (!order1Status || !order2Status) {
               if (!traderapi.getOrderDetails) {
                 log.log(`Market-making: Getting order details are not implemented for ${config.exchangeName} exchange. Assuming both maker and taker executeInSpread mm-orders are filled.`);
               } else {
-                log.log('Market-making: Unable to get maker and taker order details. Assuming both executeInSpread mm-orders are filled.');
+                log.log(`Market-making: Unable to get maker and/or taker order details, probably because of ${config.exchangeName}'s API throttling or fault. ${orderStatusesInfo}. Assuming both executeInSpread mm-orders are filled.`);
               }
 
               order.update({
@@ -209,7 +251,7 @@ module.exports = {
                 coin2AmountFilled: undefined,
                 isExecuted: true, // We _assume_ the order if fully filled
               });
-            } else if (order1Details?.status === 'filled' && order2Details?.status === 'filled') {
+            } else if (order1Status === 'filled' && order2Status === 'filled') {
               log.info('Market-making: Both maker and taker executeInSpread mm-orders are filled.');
 
               order.update({
@@ -217,26 +259,42 @@ module.exports = {
                 coin2AmountFilled: coin2Amount,
                 isExecuted: true,
               });
-            } else if (order1Details?.status === 'filled' && ['new', 'part_filled'].includes(order2Details?.status)) {
+            } else if (order1Status === 'filled' && ['new', 'part_filled'].includes(order2Status)) {
               const fillPercent = order2Details.amountExecuted / coin1Amount;
-              log.warn(`Market-making: While the maker order is filled, the taker is ${order2Details?.status} (${fillPercent}% filled). It may be the Scenario1 of third-party bot intervention.`);
+              log.warn(`Market-making: While the maker mm-order is filled, the taker is ${order2Status} (${fillPercent}% filled). It may be the Scenario1 of third-party bot intervention.`);
 
               order.update({
                 coin1AmountFilled: order2Details.amountExecuted,
                 coin2AmountFilled: order2Details.volumeExecuted,
                 isExecuted: false, // Not fully executed
               });
-            } else if (order2Details?.status === 'filled' && ['new', 'part_filled'].includes(order1Details?.status)) {
+            } else if (order2Status === 'filled' && ['new', 'part_filled'].includes(order1Status)) {
               const fillPercent = order1Details.amountExecuted / coin1Amount;
-              log.warn(`Market-making: The maker order is ${order1Details?.status} (${fillPercent}% filled), while the taker order is filled. It may be the Scenario2 of third-party bot intervention.`);
+              log.warn(`Market-making: The maker mm-order is ${order1Status} (${fillPercent}% filled), while the taker order is filled. It may be the Scenario2 of third-party bot intervention.`);
 
               order.update({
                 coin1AmountFilled: order1Details.amountExecuted,
                 coin2AmountFilled: order1Details.volumeExecuted,
                 isExecuted: false, // Not fully executed
               });
+            } else if (order1Status === 'cancelled') {
+              log.warn(`Market-making: The maker mm-order is cancelled. It may be that the ${config.exchangeName} exchange prohibits self-trade and the mm-order matched with own ob-order. API's selfTradeProhibited: ${takerApi.features().selfTradeProhibited}.`);
+
+              order.update({
+                coin1AmountFilled: 0, // Actually it may be fully or partially executed by third-party traders
+                coin2AmountFilled: 0,
+                isExecuted: false,
+              });
+            } else if (order2Status === 'cancelled') {
+              log.warn(`Market-making: The taker mm-order is cancelled. It may be that the ${config.exchangeName} exchange prohibits self-trade. API's selfTradeProhibited: ${takerApi.features().selfTradeProhibited}.`);
+
+              order.update({
+                coin1AmountFilled: 0, // Actually it may be fully or partially executed by third-party traders
+                coin2AmountFilled: 0,
+                isExecuted: false,
+              });
             } else {
-              log.warn(`Market-making: Unexpected scenario while placing executeInSpread mm-order. The maker order is ${order1Details?.status}, and the taker order is ${order2Details?.status}.`);
+              log.warn(`Market-making: Unexpected scenario while placing executeInSpread mm-order. ${orderStatusesInfo}.`);
 
               order.update({
                 coin1AmountFilled: undefined,
@@ -247,21 +305,21 @@ module.exports = {
 
             await order.save();
 
-            // Cancelling maker and taker orders, if they are not filled
+            // Cancelling maker and taker orders, if they are not filled/cancelled
 
-            if ([undefined, 'unknown', 'new', 'part_filled'].includes(order1Details?.status)) {
-              const reasonToClose = `Cancelling order1 (maker) order with status '${order1Details?.status}' while doing executeInSpread mm-trade`;
+            if ([undefined, 'unknown', 'new', 'part_filled'].includes(order1Status)) {
+              const reasonToClose = `Cancelling order1 (maker) mm-order with status '${order1Status}' while doing executeInSpread mm-trade`;
               await orderCollector.clearOrderById(
                   order, order.pair, makerOrderType, this.readableModuleName, reasonToClose, undefined, traderapi);
             }
 
-            if ([undefined, 'unknown', 'new', 'part_filled'].includes(order2Details?.status)) {
-              const reasonToClose = `Cancelling order2 (taker) order with status '${order2Details?.status}' while doing executeInSpread mm-trade`;
+            if ([undefined, 'unknown', 'new', 'part_filled'].includes(order2Status)) {
+              const reasonToClose = `Cancelling order2 (taker) mm-order with status '${order2Status}' while doing executeInSpread mm-trade`;
               await orderCollector.clearOrderById(
                   order2.orderId, order.pair, type, this.readableModuleName, reasonToClose, undefined, takerApi);
             }
           } else {
-            log.warn(`Market-making: Unable to execute taker cross-order for mm-order with params: id=${order1.orderId}, ${orderParamsString}. Action: executeInSpread.`);
+            log.warn(`Market-making: Unable to execute taker cross-order${useSecondAccount ? ' (using second account)' : ''} for mm-order with params: id=${order1.orderId}, ${orderParamsString}. Action: executeInSpread.`);
 
             await order.save();
 
@@ -270,14 +328,16 @@ module.exports = {
                 order, order.pair, makerOrderType, this.readableModuleName, reasonToClose, undefined, traderapi);
           }
         } else { // if order1
-          log.warn(`Market-making: Unable to execute maker mm-order with params: ${orderParamsString}. Action: executeInSpread. No order id returned.`);
+          log.warn(`Market-making: Unable to execute maker mm-order${useSecondAccount ? ' (using first account)' : ''} with params: ${orderParamsString}. Action: executeInSpread. No order id returned.`);
         }
 
       } else if (priceReq.mmCurrentAction === 'executeInOrderBook') {
 
         // First and last, (taker) we place type-order using second account (in case of 2-keys trading)
 
-        order1 = await takerApi.placeOrder(type, config.pair, price, coin1Amount, 1, null);
+        order1 = isPerpetual ?
+            await takerApi.placeOrder(type, pair, price, coin1Amount, 'limit', null) :
+            await takerApi.placeOrder(type, pair, price, coin1Amount, 1, null);
 
         if (order1?.orderId) {
           const { ordersDb } = db;
@@ -290,10 +350,10 @@ module.exports = {
             mmOrderAction: priceReq.mmCurrentAction, // executeInSpread or executeInOrderBook
             type,
             // targetType: type,
-            exchange: config.exchange,
-            pair: config.pair,
-            coin1: config.coin1,
-            coin2: config.coin2,
+            exchange,
+            pair,
+            coin1,
+            coin2,
             price,
             coin1Amount,
             coin2Amount,
@@ -305,11 +365,11 @@ module.exports = {
             isProcessed: true,
             isExecuted: undefined,
             isCancelled: false,
-            isSecondAccountOrder: false,
+            isSecondAccountOrder: useSecondAccount ? true : false,
           });
 
-          output = `${type} ${coin1Amount.toFixed(coin1Decimals)} ${config.coin1} for ${coin2Amount.toFixed(coin2Decimals)} ${config.coin2} at ${price.toFixed(coin2Decimals)} ${config.coin2}`;
-          log.info(`Market-making: Successfully executed mm-order to ${output}. Action: executeInOrderBook.`);
+          output = `${type} ${coin1Amount.toFixed(coin1Decimals)} ${coin1} for ${coin2Amount.toFixed(coin2Decimals)} ${coin2} at ${price.toFixed(coin2Decimals)} ${coin2}`;
+          log.info(`Market-making: Successfully executed mm-order${useSecondAccount ? ' (using two accounts)' : ''} to ${output}. Action: executeInOrderBook.`);
 
           lastOrderType = type;
 
@@ -322,13 +382,15 @@ module.exports = {
 
           // Check the mm-order status to understand if it's filled or not
 
-          order1Details = await traderapi.getOrderDetails?.call(this, order1.orderId, order.pair);
+          order1Details = traderapi.getOrderDetails ? await traderapi.getOrderDetails(order1.orderId, order.pair) : undefined;
 
-          if (!order1Details?.status) {
+          order1Status = order1Details?.status;
+
+          if (!order1Status) {
             if (!traderapi.getOrderDetails) {
               log.log(`Market-making: Getting order details are not implemented for ${config.exchangeName} exchange. Assuming the taker executeInOrderBook mm-order is filled.`);
             } else {
-              log.log('Market-making: Unable to get the executeInOrderBook taker mm-order details. Assuming it is filled.');
+              log.log(`Market-making: Unable to get the executeInOrderBook taker mm-order details, probably because of ${config.exchangeName}'s API throttling or fault. Assuming it is filled.`);
             }
 
             order.update({
@@ -336,7 +398,7 @@ module.exports = {
               coin2AmountFilled: undefined,
               isExecuted: true, // We _assume_ the order if fully filled
             });
-          } else if (order1Details?.status === 'filled') {
+          } else if (order1Status === 'filled') {
             log.info('Market-making: The taker executeInOrderBook mm-order is filled.');
 
             order.update({
@@ -344,17 +406,26 @@ module.exports = {
               coin2AmountFilled: coin2Amount,
               isExecuted: true,
             });
-          } else if (['new', 'part_filled'].includes(order1Details?.status)) {
+          } else if (['new', 'part_filled'].includes(order1Status)) {
             const fillPercent = order1Details.amountExecuted / coin1Amount;
-            log.warn(`Market-making: The taker executeInOrderBook mm-order status is ${order2Details?.status} (${fillPercent}% filled). It may be the third-party bot intervention.`);
+            log.warn(`Market-making: The taker executeInOrderBook mm-order status is ${order1Status} (${fillPercent}% filled). It may be the third-party bot intervention.`);
 
             order.update({
               coin1AmountFilled: order1Details.amountExecuted,
               coin2AmountFilled: order1Details.volumeExecuted,
               isExecuted: false, // Not fully executed
             });
+          } else if (order1Status === 'cancelled') {
+            log.warn(`Market-making: The taker executeInOrderBook mm-order is cancelled. It may be that the ${config.exchangeName} exchange prohibits self-trade and the mm-order matched with own ob-order. API's selfTradeProhibited: ${takerApi.features().selfTradeProhibited}.`);
+
+            order.update({
+              coin1AmountFilled: 0, // Actually it may be fully or partially executed by third-party traders
+              coin2AmountFilled: 0,
+              isExecuted: false, // Not executed
+            });
           } else {
-            log.warn(`Market-making: Unexpected scenario while placing the taker executeInOrderBook mm-order. Its status is ${order1Details?.status}.`);
+            // 'unknown' status
+            log.warn(`Market-making: Unexpected scenario while placing the taker executeInOrderBook mm-order. Its status is ${order1Status}.`);
 
             order.update({
               coin1AmountFilled: undefined,
@@ -365,20 +436,20 @@ module.exports = {
 
           await order.save();
 
-          // Cancelling mm-order, if it's not filled
+          // Cancelling mm-order, if it's not filled/cancelled
 
-          if ([undefined, 'unknown', 'new', 'part_filled'].includes(order1Details?.status)) {
-            const reasonToClose = `Cancelling order1 (taker) order with status '${order1Details?.status}' while doing executeInOrderBook mm-trade`;
+          if ([undefined, 'unknown', 'new', 'part_filled'].includes(order1Status)) {
+            const reasonToClose = `Cancelling order1 (taker) order with status '${order1Status}' while doing executeInOrderBook mm-trade`;
             await orderCollector.clearOrderById(
                 order, order.pair, order.type, this.readableModuleName, reasonToClose, undefined, takerApi);
           }
         } else { // if order1
-          log.warn(`Market-making: Unable to execute mm-order with params: ${orderParamsString}. Action: executeInOrderBook. No order id returned.`);
+          log.warn(`Market-making: Unable to execute mm-order${useSecondAccount ? ' (using second account)' : ''} with params: ${orderParamsString}. Action: executeInOrderBook. No order id returned.`);
         }
 
       }
     } catch (e) {
-      log.error(`Error in executeMmOrder() of ${utils.getModuleName(module.id)} module: ` + e);
+      log.error(`Error in executeMmOrder() of ${utils.getModuleName(module.id)} module: ${e}`);
     }
   },
 };
@@ -389,49 +460,77 @@ module.exports = {
  * - If mm_isFundBalancerActive in case of two-keys trading. It helps to maintain both accounts with quote-coin.
  * - If mm_Policy is orderbook. Run buy- or sell- orders in series.
  * - Consider mm_buyPercent
- * @returns {String}
+ * @returns {'buy' | 'sell'}
 */
 function setType() {
-  if (!tradeParams || !tradeParams.mm_buyPercent) {
-    log.warn(`Market-making: Param mm_buyPercent is not set. Check ${config.exchangeName} config.`);
-    return false;
+  let type; let typeMessage;
+
+  const isFundBalancerActive = traderapi2 && tradeParams.mm_isFundBalancerActive;
+  const BALANCE_PERCENT_THRESHOLD = 15; // If mm_buyPercent in [35..65], consider funds as balanced between accounts
+  const isFundsBalanced = !isFundBalancerActive || Math.abs(tradeParams.mm_buyPercent * 100 - 50) < BALANCE_PERCENT_THRESHOLD;
+
+  if (tradeParams.mm_Policy === 'orderbook' && isFundsBalanced) {
+    type = Math.random() > EXECUTE_IN_ORDER_BOOK_ORDER_TYPE_REPEAT_PERCENT / 100 ?
+        orderUtils.crossType(/** @type {'buy' | 'sell'} */ (lastOrderType)) :
+        lastOrderType;
+
+    typeMessage = `Market-making: Setting trade type to '${type}' if favour of in-orderbook trading.`;
+
+    if (isFundBalancerActive) {
+      typeMessage += ` Funds are balanced between accounts (mm_buyPercent set by Fund balancer: ${tradeParams.mm_buyPercent}).`;
+    } else {
+      typeMessage += ' Fund balancer is disabled.';
+    }
+  } else {
+    type = Math.random() > tradeParams.mm_buyPercent ? 'sell' : 'buy';
+    typeMessage = `Market-making: Setting trade type to '${type}'`;
+
+    if (isFundBalancerActive) {
+      typeMessage += ` to balance funds between accounts (mm_buyPercent set by Fund balancer: ${tradeParams.mm_buyPercent}).`;
+    } else {
+      typeMessage += ` considering mm_buyPercent: ${tradeParams.mm_buyPercent}. Fund balancer is disabled.`;
+    }
   }
 
-  let type = 'buy';
-  if (Math.random() > tradeParams.mm_buyPercent) {
-    type = 'sell';
-  }
+  log.log(typeMessage);
 
   return type;
 }
 
 /**
  * Comprehensive function to check if enough funds to trade
- * @param {String} coin1 = config.coin1 (base)
- * @param {String} coin2 = config.coin2 (quote)
- * @param {Number} amount1 Amount in coin1 (base) to trade
- * @param {Number} amount2 Amount in coin2 (quote) to trade
- * @param {String} type 'buy' or 'sell'
- * @param {String} mmCurrentAction 'executeInSpread' or 'executeInOrderBook'
- * @returns {Object<Boolean, String>}
- *  result: if enough funds to trade
- *  message: error message
+ * It differs from orderUtils.isEnoughCoins() because it considers mmCurrentAction and two account trading
+ * Supports perpetual trading
+ * @param {string} coin1 = config.coin1 (base coin)
+ * @param {string} coin2 = config.coin2 (quote coin)
+ * @param {number} base Order quantity in coin1 (base) to trade
+ * @param {number} quote Order quantity in coin2 (quote) to trade
+ * @param {'buy' | 'sell'} type Order type. When in spread order, 'buy' means buyer is taker.
+ * @param {'executeInSpread' | 'executeInOrderBook'} mmCurrentAction Trade type
+ * @returns {Promise<{ result: boolean, message?: string }>}
+ *   result: if enough funds to trade
+ *   message: error message
  */
-async function isEnoughCoins(coin1, coin2, amount1, amount2, type, mmCurrentAction) {
-  const traderapi2 = false;
-  const balances = await traderapi.getBalances(false);
+async function isEnoughCoins(coin1, coin2, base, quote, type, mmCurrentAction) {
+  const balances = await orderUtils.getBalancesCached(false, `${utils.getModuleName(module.id)}-isEnoughCoins`);
   if (!balances) {
-    log.warn(`Market-making: Unable to get balances${traderapi2 ? ' on first account' : ''} for placing mm-order.`);
+    log.warn(`Market-making: Unable to get balances${useSecondAccount ? ' on first account' : ''} for placing mm-order.`);
     return {
       result: false,
     };
   }
-  const balances2 = undefined;
-  if (!balances2 && traderapi2) {
-    log.warn(`Market-making: Unable to get balances${traderapi2 ? ' on second account' : ''} for placing mm-order.`);
-    return {
-      result: false,
-    };
+
+  let balances2;
+
+  if (useSecondAccount) {
+    balances2 = await orderUtils.getBalancesCached(false, `${utils.getModuleName(module.id)}-isEnoughCoins`, undefined, undefined, traderapi2);
+
+    if (!balances2) {
+      log.warn(`Market-making: Unable to get balances${useSecondAccount ? ' on second account' : ''} for placing mm-order.`);
+      return {
+        result: false,
+      };
+    }
   }
 
   let isBalanceEnough = true;
@@ -439,67 +538,93 @@ async function isEnoughCoins(coin1, coin2, amount1, amount2, type, mmCurrentActi
   let coin1Balance; let coin2Balance;
 
   try {
-    const coin1Decimals = orderUtils.parseMarket(config.pair).coin1Decimals;
-    const coin2Decimals = orderUtils.parseMarket(config.pair).coin2Decimals;
+    const makerBalances = utils.balanceHelper(balances, formattedPair);
+    const takerBalances = useSecondAccount ?
+        utils.balanceHelper(balances2, formattedPair) :
+        makerBalances;
 
-    const makerBalances = balances;
-    const takerBalances = traderapi2 ? balances2 : balances;
+    const makerCoin1Balance = makerBalances.coin1Data;
+    const makerCoin2Balance = makerBalances.coin2Data;
+    const takerCoin1Balance = takerBalances.coin1Data;
+    const takerCoin2Balance = takerBalances.coin2Data;
 
-    const makerCoin1Balance = makerBalances.filter((crypto) => crypto.code === coin1)[0] || { free: 0, freezed: 0 };
-    const makerCoin2Balance = makerBalances.filter((crypto) => crypto.code === coin2)[0] || { free: 0, freezed: 0 };
-    const takerCoin1Balance = takerBalances.filter((crypto) => crypto.code === coin1)[0] || { free: 0, freezed: 0 };
-    const takerCoin2Balance = takerBalances.filter((crypto) => crypto.code === coin2)[0] || { free: 0, freezed: 0 };
+    const baseString = `${base.toFixed(coin1Decimals)} ${coin1}`;
+    const quoteString = `${quote.toFixed(coin2Decimals)} ${coin2}`;
 
     if (mmCurrentAction === 'executeInSpread') {
-      if (type === 'buy') {
+      if (isPerpetual) {
+        coin2Balance = makerCoin2Balance;
+
+        if (!coin2Balance.free || coin2Balance.free < quote * 2) {
+          isBalanceEnough = false;
+          onWhichAccount = '';
+          orderType = type === 'buy' ? 'sell->buying' : 'buy->selling';
+          // Not enough USDT balance to place mm-order to sell->buying/buy->selling 1 BTC contracts for 40,000 USDT on BTCUSDT (in spread)
+          output = `Not enough ${coin2} balance${onWhichAccount} to place mm-order to ${orderType} ${baseString} contracts for ${quoteString} on ${formattedPair.pair} (in spread). ${makerBalances.coin2s2}.`;
+        }
+      } else if (type === 'buy') {
         // First, (maker) we place crossType-order (sell) using first account
         // Last, (taker) we place type-order (buy) using second account
         coin1Balance = makerCoin1Balance;
         coin2Balance = takerCoin2Balance;
-        if (!coin1Balance.free || coin1Balance.free < amount1) {
+
+        if (!coin1Balance.free || coin1Balance.free < base) {
           isBalanceEnough = false;
-          onWhichAccount = traderapi2 ? ' on first account' : '';
-          orderType = 'direct maker (selling)';
-          output = `Not enough balance${onWhichAccount} to place ${amount1.toFixed(coin1Decimals)} ${coin1} ${orderType} mm-order (in spread). Free: ${coin1Balance.free.toFixed(coin1Decimals)} ${coin1}, frozen: ${coin1Balance.freezed.toFixed(coin1Decimals)} ${coin1}.`;
-        } else if (!coin2Balance.free || coin2Balance.free < amount2) {
+          onWhichAccount = useSecondAccount ? ' on first account' : '';
+          orderType = 'direct maker (!sell->buying)';
+          output = `Not enough balance${onWhichAccount} to place ${baseString} ${orderType} mm-order on ${formattedPair.pair} (in spread). ${makerBalances.coin1s2}.`;
+        } else if (!coin2Balance.free || coin2Balance.free < quote) {
           isBalanceEnough = false;
-          onWhichAccount = traderapi2 ? ' on second account' : '';
-          orderType = 'cross-type taker (buying)';
-          output = `Not enough balance${onWhichAccount} to place ${amount2.toFixed(coin2Decimals)} ${coin2} ${orderType} mm-order (in spread). Free: ${coin2Balance.free.toFixed(coin2Decimals)} ${coin2}, frozen: ${coin2Balance.freezed.toFixed(coin2Decimals)} ${coin2}.`;
+          onWhichAccount = useSecondAccount ? ' on second account' : '';
+          orderType = 'cross-type taker (sell->!buying)';
+          output = `Not enough balance${onWhichAccount} to place ${quoteString} ${orderType} mm-order on ${formattedPair.pair} (in spread). ${takerBalances.coin2s2}.`;
         }
       } else { // type === 'sell'
         // First, (maker) we place crossType-order (buy) using first account
         // Last, (taker) we place type-order (sell) using second account
         coin1Balance = takerCoin1Balance;
         coin2Balance = makerCoin2Balance;
-        if (!coin2Balance.free || coin2Balance.free < amount2) {
+
+        if (!coin2Balance.free || coin2Balance.free < quote) {
           isBalanceEnough = false;
-          onWhichAccount = traderapi2 ? ' on first account' : '';
-          orderType = 'direct maker (buying)';
-          output = `Not enough balance${onWhichAccount} to place ${amount2.toFixed(coin2Decimals)} ${coin2} ${orderType} mm-order (in spread). Free: ${coin2Balance.free.toFixed(coin2Decimals)} ${coin2}, frozen: ${coin2Balance.freezed.toFixed(coin2Decimals)} ${coin2}.`;
-        } else if (!coin1Balance.free || coin1Balance.free < amount1) {
+          onWhichAccount = useSecondAccount ? ' on first account' : '';
+          orderType = 'direct maker (!buy->selling)';
+          output = `Not enough balance${onWhichAccount} to place ${quoteString} ${orderType} mm-order on ${formattedPair.pair} (in spread). ${makerBalances.coin2s2}.`;
+        } else if (!coin1Balance.free || coin1Balance.free < base) {
           isBalanceEnough = false;
-          onWhichAccount = traderapi2 ? ' on second account' : '';
-          orderType = 'cross-type taker (selling)';
-          output = `Not enough balance${onWhichAccount} to place ${amount1.toFixed(coin1Decimals)} ${coin1} ${orderType} mm-order (in spread). Free: ${coin1Balance.free.toFixed(coin1Decimals)} ${coin1}, frozen: ${coin1Balance.freezed.toFixed(coin1Decimals)} ${coin1}.`;
+          onWhichAccount = useSecondAccount ? ' on second account' : '';
+          orderType = 'cross-type taker (buy->!selling)';
+          output = `Not enough balance${onWhichAccount} to place ${baseString} ${orderType} mm-order on ${formattedPair.pair} (in spread). ${takerBalances.coin1s2}.`;
         }
       }
     }
 
     if (mmCurrentAction === 'executeInOrderBook') {
-      if (type === 'sell') {
-        coin1Balance = takerCoin1Balance;
-        if (!coin1Balance.free || coin1Balance.free < amount1) {
+      if (isPerpetual) {
+        coin2Balance = makerCoin2Balance;
+
+        if (!coin2Balance.free || coin2Balance.free < quote * 2) {
           isBalanceEnough = false;
-          onWhichAccount = traderapi2 ? ' on second account' : '';
-          output = `Not enough balance${onWhichAccount} to place ${amount1.toFixed(coin1Decimals)} ${coin1} ${type} mm-order (in order book). Free: ${coin1Balance.free.toFixed(coin1Decimals)} ${coin1}, frozen: ${coin1Balance.freezed.toFixed(coin1Decimals)} ${coin1}.`;
+          onWhichAccount = '';
+          orderType = type;
+          // Not enough USDT balance to place mm-order to buy 1 BTC contracts for 40,000 USDT on BTCUSDT (in order book)
+          output = `Not enough ${coin2} balance${onWhichAccount} to place mm-order to ${orderType} ${baseString} contracts for ${quoteString} on ${formattedPair.pair} (in order book). ${makerBalances.coin2s2}.`;
+        }
+      } else if (type === 'sell') {
+        coin1Balance = takerCoin1Balance;
+
+        if (!coin1Balance.free || coin1Balance.free < base) {
+          isBalanceEnough = false;
+          onWhichAccount = useSecondAccount ? ' on second account' : '';
+          output = `Not enough balance${onWhichAccount} to place ${baseString} ${type} mm-order on ${formattedPair.pair} (in order book). ${takerBalances.coin1s2}.`;
         }
       } else { // type === 'buy'
         coin2Balance = takerCoin2Balance;
-        if (!coin2Balance.free || coin2Balance.free < amount2) {
+
+        if (!coin2Balance.free || coin2Balance.free < quote) {
           isBalanceEnough = false;
-          onWhichAccount = traderapi2 ? ' on second account' : '';
-          output = `Not enough balance${onWhichAccount} to place ${amount2.toFixed(coin2Decimals)} ${coin2} ${type} mm-order (in order book). Free: ${coin2Balance.free.toFixed(coin2Decimals)} ${coin2}, frozen: ${coin2Balance.freezed.toFixed(coin2Decimals)} ${coin2}.`;
+          onWhichAccount = useSecondAccount ? ' on second account' : '';
+          output = `Not enough balance${onWhichAccount} to place ${quoteString} ${type} mm-order on ${formattedPair.pair} (in order book). ${takerBalances.coin2s2}.`;
         }
       }
     }
@@ -509,7 +634,8 @@ async function isEnoughCoins(coin1, coin2, amount1, amount2, type, mmCurrentActi
       message: output,
     };
   } catch (e) {
-    log.warn('Market-making: Unable to process balances for placing mm-order: ' + e);
+    log.warn(`Market-making: Unable to process balances for placing mm-order on ${formattedPair.pair}: ${e}`);
+
     return {
       result: false,
     };
@@ -525,25 +651,29 @@ async function isEnoughCoins(coin1, coin2, amount1, amount2, type, mmCurrentActi
  * - Choose mmCurrentAction: 'executeInSpread', 'executeInOrderBook' or 'doNotExecute' depending on spread and mm_Policy
  * - To draw nice smooth chart, it receives traderapi.getTradesHistory() and calculates smooth price change interval
  * - If mm_Policy === 'optimal' && executeInOrderBookAllowed === true,
- *   then it chooses to trade in spread or in orderbook depending on mm_isLiquidityActive and spread size
+ *   It chooses to trade in spread or in orderbook depending on mm_isLiquidityActive and spread size
  * - When trading in order book, order amount can be limited
- * @param {String} type 'buy' or 'sell'
- * @param {Number} coin1Amount Amount to trade. This function can update it.
- * @returns {Object<Number, Number, String>}
- *  price: price to trade
- *  coin1Amount: updated amount to trade in case of 'executeInOrderBook'
- *  mmCurrentAction: 'executeInSpread', 'executeInOrderBook' or 'doNotExecute'
- *  In case of 'executeInOrderBook' additionally: startPrice, expectedPrice, newSpread, newSpreadNumber, newSpreadPercent
+ * @param {'buy' | 'sell'} type Order type
+ * @param {number} coin1Amount Amount to trade. This function can modify this value.
+ * @returns {Promise<{ price: number | boolean, message?: string, coin1Amount?: number, mmCurrentAction?: 'executeInSpread' | 'executeInOrderBook',
+ *   startPrice?: number, expectedPrice?: number, newSpread?: number, newSpreadNumber?: number, newSpreadPercent?: number }>}
+ *   - price: price to trade
+ *   - message: error message
+ *   - coin1Amount: updated amount to trade in case of 'executeInOrderBook'
+ *   - mmCurrentAction: 'executeInSpread', 'executeInOrderBook'. The function doesn't return 'doNotExecute' action, instead price=false and 'message'.
+ *   In case of 'executeInOrderBook' additionally: startPrice, expectedPrice, newSpread, newSpreadNumber, newSpreadPercent
 */
 async function setPrice(type, coin1Amount) {
   try {
-    const coin1Decimals = orderUtils.parseMarket(config.pair).coin1Decimals;
-    const coin2Decimals = orderUtils.parseMarket(config.pair).coin2Decimals;
-    const precision = utils.getPrecision(coin2Decimals); // precision for 3 decimals = 0.001
+    const precision = utils.getPrecision(coin2Decimals); // Precision for 3 decimals = 0.001
+
     let output = '';
 
-    let ask_high; let bid_low; let price;
-    const orderBook = await traderapi.getOrderBook(config.pair);
+    let ask_high; let bid_low;
+    let price;
+
+    const orderBook = await orderUtils.getOrderBookCached(pair, utils.getModuleName(module.id), true);
+
     let orderBookInfo = utils.getOrderBookInfo(orderBook, tradeParams.mm_liquiditySpreadPercent);
     if (!orderBookInfo) {
       log.warn(`Market-making: Order books are empty for ${config.pair}, or temporary API error. Unable to set a price while placing mm-order.`);
@@ -551,6 +681,7 @@ async function setPrice(type, coin1Amount) {
         price: false,
       };
     }
+
     bid_low = orderBookInfo.highestBid;
     ask_high = orderBookInfo.lowestAsk;
 
@@ -561,7 +692,7 @@ async function setPrice(type, coin1Amount) {
 
     let mmCurrentAction; // doNotExecute, executeInSpread, executeInOrderBook
 
-    let lowHighString = `Low: ${bid_low.toFixed(coin2Decimals)}, high: ${ask_high.toFixed(coin2Decimals)} ${config.coin2}`;
+    let lowHighString = `Low: ${bid_low.toFixed(coin2Decimals)}, high: ${ask_high.toFixed(coin2Decimals)} ${coin2}`;
     const checkObString = 'Check the order book and the Price watcher parameters.';
 
     let isSpreadCorrectedByPriceWatcher = false;
@@ -594,7 +725,7 @@ async function setPrice(type, coin1Amount) {
             output = `Price watcher corrected spread to buy not higher than ${pwHighPrice.toFixed(coin2Decimals)} while placing mm-order.`;
 
             if (mmPolicy === 'orderbook') {
-              output += ` Market making settings deny trading in spread. Unable to set a price for ${config.pair}. Mm-order cancelled. ${lowHighString}. ${pw.getPwRangeString()} ${checkObString}`;
+              output += ` Market making settings deny trading in spread. Unable to set a price for ${pair}. Mm-order cancelled. ${lowHighString}. ${pw.getPwRangeString()} ${checkObString}`;
               skipNotify = true;
 
               mmCurrentAction = 'doNotExecute';
@@ -619,7 +750,7 @@ async function setPrice(type, coin1Amount) {
             output = `Price watcher corrected spread to sell not lower than ${pwLowPrice.toFixed(coin2Decimals)} while placing mm-order.`;
 
             if (mmPolicy === 'orderbook') {
-              output += ` Market making settings deny trading in spread. Unable to set a price for ${config.pair}. Mm-order cancelled. ${lowHighString}. ${pw.getPwRangeString()} ${checkObString}`;
+              output += ` Market making settings deny trading in spread. Unable to set a price for ${pair}. Mm-order cancelled. ${lowHighString}. ${pw.getPwRangeString()} ${checkObString}`;
               skipNotify = true;
 
               mmCurrentAction = 'doNotExecute';
@@ -700,7 +831,7 @@ async function setPrice(type, coin1Amount) {
      * Set a price and trade amount according to mmCurrentAction
      * Or cancel a trade, if 'doNotExecute'
      */
-    lowHighString = `Low: ${bid_low.toFixed(coin2Decimals)}, high: ${ask_high.toFixed(coin2Decimals)} ${config.coin2}`;
+    lowHighString = `Low: ${bid_low.toFixed(coin2Decimals)}, high: ${ask_high.toFixed(coin2Decimals)} ${coin2}`;
 
     if (mmCurrentAction === 'doNotExecute') {
       if (!output) {
@@ -708,7 +839,7 @@ async function setPrice(type, coin1Amount) {
           output = `Refusing to place mm-order because of price watcher. Corrected spread is too small. ${lowHighString}. ${pw.getPwRangeString()} ${checkObString}`;
           skipNotify = true;
         } else {
-          output = `No spread currently, and market making settings deny trading in the order book. ${lowHighString}. Unable to set a price for ${config.pair}. Update settings or create spread manually.`;
+          output = `No spread currently, and market making settings deny trading in the order book. ${lowHighString}. Unable to set a price for ${pair}. Update settings or create spread manually.`;
         }
       }
 
@@ -769,9 +900,9 @@ async function setPrice(type, coin1Amount) {
 
       let executeInOrderBookString = `Market-making: Calculating coin1Amount (${mmPolicy} trading policy) to ${type === 'buy' ? 'buy from' : 'sell in'} order book.`;
       if (isAmountLimited) {
-        executeInOrderBookString += ` Order amount is reduced from ${coin1AmountOriginal.toFixed(coin1Decimals)} to ${coin1Amount.toFixed(coin1Decimals)} ${config.coin1} to fit ${limitedByString}.`;
+        executeInOrderBookString += ` Order amount is reduced from ${coin1AmountOriginal.toFixed(coin1Decimals)} to ${coin1Amount.toFixed(coin1Decimals)} ${coin1} to fit ${limitedByString}.`;
       } else {
-        executeInOrderBookString += ` Order amount ${coin1AmountOriginal.toFixed(coin1Decimals)} ${config.coin1} is not reduced.`;
+        executeInOrderBookString += ` Order amount ${coin1AmountOriginal.toFixed(coin1Decimals)} ${coin1} is not reduced.`;
       }
       log.log(executeInOrderBookString);
 
@@ -798,16 +929,16 @@ async function setPrice(type, coin1Amount) {
       const newSpreadPercent = newSpread / finalPrice * 100;
 
       executeInOrderBookString = `Market-making: Calculating price (${mmPolicy} trading policy) to ${type === 'buy' ? 'buy from' : 'sell in'} order book.`;
-      executeInOrderBookString += ` Trying to ${type} ${coin1Amount.toFixed(coin1Decimals)} ${config.coin1} at ${price.toFixed(coin2Decimals)} ${config.coin2}.`;
+      executeInOrderBookString += ` Trying to ${type} ${coin1Amount.toFixed(coin1Decimals)} ${coin1} at ${price.toFixed(coin2Decimals)} ${coin2}.`;
       if (isPriceMoved) {
-        executeInOrderBookString += ` It will move ob-price from ${startPrice.toFixed(coin2Decimals)} to ${finalPrice.toFixed(coin2Decimals)} ${config.coin2} (${priceChangePercent.toFixed(4)}% change),`;
+        executeInOrderBookString += ` It will move ob-price from ${startPrice.toFixed(coin2Decimals)} to ${finalPrice.toFixed(coin2Decimals)} ${coin2} (${priceChangePercent.toFixed(4)}% change),`;
         if (isOrderFilled) {
           executeInOrderBookString += ' the order will be fully filled.';
         } else {
           executeInOrderBookString += ' the order will match all ob-orders and stay in the order book.';
         }
       } else {
-        executeInOrderBookString += ` It will not change ob-price ${startPrice.toFixed(coin2Decimals)} ${config.coin2}, the order will be fully filled.`;
+        executeInOrderBookString += ` It will not change ob-price ${startPrice.toFixed(coin2Decimals)} ${coin2}, the order will be fully filled.`;
       }
       log.log(executeInOrderBookString);
 
@@ -843,31 +974,24 @@ async function setPrice(type, coin1Amount) {
     } // if (mmCurrentAction === 'executeInSpread')
 
   } catch (e) {
-    log.error(`Error in setPrice() of ${utils.getModuleName(module.id)} module: ` + e);
+    log.error(`Error in setPrice() of ${utils.getModuleName(module.id)} module: ${e}`);
   }
 }
 
 /**
  * Sets ~randomized trading amount from mm_minAmount to mm_maxAmount multiplied by volatilityKoef
  * It considers volatilityKoef (0.25–4) from mm_volume_volatility module
- * @returns {Number} Amount to trade in base coin
+ * @returns {number} Amount to trade in base coin
 */
 function setAmount() {
-  if (!tradeParams || !tradeParams.mm_maxAmount || !tradeParams.mm_minAmount) {
-    log.warn(`Market-making: Params mm_maxAmount or mm_minAmount are not set. Check ${config.exchangeName} config.`);
-    return false;
-  }
-  return Math.random() * (tradeParams.mm_maxAmount - tradeParams.mm_minAmount) + tradeParams.mm_minAmount;
+  const regularAmount = utils.randomValue(tradeParams.mm_minAmount, tradeParams.mm_maxAmount);
+  return regularAmount;
 }
 
 /**
  * Sets trading interval in ms
- * @returns {Number}
+ * @returns {number}
 */
 function setPause() {
-  if (!tradeParams || !tradeParams.mm_maxInterval || !tradeParams.mm_minInterval) {
-    log.warn(`Market-making: Params mm_maxInterval or mm_minInterval are not set. Check ${config.exchangeName} config.`);
-    return false;
-  }
   return utils.randomValue(tradeParams.mm_minInterval, tradeParams.mm_maxInterval, true);
 }

@@ -2,7 +2,6 @@
  * Places to and removes orders from order book in order to make it dynamic
  * Each iteration places up to MAX_ORDERS_PER_ITERATION orders
  * Maximum ob-order number is tradeParams.mm_orderBookOrdersCount
- * Supports perpetual contract trading
  */
 
 /**
