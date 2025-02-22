@@ -1,8 +1,15 @@
 /**
  * Places orders in ±mm_liquiditySpreadPercent with mm_liquiditySellAmount and mm_liquidityBuyQuoteAmount
  * So it also maintains mm_liquiditySpreadPercent spread
- * mm_liquidityTrend determines how to fill the gap: middle, downtrend, or uptrend
- */
+ *
+ * Liq is enabled if mm_isActive && mm_isLiquidityActive && mm_Policy is not 'wash'
+ *
+ * Examples:
+ * - '/enable liq 2% 1000 ADM 100 USDT middle': Place liq-orders in 0–2% deviation
+ *
+ * mm_liquidityTrend determines where the midpoint of spread is — how to fill the bid–ask of the gap: middle, downtrend, or uptrend.
+ * mm_liquidityTrend can move a price up or down if there are no third-party orders.
+*/
 
 const utils = require('../helpers/utils');
 const constants = require('../helpers/const');
@@ -22,6 +29,8 @@ const traderapi = require('./trader_' + config.exchange)(
     config.exchange_socket,
     config.exchange_socket_pull,
 );
+
+const isPerpetual = Boolean(config.perpetual);
 
 const db = require('../modules/DB');
 const orderUtils = require('./orderUtils');
@@ -58,7 +67,8 @@ module.exports = {
       interval &&
       tradeParams.mm_isActive &&
       tradeParams.mm_isLiquidityActive &&
-      constants.MM_POLICIES_REGULAR.includes(tradeParams.mm_Policy)
+      constants.MM_POLICIES_REGULAR.includes(tradeParams.mm_Policy) &&
+      !isPerpetual
     ) {
       if (isPreviousIterationFinished) {
         isPreviousIterationFinished = false;
@@ -94,7 +104,7 @@ module.exports = {
         exchange: config.exchange,
       });
 
-      const orderBook = await traderapi.getOrderBook(config.pair);
+      const orderBook = await orderUtils.getOrderBookCached(config.pair, utils.getModuleName(module.id));
       const orderBookInfo = utils.getOrderBookInfo(orderBook, tradeParams.mm_liquiditySpreadPercent);
 
       if (!orderBookInfo) {
@@ -175,8 +185,9 @@ module.exports = {
   /**
    * Closes opened liq-orders:
    * - Expired by time
-   * - Out of Spread
    * - Out of Pw's range
+   * - Out of TWAP range
+   * - Out of Spread, except orders placed out of spread intentionally because of Pw or TWAP correction
    * @param {Array<Object>} liquidityOrders Orders of type liq, received from internal DB
    * @param {Object} orderBookInfo Object of utils.getOrderBookInfo() to check if an order is out of spread
    * @returns {Array<Object>} Updated order list
