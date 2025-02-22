@@ -25,6 +25,9 @@ const orderPurposes = require('./orderCollector').orderPurposes;
  *   Every NotFound order is Closed and Processed as well
  */
 
+const moduleId = /** @type {NodeJS.Module} */ (module).id;
+const moduleName = utils.getModuleName(moduleId);
+
 module.exports = {
   /**
    * Get stats on all orders by purposes list
@@ -59,7 +62,7 @@ module.exports = {
         }
       });
     } catch (e) {
-      log.error(`Error in getAllOrderStats(purposes: ${purposes?.join(', ')}, pair: ${pair}) of ${utils.getModuleName(module.id)}: ${e}.`);
+      log.error(`Error in getAllOrderStats(purposes: ${purposes?.join(', ')}, pair: ${pair}) of ${moduleName}: ${e}.`);
     }
 
     return { statList, statTotal };
@@ -201,7 +204,7 @@ module.exports = {
         },
       ]));
     } catch (e) {
-      log.error(`Error in getOrderStats(isExecuted: ${isExecuted}, isProcessed: ${isProcessed}, isCancelled: ${isCancelled}, purpose: ${purpose}, pair: ${pair}) of ${utils.getModuleName(module.id)}: ${e}.`);
+      log.error(`Error in getOrderStats(isExecuted: ${isExecuted}, isProcessed: ${isProcessed}, isCancelled: ${isCancelled}, purpose: ${purpose}, pair: ${pair}) of ${moduleName}: ${e}.`);
     }
 
     if (!stats[0]) {
@@ -212,48 +215,162 @@ module.exports = {
   },
 
   /**
-   * Returns info about locally stored orders by purpose (type)
+   * Returns info about locally stored open orders grouped by purpose (type)
    * Used for /orders command
-   * @param {String} pair Filter order trade pair
+   * @param {string} pair BTC/USDT for spot or BTCUSDT for perpetual
    * @param {Object} api If we should calculate for the second account in case of 2-keys trading
-   * @param {Boolean} hideNotOpened Hide ld-order in states as Not opened, Filled, Cancelled (default)
-   * @return {Object} Aggregated info
+   * @param {boolean} [hideNotOpened=true] Hide ld-orders in [Not opened, Filled, Cancelled] states
+   * @param {boolean} [splitByModuleIndex=true] Splits indexed purposes like 'ld', 'ld2' according to moduleIndex
+   * @return {Promise<Object>} Aggregated by purpose order info
    */
-  async ordersByType(pair, api, hideNotOpened = true) {
-    const ordersByType = { };
+  async ordersByType(pair, api, hideNotOpened = true, splitByModuleIndex = true) {
+    const ordersByType = {};
 
     try {
       const { ordersDb } = db;
       let dbOrders = await ordersDb.find({
         isProcessed: false,
-        pair: pair || config.pair,
+        pair,
         exchange: config.exchange,
         isSecondAccountOrder: api?.isSecondAccount ? true : { $ne: true },
       });
 
-      dbOrders = await orderUtils.updateOrders(dbOrders, pair, utils.getModuleName(module.id), false, api, hideNotOpened);
-      if (dbOrders && dbOrders[0]) {
-        Object.keys(orderPurposes).forEach((purpose) => {
-          ordersByType[purpose] = { };
-          ordersByType[purpose].purposeName = orderPurposes[purpose];
-          ordersByType[purpose].allOrders = purpose === 'all' ? dbOrders : dbOrders.filter((order) => order.purpose === purpose);
-          ordersByType[purpose].buyOrders = ordersByType[purpose].allOrders.filter((order) => order.type === 'buy');
-          ordersByType[purpose].sellOrders = ordersByType[purpose].allOrders.filter((order) => order.type === 'sell');
-          ordersByType[purpose].buyOrdersQuote =
-            ordersByType[purpose].buyOrders.reduce((total, order) => total + order.coin2Amount, 0);
-          ordersByType[purpose].sellOrdersAmount =
-            ordersByType[purpose].sellOrders.reduce((total, order) => total + order.coin1Amount, 0);
-        });
-      } else {
-        ordersByType['all'] = { };
-        ordersByType['all'].allOrders = [];
-      }
+      dbOrders = await orderUtils.updateOrders(dbOrders, pair, `${moduleName}-ordersByType`, false, api, hideNotOpened);
 
+      // Handle specific purposes
+
+      Object.keys(orderPurposes).forEach((purpose) => {
+        if (purpose === 'all') return; // Skip 'all', handled later
+
+        if (!splitByModuleIndex) {
+          // Default behavior without splitting by moduleIndex
+
+          const allOrders = dbOrders.filter((order) => order.purpose === purpose);
+          const buyOrders = [];
+          const sellOrders = [];
+          let buyOrdersQuote = 0;
+          let sellOrdersAmount = 0;
+
+          allOrders.forEach((order) => {
+            if (order.type === 'buy') {
+              buyOrders.push(order);
+              buyOrdersQuote += order.coin2Amount;
+            } else if (order.type === 'sell') {
+              sellOrders.push(order);
+              sellOrdersAmount += order.coin1Amount;
+            }
+          });
+
+          ordersByType[purpose] = {
+            purposeName: orderPurposes[purpose],
+            allOrders,
+            buyOrders,
+            sellOrders,
+            buyOrdersQuote,
+            sellOrdersAmount,
+          };
+        } else {
+          // Split by moduleIndex
+
+          const groupedOrders = {};
+
+          dbOrders
+              .filter((order) => order.purpose === purpose)
+              .forEach((order) => {
+                const moduleIndex = order.moduleIndex || 1; // Default to 1 if moduleIndex not present
+                const key = moduleIndex > 1 ? `${purpose}${moduleIndex}` : purpose;
+
+                if (!groupedOrders[key]) {
+                  groupedOrders[key] = [];
+                }
+
+                groupedOrders[key].push(order);
+              });
+
+          Object.entries(groupedOrders).forEach(([key, orders]) => {
+            const buyOrders = [];
+            const sellOrders = [];
+            let buyOrdersQuote = 0;
+            let sellOrdersAmount = 0;
+
+            orders.forEach((order) => {
+              if (order.type === 'buy') {
+                buyOrders.push(order);
+                buyOrdersQuote += order.coin2Amount;
+              } else if (order.type === 'sell') {
+                sellOrders.push(order);
+                sellOrdersAmount += order.coin1Amount;
+              }
+            });
+
+            ordersByType[key] = {
+              purposeName: orderPurposes[purpose],
+              allOrders: orders,
+              buyOrders,
+              sellOrders,
+              buyOrdersQuote,
+              sellOrdersAmount,
+            };
+          });
+
+          // Add an empty entry for purposes with no orders
+
+          if (!Object.keys(groupedOrders).length) {
+            ordersByType[purpose] = {
+              purposeName: orderPurposes[purpose],
+              allOrders: [],
+              buyOrders: [],
+              sellOrders: [],
+              buyOrdersQuote: 0,
+              sellOrdersAmount: 0,
+            };
+          }
+        }
+      });
+
+      // Ensure 'all' purpose is handled separately
+
+      ordersByType['all'] = {
+        purposeName: 'All Orders',
+        allOrders: dbOrders || [],
+        buyOrders: [],
+        sellOrders: [],
+        buyOrdersQuote: 0,
+        sellOrdersAmount: 0,
+      };
+
+      dbOrders.forEach((order) => {
+        if (order.type === 'buy') {
+          ordersByType['all'].buyOrders.push(order);
+          ordersByType['all'].buyOrdersQuote += order.coin2Amount;
+        } else if (order.type === 'sell') {
+          ordersByType['all'].sellOrders.push(order);
+          ordersByType['all'].sellOrdersAmount += order.coin1Amount;
+        }
+      });
     } catch (e) {
-      log.error(`Error in ordersByType(${pair}) of ${utils.getModuleName(module.id)}: ${e}.`);
+      log.error(`Error in ordersByType(${pair}) of ${moduleName}: ${e}.`);
     }
 
     return ordersByType;
+  },
+
+  /**
+   * Filters order list by moduleIndex
+   * Supports backward compatibility, when orders don't include moduleIndex
+   * @param {Array<Object>} orders List of orders
+   * @param {number} moduleIndex When working with several module instances, e.g., ladder1 and ladder2. Indexing starts with 1.
+   * @return {Array<Object>} Filtered list of orders
+   */
+  ordersByModuleIndex(orders, moduleIndex) {
+    return orders.filter((order) => {
+      if (moduleIndex === 1) {
+        // Include orders where moduleIndex === 1 or moduleIndex does not exist (backward compatibility)
+        return order.moduleIndex === 1 || !order.moduleIndex;
+      } else {
+        return order.moduleIndex === moduleIndex;
+      }
+    });
   },
 };
 
