@@ -7,6 +7,10 @@ let config = {};
 
 // Validate config fields
 const fields = {
+  dev: {
+    type: Boolean,
+    default: false,
+  },
   cli: {
     type: Boolean,
     default: false,
@@ -36,6 +40,11 @@ const fields = {
   exchanges: {
     type: Array,
     isRequired: true,
+  },
+  isDemoAccount: {
+    type: Boolean,
+    isRequired: false,
+    default: false,
   },
   exchange: {
     type: String,
@@ -172,6 +181,21 @@ const fields = {
     type: Object,
     default: {},
   },
+  db: {
+    type: Object,
+    default: { // Fallback to default MongoDB parameters if the configuration is missing them
+      name: 'tradebotdb',
+      url: 'mongodb://127.0.0.1:27017/',
+      options: {
+        serverSelectionTimeoutMS: 3_000,
+        serverApi: {
+          deprecationErrors: true,
+          strict: true,
+          version: '1',
+        },
+      },
+    },
+  },
   com_server: {
     type: String,
     default: false,
@@ -196,7 +220,6 @@ const fields = {
 try {
   // Determine dev, doClearDB and configCustom args/params
   const dev =
-      config.dev ||
       process.argv.includes('dev') ||
       process.argv.includes('test') ||
       process.env.DEV === 'true';
@@ -223,9 +246,10 @@ try {
   // __dirname = ./modules
   config = JSON.parse(jsonminify(fs.readFileSync(path.join(__dirname, configFile), 'utf-8')));
 
-  config.dev = dev;
+  config.dev = dev || config.dev;
   config.doClearDB = doClearDB;
   config.configFile = configFile;
+  config.configCustom = configCustom;
 
   if (config.passPhrase?.length < 35) {
     config.passPhrase = undefined;
@@ -236,7 +260,7 @@ try {
 
   if (!isCliEnabled && !isTgEnabled) {
     if (!config.passPhrase) {
-      exit('Bot\'s config is wrong. ADAMANT passPhrase is invalid.');
+      exit(`Bot's config is wrong. ADAMANT passPhrase is invalid: ${config.passPhrase}.`);
     }
 
     if (!config.node_ADM) {
@@ -274,7 +298,18 @@ try {
     config.projectBranch = stdout.trim();
   });
 
-  config.pair = config.pair.toUpperCase();
+
+  config.isDemoAccount = config.isDemoAccount ?? process.env.OVERRIDE_CONFIG_FUNDS === 'demo';
+
+  const pair = config.pair.toUpperCase();
+
+  if (!pair?.includes('/')) {
+    exit(`Bot's config is wrong. Spot trading pair is incorrect: ${config.pair}.`);
+  }
+
+  config.pair = pair;
+  config.defaultPair = config.perpetual || config.pair;
+
   config.coin1 = config.pair.split('/')[0].trim();
   config.coin2 = config.pair.split('/')[1].trim();
 
@@ -290,7 +325,7 @@ try {
       config.email_smtp?.auth?.username &&
       config.email_smtp?.auth?.password;
 
-  config.bot_id = `${config.pair}@${config.exchangeName}`;
+  config.bot_id = `${config.defaultPair}@${config.exchangeName}`;
 
   if (config.account) {
     config.bot_id += `-${config.account}`;
@@ -340,7 +375,7 @@ try {
     });
   });
 
-  console.info(`${config.notifyName} successfully read the config-file '${configFile}'${dev ? ' (dev)' : ''}.`);
+  console.info(`${config.notifyName} successfully read the config-file '${configFile}'${config.dev ? ' (dev)' : ''}.`);
 
   // Create tradeParams for exchange
   const exchangeTradeParams = path.join(__dirname, '.' + config.fileWithPath);

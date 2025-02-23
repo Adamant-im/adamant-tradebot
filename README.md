@@ -1,6 +1,6 @@
 ADAMANT Trading & Market making bot is a software that allows to run trades on crypto exchanges, make trade volume, maintain spread and liquidity, set price range, and build live-like dynamic order book.
 
-This is a free version. For premium features, see [marketmaking.app/mm-services](https://marketmaking.app/mm-services/).
+This is a free version. For premium features, see [https://marketmaking.app/cex-mm/mm-features](https://marketmaking.app/cex-mm/mm-features/).
 
 # Market making
 
@@ -33,36 +33,7 @@ Profit trading is a mode in which a bot runs orders according to some strategy. 
 
 ## Premium features
 
-For premium features, see [marketmaking.app/mm-services](https://marketmaking.app/mm-services/).
-
-* High-frequency order books
-* Watch order books and eliminate gaps
-* Anti-cheat cleans price manipulation orders
-* 2-keys trading
-* Running commands for the second trade account
-* Fund balancer for 2-keys trading
-* Fund supplier for multi-pair trading on one exchange using one account
-* Liquidity/depth set up to support spread and place main volume further from current price
-* Support price to maintain by any means
-* Setting manual price trends and target
-* Automatic volatility life-like chart
-* In-orderbook market-making without in-spread trading
-* Maintaining a small spread and consistent chart with in-orderbook market-making
-* Volume volatility: more volume on pumps and dumps
-* Stores and displays statistics
-* Account info: fees and daily volume
-* Quote hunter to replenish quote coin balance
-* Withdrawals
-* Show deposits, withdrawals, coin network information
-* Transfer funds between account types (main, trade, margin)
-* Cross-bot communication to run commands remotely across all the bots at once
-* Command aliases
-* High-frequency order book updates
-* Price maker & Price watcher, including depth policy
-* Balance equalizer: Ensures coin1 (base) and coin2 (quote) balances are near equal in USD value
-* TWAP orders
-* Socket support for exchange connections
-* Socket-pull support as a preferred to socket-subscribe model
+For premium features, see [https://marketmaking.app/cex-mm/mm-features](https://marketmaking.app/cex-mm/mm-features/).
 
 # Supported exchanges
 
@@ -74,7 +45,7 @@ For premium features, see [marketmaking.app/mm-services](https://marketmaking.ap
 * [NonKYC](https://nonkyc.io?ref=655b4df9eb13acde84677358)
 * [XeggeX](https://xeggex.com?ref=656846d209bbed85b91aba4d)
 
-To add other exchange support, see [marketmaking.app/mm-services](https://marketmaking.app/mm-services/).
+To add other exchange support, see [https://marketmaking.app/cex-mm/mm-features/#add-more-exchanges](https://marketmaking.app/cex-mm/mm-features/#add-more-exchanges).
 
 # Usage and Installation
 

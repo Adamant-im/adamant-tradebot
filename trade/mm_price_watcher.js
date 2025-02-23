@@ -58,8 +58,8 @@ const tradeParams = require('./settings/tradeParams_' + config.exchange);
 const db = require('../modules/DB');
 const orderCollector = require('./orderCollector');
 const orderUtils = require('./orderUtils');
-const TraderApi = require('./trader_' + config.exchange);
 
+const TraderApi = require('./trader_' + config.exchange);
 const traderapi = TraderApi(
     config.apikey,
     config.apisecret,
@@ -70,6 +70,8 @@ const traderapi = TraderApi(
     config.exchange_socket,
     config.exchange_socket_pull,
 );
+
+const isPerpetual = Boolean(config.perpetual);
 
 let traderapi2;
 if (config.apikey2) {
@@ -404,7 +406,8 @@ module.exports = {
     if (
       interval &&
       tradeParams.mm_isActive &&
-      this.getIsPriceWatcherEnabled() // Checks also if MM_POLICIES_REGULAR policies
+      this.getIsPriceWatcherEnabled() && // Checks also if MM_POLICIES_REGULAR policies
+      !isPerpetual
     ) {
       if (isPreviousIterationFinished) {
         isPreviousIterationFinished = false;

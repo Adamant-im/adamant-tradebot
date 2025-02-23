@@ -9,10 +9,20 @@ const networks = {
     name: 'Optimism',
     sampleAddress: '0xe16d65d4b592c4fddaecb7363c276b68c5758e34',
   },
+  ARBINOVA: {
+    code: 'ARBINOVA',
+    name: 'Arbitrum Nova',
+    sampleAddress: '0x0123456789abcdef0123456789abcdef01234567',
+  },
   ARBITRUM: {
     code: 'ARBITRUM',
     name: 'Arbitrum',
     sampleAddress: '0xe16d65d4b592c4fddaecb7363c276b68c5758e34',
+  },
+  BASE: {
+    code: 'BASE',
+    name: 'Base Mainnet',
+    sampleAddress: '0x0123456789abcdef0123456789abcdef01234567',
   },
   BEP20: {
     code: 'BEP20',
@@ -30,10 +40,25 @@ const networks = {
     altcode: 'Ether',
     sampleAddress: '0xF110E32D351Cedba6400E85f3bfa308DC606e079',
   },
+  LINEA: {
+    code: 'LINEA',
+    name: 'LINEA',
+    sampleAddress: '0x0123456789abcdef0123456789abcdef01234567',
+  },
+  MANTLE: {
+    code: 'MANTLE',
+    name: 'Mantle Network',
+    sampleAddress: '0x0123456789abcdef0123456789abcdef01234567',
+  },
   'ZKSYNC-ERA': {
     code: 'ZKSYNC-ERA',
     name: 'zkSync Era',
     sampleAddress: '0xF110E32D351Cedba6400E85f3bfa308DC606e079',
+  },
+  ZKSYNC: {
+    code: 'ZKSYNC',
+    name: 'zkSync Lite',
+    sampleAddress: '0x0123456789abcdef0123456789abcdef01234567',
   },
   'AVAX-C-CHAIN': {
     code: 'AVAX-C-CHAIN',

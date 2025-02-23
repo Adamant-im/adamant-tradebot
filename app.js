@@ -25,7 +25,7 @@ function initServices() {
       initApi();
     }
   } catch (e) {
-    console.error(`${config.notifyName} is not started. Error: ${e}`);
+    console.error(`${config.notifyName} is not started. ${e}`);
     process.exit(1);
   }
 }
@@ -65,7 +65,7 @@ function startModules() {
       notify(`${config.notifyName} *started*${addressInfo} (${config.projectBranch}, v${config.version}).`, 'info');
     }
   } catch (e) {
-    console.error(`${config.notifyName} is not started. Error: ${e}`);
+    console.error(`${config.notifyName} is not started. ${e}`);
     process.exit(1);
   }
 }

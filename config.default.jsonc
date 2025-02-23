@@ -160,6 +160,23 @@
     "debug": false
   },
 
+  /**
+    Storage connection options for MongoDB.
+    https://mongodb.github.io/node-mongodb-native/6.5/interfaces/MongoClientOptions.html
+  **/
+  "db": {
+    "name": "tradebotdb",
+    "url": "mongodb://127.0.0.1:27017/",
+    "options": {
+      "serverSelectionTimeoutMS": 3000,
+      "serverApi": { // https://mongodb.github.io/node-mongodb-native/6.5/interfaces/ServerApi.html
+        "deprecationErrors": true,
+        "strict": true,
+        "version": "1"
+      }
+    }
+  },
+
   /** Minimal amount of USDT to confirm buy/sell/fill commands **/
   "amount_to_confirm_usd": 1000
 }
