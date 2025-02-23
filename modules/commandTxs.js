@@ -525,7 +525,7 @@ async function enable(params, _, isWebApi = false) {
         };
       }
       const rangeOrValue = utils.parseRangeOrValue(spreadString.slice(0, -1));
-      if (rangeOrValue.isValue) {
+      if (!rangeOrValue.isValue) {
         return {
           msgNotify: '',
           msgSendBack: 'Set correct ±depth%. Example: */enable liq 2% 1000 ADM 50 USDT uptrend*.',
@@ -537,7 +537,7 @@ async function enable(params, _, isWebApi = false) {
         if (rangeOrValue.value > 80) {
           return {
             msgNotify: '',
-            msgSendBack: 'Set correct ±depth%. Example: */enable liq 2% 1000 ADM 50 USDT ss uptrend*.',
+            msgSendBack: 'Set correct ±depth%. Example: */enable liq 2% 1000 ADM 50 USDT uptrend*.',
             notifyType: 'log',
           };
         }
