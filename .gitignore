@@ -10,7 +10,6 @@ config.jsonc
 test_*.js
 errcase.py
 error.list
-jsconfig.json
 balances.out
 trade/tests/debug_trader.js
 client.py

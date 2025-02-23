@@ -1,3 +1,8 @@
+/**
+ * @module helpers/cryptos/exchanger
+ * @typedef {import('types/bot/parsedMarket.d').ParsedMarket} ParsedMarket
+ */
+
 const config = require('../../modules/configReader');
 const tradeParams = require('../../trade/settings/tradeParams_' + config.exchange);
 const orderUtils = require('../../trade/orderUtils');
@@ -72,7 +77,7 @@ module.exports = {
    * @param {boolean} [considerExchangerFee=false] Whether to deduct fees (for the ADAMANT Exchanger bot)
    * @param {number} [specificRate] Convert using specific rate
    * @param {boolean} [validateSpecificRate=true] Whether to validate that specificRate differs from the global (Infoservice) no more, than allowed %.
-   * @return {number|number} or { NaN, NaN }
+   * @return {{ outAmount: number | NaN, exchangePrice: number | NaN }}
    */
   convertCryptos(from, to, amount = 1, considerExchangerFee = false, specificRate, validateSpecificRate = true) {
     const ALLOWED_GLOBAL_RATE_DIFFERENCE_PERCENT = 20;
@@ -185,25 +190,27 @@ module.exports = {
 
   /**
    * Estimates daily mm trading volume according to tradeParams
-   * @param maxAmount If to override tradeParams.mm_maxAmount
+   * @param {number} maxAmount If to override tradeParams.mm_maxAmount
    * @return {Object} Estimate mm trade volume in coin1, coin2, USD, USDT and BTC
    */
   estimateCurrentDailyTradeVolume(maxAmount) {
     try {
       maxAmount = maxAmount || tradeParams.mm_maxAmount;
+
       const midAmount = (tradeParams.mm_minAmount + maxAmount) / 2;
       const midInterval = (tradeParams.mm_minInterval + tradeParams.mm_maxInterval) / 2;
       const dailyTrades = constants.DAY / midInterval;
       const dailyVolumeCoin1 = midAmount * dailyTrades;
+
       return this.calcCoin1AmountInOtherCoins(dailyVolumeCoin1);
     } catch (e) {
-      log.error(`Error in estimateCurrentDailyTradeVolume() of ${utils.getModuleName(module.id)} module: ` + e);
+      log.error(`Error in estimateCurrentDailyTradeVolume() of ${utils.getModuleName(module.id)} module: ${e}`);
     }
   },
 
   /**
    * Calculates coin1 amount in coin1, coin2, USD, USDT and BTC
-   * @param coin1Amount Amount in coin1
+   * @param {number} coin1Amount Amount in coin1
    * @return {Object}
    */
   calcCoin1AmountInOtherCoins(coin1Amount) {
@@ -216,7 +223,7 @@ module.exports = {
         BTC: this.convertCryptos(config.coin1, 'BTC', coin1Amount).outAmount,
       };
     } catch (e) {
-      log.error(`Error in calcCoin1AmountInOtherCoins() of ${utils.getModuleName(module.id)} module: ` + e);
+      log.error(`Error in calcCoin1AmountInOtherCoins() of ${utils.getModuleName(module.id)} module: ${e}`);
     }
   },
 
@@ -237,20 +244,27 @@ module.exports = {
   },
 
   /**
-   * Creates volume change infoString
-   * @return {String}
+   * Creates daily estimate volume change infoString
+   * E.g., from 1 366.33663366 ADM (100 USDT) to 3 445.54455446 ADM (300 USDT)
+   * Uses default trading pair/contract
+   * @param {Object} oldVolume Trading volume before update
+   * @param {Object} newVolume Trading volume after update
+   * @return {string}
    */
   getVolumeChangeInfoString(oldVolume, newVolume) {
     try {
-      const coin1Decimals = orderUtils.parseMarket(config.pair).coin1Decimals;
-      const coin2Decimals = orderUtils.parseMarket(config.pair).coin2Decimals;
+      const formattedPair = /** @type {ParsedMarket} */ (orderUtils.parseMarket(config.defaultPair));
+      const coin1 = formattedPair.coin1;
+      const coin2 = formattedPair.coin2;
+      const coin1Decimals = formattedPair.coin1Decimals;
+      const coin2Decimals = formattedPair.coin2Decimals;
 
-      let infoString = `from ${utils.formatNumber(oldVolume.coin1.toFixed(coin1Decimals), true)} ${config.coin1} (${utils.formatNumber(oldVolume.coin2.toFixed(coin2Decimals), true)} ${config.coin2})`;
-      infoString += ` to ${utils.formatNumber(newVolume.coin1.toFixed(coin1Decimals), true)} ${config.coin1} (${utils.formatNumber(newVolume.coin2.toFixed(coin2Decimals), true)} ${config.coin2})`;
+      let infoString = `from ${utils.formatNumber(oldVolume.coin1.toFixed(coin1Decimals), true)} ${coin1} (${utils.formatNumber(oldVolume.coin2.toFixed(coin2Decimals), true)} ${coin2})`;
+      infoString += ` to ${utils.formatNumber(newVolume.coin1.toFixed(coin1Decimals), true)} ${coin1} (${utils.formatNumber(newVolume.coin2.toFixed(coin2Decimals), true)} ${coin2})`;
 
       return infoString;
     } catch (e) {
-      log.error(`Error in getVolumeChangeInfoString() of ${utils.getModuleName(module.id)} module: ` + e);
+      log.error(`Error in getVolumeChangeInfoString() of ${utils.getModuleName(module.id)} module: ${e}`);
     }
   },
 

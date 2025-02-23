@@ -110,6 +110,7 @@ module.exports = (
         allowAmountForMarketBuy: false,
         amountForMarketOrderNecessary: false,
         openOrdersCacheSec: 180, // P2PB2B exchange say cache time is ~5 sec, but it's not true. Real cache time is unknown.
+        partiallyFilledIsFilled: true, // Unable to determine if an order is filled or partially filled
       };
     },
 

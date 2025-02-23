@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "lib": [
+      "es5", "es6", "dom", "dom.iterable"
+    ],
+    "module": "Node16",
+    "moduleResolution": "Node16",
+    "paths": {
+      "types/*": ["./types/*"]
+    },
+    "target": "ES6"
+  },
+  "exclude": ["node_modules"],
+  "include": ["**/*.js"]
+}

@@ -304,8 +304,10 @@ module.exports = (
 
       try {
         if (data && !data.azbitErrorInfo) {
-          const orderTrades = data.deals;
+          // data.deals is not reliable. E.g., initialAmount: 10, amount: 5, but deals: []
+          // const orderTrades = data.deals;
 
+          // Response includes data.status: Created | Completed | PartiallyCompleted, but current approach seems more reliable
           let orderStatus;
           if (data.isCanceled) {
             orderStatus = 'cancelled';
@@ -317,23 +319,30 @@ module.exports = (
             orderStatus = 'part_filled';
           }
 
+          const price = data.price;
+          const amountExecuted = data.initialAmount - data.amount;
+
           const result = {
             orderId: data.id,
-            tradesCount: orderTrades.length,
+            tradesCount: null, // orderTrades.length is not reliable
+
+            price,
             amount: data.initialAmount,
             volume: data.quoteAmount,
-            pairPlain: pair_.pairPlain,
+            amountExecuted,
+            volumeExecuted: amountExecuted * price,
+
+            pairPlain: pair_.pairPlain, // The same as data.currencyPairCode, e.g., 'ADM_USDT'
             pairReadable: pair_.pairReadable,
             totalFeeInCoin2: undefined, // Azbit doesn't provide fee info
-            amountExecuted: 0, // In coin1
-            volumeExecuted: 0, // In coin2
+
+            side: data.isBid ? 'buy' : 'sell', // 'buy' or 'sell'
+            type: undefined, // 'limit', 'market', Azbit doesn't provide order type
+
+            timestamp: new Date(data.date + 'Z').getTime(), // '2024-06-26T06:12:14.8323632' -> 1719382334832 in milliseconds
+            updateTimestamp: undefined,
             status: orderStatus,
           };
-
-          orderTrades.forEach((trade) => {
-            result.amountExecuted += +trade.volume; // Finally should be as (initialAmount - amount)
-            result.volumeExecuted += +trade.volume * +trade.price;
-          });
 
           return result;
         } else {

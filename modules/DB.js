@@ -1,15 +1,18 @@
-const log = require('../helpers/log');
-const MongoClient = require('mongodb').MongoClient;
-const mongoClient = new MongoClient('mongodb://127.0.0.1:27017/', { serverSelectionTimeoutMS: 3000 });
-const model = require('../helpers/dbModel');
-const config = require('./configReader');
+'use strict';
 
-const dbName = 'tradebotdb';
+const config = require('./configReader');
+const log = require('../helpers/log');
+const { MongoClient } = require('mongodb');
+const model = require('../helpers/dbModel');
+
+const { name, url, options } = config.db;
+const mongoClient = new MongoClient(url, options);
+
 const collections = {};
 
 mongoClient.connect()
     .then((client) => {
-      const db = client.db(dbName);
+      const db = client.db(name);
 
       collections.db = db;
 
@@ -29,7 +32,7 @@ mongoClient.connect()
       collections.incomingTxsDb = model(incomingTxsCollection);
       collections.systemDb = model(db.collection('systems'));
 
-      log.log(`${config.notifyName} successfully connected to '${dbName}' MongoDB.`);
+      log.log(`${config.notifyName} successfully connected to '${name}' MongoDB.`);
     })
     .catch((error) => {
       log.error(`Unable to connect to MongoDB: ${error}`);
