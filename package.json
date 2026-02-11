@@ -39,7 +39,7 @@
   "license": "GPL-3.0",
   "dependencies": {
     "adamant-api": "^2.4.0",
-    "axios": "^1.11.0",
+    "axios": "^1.13.5",
     "deep-object-diff": "^1.1.9",
     "express": "^4.21.2",
     "fast-deep-equal": "^3.1.3",
