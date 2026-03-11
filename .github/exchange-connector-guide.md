@@ -303,8 +303,12 @@ module.exports = (
 
   exchangeApiClient.setConfig(apiServer, apiKey, secretKey, pwd, log, publicOnly);
 
+  // Load markets on init
   if (loadMarket) {
     getMarkets();
+    if (!publicOnly) {
+      getCurrencies(); // Only if auth endpoints needed
+    }
   }
 
   return {
