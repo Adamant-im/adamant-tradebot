@@ -49,6 +49,11 @@ trade/
 └── api/
     └── {exchange}_errors.js
 
+trade/tests/
+├── trader_{exchange}.test.js
+├── trader_{exchange}.mock.js
+└── manual.test.js
+
 types/
 └── {exchange}/...
 ```
@@ -114,6 +119,18 @@ If an optional capability is not implemented, expose that honestly in `features(
 ## Step 1: Build the Plain API Client
 
 **File**: `trade/api/{exchange}_api.js`
+
+### JSDoc is required
+
+For this repository, connector code should be documented with JSDoc in the same patch where it is added or changed.
+
+- Add JSDoc for all public functions
+- Add JSDoc for internal helper functions when their behavior is not obvious
+- Document all parameters with `@param`
+- Document return values with `@returns`
+- Reuse typedefs from `types/*.d.js` or `types/{exchange}/` where possible
+- Keep wording consistent with the repository writing style
+- Update JSDoc whenever function behavior, accepted inputs, or return shapes change
 
 This layer should only know exchange-specific HTTP details:
 
@@ -782,6 +799,11 @@ If such support is ever added to this repo later, document it separately after t
 ### Use JSDoc, but do not over-engineer it
 
 Document public methods and include links to the exchange docs when useful.
+
+- At minimum, every connector function should have a purpose line, `@param` entries for all parameters, and `@returns`
+- Parameter descriptions should explain semantics and constraints, not only the raw type
+- If a function returns `undefined` on failure, say that explicitly
+- If a function normalizes exchange-specific statuses or payload fields, document that mapping
 
 ### Prefer explicit validation over permissive fallbacks
 

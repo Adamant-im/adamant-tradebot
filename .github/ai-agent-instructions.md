@@ -16,9 +16,20 @@ These repository-specific instructions extend the broader ADAMANT organization c
 
 ### Writing style
 
-- In bullet and numbered lists, do not add a trailing period when an item contains one sentence
+- In JSDoc param descriptions, bullet and numbered lists, do not add a trailing period when an item contains one sentence
 - If an item contains two or more sentences, end every sentence with a period
 - Prefer concise, operational wording over marketing language
+
+### JSDoc policy
+
+- Write JSDoc for functions you add or materially change
+- Document every function's purpose, parameters, and return value
+- Add `@param` entries for all parameters and describe meaningful value semantics, not only types
+- Add `@returns` when the return shape is not trivially obvious from the code
+- Reuse existing typedefs from `types/*.d.js` when possible instead of inventing ad hoc inline object descriptions
+- Keep JSDoc aligned with the repository's existing style and current behavior
+- When behavior changes, update the JSDoc in the same patch
+- Use Writing style guidelines
 
 ### Sources of truth
 
@@ -121,6 +132,15 @@ The current open-source version is intentionally narrower than the commercial pr
 - Database: MongoDB
 - API server: Express for debug and health routes
 - Typing style: JSDoc with `.d.js` files under `types/`
+
+## Documentation Expectations in Code
+
+JSDoc is the main documentation and typing mechanism in this repository.
+
+- Prefer documented functions over undocumented ones when touching code
+- Keep `@param`, `@returns`, and typedef references synchronized with implementation
+- For exchange adapters, document normalization rules and important status mappings
+- For helper functions with non-obvious behavior, document units, accepted formats, and failure behavior
 
 ## What Actually Starts
 
