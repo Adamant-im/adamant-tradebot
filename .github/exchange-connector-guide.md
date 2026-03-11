@@ -29,13 +29,13 @@ The goal is a small, reliable connector that works with the existing market-maki
 ```text
 trade/
 ├── trader_{exchange}.js
-└── api/
-    └── {exchange}_api.js
-│   ├── {exchange}_errors.js          # HTTP and exchange error code maps (RECOMMENDED)
+├── api/
+│   ├── {exchange}_api.js
+│   └── {exchange}_errors.js          # HTTP and exchange error code maps (RECOMMENDED)
 ├── tests/
 │   ├── trader_{exchange}.test.js     # Automated Jest tests
 │   ├── trader_{exchange}.mock.js     # Mock data for tests
-│   └── manual.test.js               # Manual test runner (shared)
+│   └── manual.test.js                # Manual test runner (shared)
 └── settings/
     └── tradeParams_{exchange}.js     # Exchange-specific param overrides (OPTIONAL)
 ```
