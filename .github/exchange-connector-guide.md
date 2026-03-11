@@ -4,6 +4,8 @@
 
 Read `ai-agent-instructions.md` first.
 
+Organization-wide governance rules from the ADAMANT org also apply here, especially English-only repository artifacts, issue and PR conventions, label policy, and linked governance references.
+
 ## Scope
 
 This guide describes the preferred baseline for the open-source branch: a basic **spot REST** connector.

@@ -4,6 +4,90 @@
 
 **Language policy**: Developers may talk to the agent in any language, but code, comments, docs, and commit messages must stay in English.
 
+## Organization-Wide Rules
+
+These repository-specific instructions extend the broader ADAMANT organization conventions rather than replace them.
+
+### English-only repository artifacts
+
+- Developers may communicate with AI in any language
+- All repository artifacts must be in English only
+- Write code, comments, docs, issue text, PR text, commit messages, and release notes in English
+
+### Writing style
+
+- In bullet and numbered lists, do not add a trailing period when an item contains one sentence
+- If an item contains two or more sentences, end every sentence with a period
+- Prefer concise, operational wording over marketing language
+
+### Sources of truth
+
+Use these sources when making changes or preparing repository-facing text:
+
+- This repository's current code, configuration, and passing tests
+- The ADAMANT organization governance repository: [Adamant-im/.github](https://github.com/Adamant-im/.github)
+- Recommended issue title prefixes: [Adamant-im discussion 5](https://github.com/orgs/Adamant-im/discussions/5)
+- Recommended labels for issues and discussions: [Adamant-im discussion 1](https://github.com/orgs/Adamant-im/discussions/1)
+- ADAMANT documentation: [docs.adamant.im](https://docs.adamant.im)
+- AIPs: [aips.adamant.im](https://aips.adamant.im) and [Adamant-im/AIPs](https://github.com/Adamant-im/AIPs)
+
+If sources disagree, prefer current repository behavior and passing tests as implementation truth, then document the mismatch instead of silently choosing a different rule.
+
+### Issue workflow
+
+When drafting issue text, titles, or recommendations for contributors:
+
+1. Search for existing issues first to avoid duplicates
+2. Prefer the organization issue forms when they are available
+3. Use a concise prefixed issue title
+4. Apply labels from the org label catalog, not ad hoc names
+5. Link related issues and PRs explicitly
+
+### Issue title prefixes
+
+Use one or two prefixes maximum.
+
+Common prefixes:
+
+- `[Bug]` for bugs, crashes, and unexpected behavior
+- `[Feat]` for new functionality
+- `[Enhancement]` for improvements without a brand new feature
+- `[Refactor]` for refactoring without intended behavior changes
+- `[Docs]` for documentation work
+- `[Test]` for test additions or test improvements
+- `[Chore]` for maintenance, tooling, dependencies, or CI work
+
+Additional useful prefixes in the ADAMANT organization:
+
+- `[Task]` for general tasks
+- `[Composite]` for multi-part work with sub-tasks
+- `[UX/UI]` for interface and user-experience work
+- `[Proposal]`, `[Idea]`, `[Discussion]` for idea-level topics that are often better suited for Discussions than Issues
+
+### Label policy
+
+- `labels.json` in the organization governance repository is the source of truth for label names, casing, descriptions, and colors
+- Keep default GitHub labels lowercase, such as `bug`, `enhancement`, and `documentation`
+- Keep custom organization labels capitalized when the org uses capitalized names, such as `Security`, `Privacy`, `Task`, `Composite task`, and `UX/UI`
+- For most issues, use a small but informative set: one type label, one or more domain labels, and an optional priority label when justified
+- Do not invent legacy workflow labels for tracking state when GitHub Projects already owns that workflow
+
+### PR conventions
+
+- Use the organization PR template sections when preparing PR text
+- Reference related issues with closing keywords when appropriate, for example `Closes #123`
+- Use Conventional Commit style for PR titles, for example `Docs: Update AI instructions`
+- Do not use issue-style square-bracket prefixes in PR titles
+- Keep PR title type aligned with the nature of the change, such as `Docs:`, `Fix:`, `Feat:`, `Refactor:`, `Test:`, or `Chore:`
+- Include testing or verification steps and mention meaningful risk areas
+
+### Common governance links
+
+- Governance repository: [Adamant-im/.github](https://github.com/Adamant-im/.github)
+- Prefix guidance: [Adamant-im discussion 5](https://github.com/orgs/Adamant-im/discussions/5)
+- Label guidance: [Adamant-im discussion 1](https://github.com/orgs/Adamant-im/discussions/1)
+- ADAMANT docs: [docs.adamant.im](https://docs.adamant.im)
+
 ## Scope
 
 This repository is the open-source base version of the bot.
