@@ -63,7 +63,7 @@ After installation, you control the bot directly via a secure ADAMANT Messenger 
 
 * Ubuntu 20+, centOS 8+ (we didn't test others)
 * NodeJS v18+
-* MongoDB ([installation instructions](https://docs.mongodb.com/manual/tutorial/install-mongodb-on-ubuntu/))
+* MongoDB ([installation instructions](https://www.mongodb.com/docs/manual/tutorial/install-mongodb-on-ubuntu/))
 
 ## Setup
 
