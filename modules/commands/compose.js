@@ -227,9 +227,9 @@ async function composeLiquidityStats(pairRaw) {
 
     rows.push([
       `VWAP, ${coin2}`,
-      stats.boughtVwap > 0 ? stats.boughtVwap.toFixed(coin2Decimals) : '—',
-      stats.soldVwap > 0 ? stats.soldVwap.toFixed(coin2Decimals) : '—',
-      stats.hasBothSides ? utils.signedNumber(stats.vwapSpread, coin2Decimals) : '—',
+      stats?.boughtVwap > 0 ? stats.boughtVwap.toFixed(coin2Decimals) : '—',
+      stats?.soldVwap > 0 ? stats.soldVwap.toFixed(coin2Decimals) : '—',
+      stats?.hasBothSides ? utils.signedNumber(stats.vwapSpread, coin2Decimals) : '—',
     ]);
 
     rows.push([
@@ -635,15 +635,15 @@ async function composeTraderOrdersFull(pairRaw) {
     ],
     [
       `VWAP, ${coin2}`,
-      tFillStats.boughtVwap > 0 ? tFillStats.boughtVwap.toFixed(coin2Decimals) : '—',
-      tFillStats.soldVwap > 0 ? tFillStats.soldVwap.toFixed(coin2Decimals) : '—',
-      tFillStats.hasBothSides ? utils.signedNumber(tFillStats.vwapSpread, coin2Decimals) : '—',
+      tFillStats?.boughtVwap > 0 ? tFillStats.boughtVwap.toFixed(coin2Decimals) : '—',
+      tFillStats?.soldVwap > 0 ? tFillStats.soldVwap.toFixed(coin2Decimals) : '—',
+      tFillStats?.hasBothSides ? utils.signedNumber(tFillStats.vwapSpread, coin2Decimals) : '—',
     ],
     [
       'MTM PnL',
       '',
       '',
-      typeof tFillStats.pnlQuoteMtm === 'number' ?
+      typeof tFillStats?.pnlQuoteMtm === 'number' ?
         `${utils.signedNumber(tFillStats.pnlQuoteMtm, coin2DecimalsForStable)} ${coin2}` +
           (!utils.isStableCoin(coin2) && Number.isFinite(tFillStats.pnlUsdMtm) ?
             ` (${utils.signedNumber(tFillStats.pnlUsdMtm, 2)} USD)` :
