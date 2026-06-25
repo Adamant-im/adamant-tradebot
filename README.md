@@ -31,12 +31,12 @@ Market-making helps:
 
 # Supported exchanges (Basic MM bot)
 
-* [Azbit](https://azbit.com?referralCode=9YVWYAF)
+* [Azbit](https://azbit.com)
 * [P2PB2B](https://p2pb2b.com)
-* [StakeCube](https://stakecube.net/?team=adm)
+* [StakeCube](https://stakecube.net)
 * [Coinstore](https://coinstore.com)
 * [FameEX](https://www.fameex.com)
-* [NonKYC](https://nonkyc.io/?ref=655b4df9eb13acde84677358)
+* [NonKYC](https://nonkyc.io)
 
 # Premium features and exchange support
 
