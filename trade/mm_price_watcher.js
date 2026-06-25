@@ -942,13 +942,14 @@ async function setPriceRange() {
 
         let crossMarketBid; let crossMarketAsk;
 
-        // Try direct rate
-        let crossMarketPair = `${coin2}/${targetPairObj.coin2}`; // E.g., USDT/BTC
+        const directCrossMarketPair = `${targetPairObj.coin2}/${coin2}`; // E.g., USDT/BTC for USDT -> BTC conversion
+
+        // Try inverted pair first (e.g., BTC/USDT), then direct (e.g., USDT/BTC)
+        let crossMarketPair = `${coin2}/${targetPairObj.coin2}`;
         let crossMarket = /** @type {ParsedMarket} */ (orderUtils.parseMarket(crossMarketPair, targetExchange, true));
 
         if (!crossMarket.isParsed || crossMarket.isReversed) { // Consider the DEX's isReversed as no market found, as we try the inversed rate especially
-          // Try inversed rate
-          crossMarketPair = `${targetPairObj.coin2}/${coin2}`; // USDT/BTC -> BTC/USDT
+          crossMarketPair = directCrossMarketPair;
           crossMarket = /** @type {ParsedMarket} */ (orderUtils.parseMarket(crossMarketPair, targetExchange, true));
         }
 
@@ -969,10 +970,16 @@ async function setPriceRange() {
           priceRangeInfoString += `Found rates for the ${crossMarketPair} cross-pair at ${targetExchange} exchange: bid is ${crossMarketBid.toFixed(crossMarket.coin2Decimals)}, ask is ${crossMarketAsk.toFixed(crossMarket.coin2Decimals)} (${crossMarketSpread.toFixed(2)}% spread).`;
           priceRangeInfoString += ` Using these rates for ${targetPairObj.coin2} -> ${coin2} conversion.`;
 
-          l = exchangerUtils.convertCryptos(targetPairObj.coin2, coin2, bidPriceInTargetCoin, false, crossMarketBid)
-              .outAmount; // E.g., 0.00000047 BTC -> 0.0302 USDT
-          h = exchangerUtils.convertCryptos(targetPairObj.coin2, coin2, askPriceInTargetCoin, false, crossMarketAsk)
-              .outAmount; // E.g., 0.00000049 BTC -> 0.0316 USDT
+          const isDirectCrossMarket = crossMarketPair === directCrossMarketPair;
+          // Rates from a direct pair (USDT/BTC) are already in targetPairObj.coin2/coin2 terms.
+          // Rates from an inverted pair (BTC/USDT) must be inverted; swap bid/ask accordingly.
+          const convertRateForBid = isDirectCrossMarket ? crossMarketBid : 1 / crossMarketAsk;
+          const convertRateForAsk = isDirectCrossMarket ? crossMarketAsk : 1 / crossMarketBid;
+
+          l = exchangerUtils.convertCryptos(targetPairObj.coin2, coin2, bidPriceInTargetCoin, false, convertRateForBid)
+              .outAmount; // E.g., 1.09 USDT -> 0.00001819 BTC
+          h = exchangerUtils.convertCryptos(targetPairObj.coin2, coin2, askPriceInTargetCoin, false, convertRateForAsk)
+              .outAmount; // E.g., 1.10 USDT -> 0.00001837 BTC
         } else {
           // Case 1B.g: Neither direct nor reversed cross-market pairs exist on the target exchange
           // Convert `targetExchange.coin2` → `config.coin2` using global rates (less accurate, no additional conversion validation)
