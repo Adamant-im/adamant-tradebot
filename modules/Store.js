@@ -1,14 +1,31 @@
+/**
+ * @module modules/Store
+ * @typedef {import('types/bot/store.d.js').StoreModule} StoreModule
+ * @typedef {import('types/bot/store.d.js').SystemDbRecord} SystemDbRecord
+ */
+
 const db = require('./DB');
 const log = require('../helpers/log');
 const utils = require('../helpers/utils');
 
+const adamantApi = require('../modules/adamantApi');
+
+const moduleId = /** @type {NodeJS.Module} */ (module).id;
+const moduleName = utils.getModuleName(moduleId);
+
+log.log(`Module ${moduleName} is loaded.`);
+
+/** @type {StoreModule} */
 module.exports = {
   lastProcessedBlockHeight: undefined,
 
   /**
-   * Returns the lastProcessedBlockHeight
-   * If the bot runs the first time, stores the current blockchain height as the lastProcessedBlockHeight
-   * @returns {number|undefined}
+   * Returns the last processed ADM block height.
+   *
+   * Used by `admTxChecker`. On the first run, reads the current chain height
+   * from the ADAMANT API and stores it so only new blocks are scanned afterward.
+   *
+   * @returns {Promise<number | undefined>}
    */
   async getLastProcessedBlockHeight() {
     try {
@@ -16,48 +33,57 @@ module.exports = {
         return this.lastProcessedBlockHeight;
       }
 
-      // Try getting the lastProcessedBlockHeight from the DB
       const systemDbData = await db.systemDb.findOne();
 
       if (systemDbData?.lastProcessedBlockHeight) {
         this.lastProcessedBlockHeight = systemDbData.lastProcessedBlockHeight;
+        log.log(`Store: Loaded last processed ADM block height ${this.lastProcessedBlockHeight} from the database.`);
       } else {
-        // The bot runs the first time
-        const exchangerUtils = require('../helpers/cryptos/exchanger');
-        const lastBlock = await exchangerUtils.ADM.getLastBlockHeight();
+        const api = adamantApi();
+        const response = await api.getHeight();
 
-        if (lastBlock) {
-          await this.updateSystemDbField('lastProcessedBlockHeight', lastBlock);
+        if (response.success) {
+          log.log(
+              `Store: First run detected; saving the current ADM blockchain height ` +
+              `(${response.height}) as the last processed block.`,
+          );
+          await this.updateSystemDbField('lastProcessedBlockHeight', response.height);
         } else {
-          log.warn(`Store: Unable to get the last ADM block from the blockchain, the request result is ${JSON.stringify(lastBlock)}. Will try next time.`);
+          log.warn(
+              `Store: Unable to retrieve the current ADM blockchain height; ` +
+              `API response: '${JSON.stringify(response)}'. Retrying on the next iteration.`,
+          );
         }
       }
 
       return this.lastProcessedBlockHeight;
-    } catch (e) {
-      log.error(`Error in getLastProcessedBlockHeight() of ${utils.getModuleName(module.id)} module: ${e}`);
+    } catch (error) {
+      log.error(`Error in getLastProcessedBlockHeight() of the ${moduleName} module: ${error}`);
     }
   },
 
   /**
-   * Loads data from the systemsDb
-   * @param {string} field Field name
-   * @returns {any}
+   * Reads one field from the `systems` collection.
+   *
+   * @param {string} field Database field name
+   * @returns {Promise<any>}
    */
   async getSystemDbField(field) {
     try {
       const systemDbData = await db.systemDb.findOne();
 
       return systemDbData?.[field];
-    } catch (e) {
-      log.error(`Error in getLiqLimits() of ${utils.getModuleName(module.id)} module: ${e}`);
+    } catch (error) {
+      log.error(`Error in getSystemDbField('${field}') of the ${moduleName} module: ${error}`);
     }
   },
 
   /**
-   * Stores the data into the systemDb and updates the local variable
-   * @param {string} field Field name
-   * @param {any} data Data to store
+   * Persists a field to `systems` and mirrors it on the in-memory store object.
+   *
+   * @param {string} field Database field name
+   * @param {any} data Value to store
+   * @returns {Promise<void>}
    */
   async updateSystemDbField(field, data) {
     try {
@@ -67,20 +93,20 @@ module.exports = {
       await db.systemDb.db.updateOne({}, { $set }, { upsert: true });
 
       this[field] = data;
-    } catch (e) {
-      log.error(`Error in updateSystemDbField() of ${utils.getModuleName(module.id)} module: ${e}`);
+    } catch (error) {
+      log.error(`Error in updateSystemDbField('${field}') of the ${moduleName} module: ${error}`);
     }
   },
 
   /**
-   * Stores the lastProcessedBlockHeight into the systemDb
-   * @param {number} height Block height
+   * Advances the ADM block cursor when a higher confirmed height is observed.
+   *
+   * @param {number} height Block height from a processed transaction
+   * @returns {Promise<void>}
    */
   async updateLastProcessedBlockHeight(height) {
-    if (height) {
-      if (!this.lastProcessedBlockHeight || height > this.lastProcessedBlockHeight) {
-        await this.updateSystemDbField('lastProcessedBlockHeight', height);
-      }
+    if (height && height > (this.lastProcessedBlockHeight ?? 0)) {
+      await this.updateSystemDbField('lastProcessedBlockHeight', height);
     }
   },
 };

@@ -1,110 +1,132 @@
-ADAMANT’s market-making bot is software that enables trading on cryptocurrency exchanges. It helps generate trading volume, maintain spread and liquidity, set price ranges, and build a live-like dynamic order book.
+ADAMANT Market-making bot is self-hosted software that runs trades on crypto exchanges, generates trading volume, maintains spread and liquidity, sets price ranges, and builds live-like dynamic order books.
 
 This is the free version — suitable for small crypto projects with low liquidity, traded on centralized exchanges from the open list.
 
 For premium features, see [https://marketmaking.app/cex-mm/mm-features](https://marketmaking.app/cex-mm/mm-features/).
 
-# Market-making bot
-
-In Market-making mode, the bot automatically places and executes orders to generate trading volume, maintain spread and liquidity, build live-like dynamic order books, and track token prices. Market making is useful for:
+Market-making helps:
 
 * Cryptocurrency projects (token issuers)
 * Cryptocurrency exchanges
-
-See [marketmaking.app](https://marketmaking.app) to explore the bot’s full list of features.
 
 ![Trading chart](./assets/Making-chart.png)
 
 ![Market Making & OrderBook Building](./assets/OrderBook-Builder.gif)
 
-# Profit trading
+# Features (Basic MM bot)
 
-Profit Trading is a mode where the bot executes orders based on a chosen strategy. For profit-trading functionality, see our other software—[CoinOptimus](https://github.com/Adamant-im/adamant-coinoptimus).
-
-# Features
-
+* Self-hosted — never share your exchange API keys
 * Easy to install and configure
-* Initial fill order books
-* Dynamic order book building
+* Initial order book filling
+* Dynamic order book building (basic)
+* Watch order books and eliminate gaps
 * Place buy and sell limit or market orders
-* Market making with 4 policies: spread, orderbook, optimal, and depth
-* Spread & liquidity/depth maintenance
-* Price range setting
-* Arbitrage token price on other trade pairs or exchanges
-* Managed with your commands using ADAMANT Messenger
+* Trading volume with four policies: spread, orderbook, optimal, and depth
+* Spread and liquidity/depth maintenance (basic)
+* Price range settings
+* Arbitrage token price across trade pairs or exchanges
+* Account info: fees and daily volume
+* Command aliases
+* Managed via ADAMANT Messenger, Telegram, or WebUI
 
-## Premium features
+# Supported exchanges (Basic MM bot)
 
-For premium features, see [https://marketmaking.app/cex-mm/mm-features](https://marketmaking.app/cex-mm/mm-features/).
-
-# Supported exchanges
-
-In the free version, the bot supports the following exchanges out of the box:
-
+* [Azbit](https://azbit.com)
 * [P2PB2B](https://p2pb2b.com)
-* [Azbit](https://azbit.com?referralCode=9YVWYAF)
-* [StakeCube](https://stakecube.net/?team=adm)
-* [Coinstore](https://h5.coinstore.com/h5/signup?invitCode=o951vZ)
-* [FameEX](https://www.fameex.com/en-US/commissiondispense?code=MKKAWV)
-* [NonKYC](https://nonkyc.io?ref=655b4df9eb13acde84677358)
-* More exchanges available in the premium version
+* [StakeCube](https://stakecube.net)
+* [Coinstore](https://coinstore.com)
+* [FameEX](https://www.fameex.com)
+* [NonKYC](https://nonkyc.io)
 
-To add support for other exchanges, see [https://marketmaking.app/cex-mm/mm-features/#add-more-exchanges](https://marketmaking.app/cex-mm/mm-features/#add-more-exchanges).
+# Premium features and exchange support
 
-# Usage and Installation
+For premium features and using the MM bot on any CEX, see [MM Bot Features](https://marketmaking.app/cex-mm/mm-features/).
 
-After installation, you control the bot directly via a secure ADAMANT Messenger chat. The bot is fully self-hosted.
+# Usage and installation
 
-[Installation and usage guide](https://marketmaking.app/cex-mm/installation/).
+After installation, you control the bot in a secure ADAMANT Messenger chat. The bot is self-hosted.
 
-[Command reference](https://marketmaking.app/cex-mm/command-reference/).
+For additional bot management options, including Telegram, CLI and Web UI access, request a manager account at https://marketmaking.app.
+
+* [Installation and usage guide](https://marketmaking.app/cex-mm/installation/)
+* [Command reference](https://marketmaking.app/cex-mm/command-reference/)
 
 ## Requirements
 
-* Ubuntu 20+, centOS 8+ (we didn't test others)
-* NodeJS v18+
-* MongoDB ([installation instructions](https://www.mongodb.com/docs/manual/tutorial/install-mongodb-on-ubuntu/))
+* Ubuntu 20+ or CentOS 8+ (other Linux distros may work but are not tested)
+* Node.js v22.2+
+* npm v9+
+* MongoDB ([installation instructions](https://www.mongodb.com/docs/manual/administration/install-community/)
 
 ## Setup
 
-```
+```bash
 su - adamant
 git clone https://github.com/Adamant-im/adamant-tradebot
-cd ./adamant-tradebot
+cd adamant-tradebot
 npm i
 ```
 
 ## Pre-launch tuning
 
-The bot will use `config.jsonc` if available, or `config.default.jsonc` otherwise.
+The bot uses `config.jsonc` if present, otherwise `config.default.jsonc`.
+For named configs, use `config.<name>.jsonc` and pass `<name>` as a launch argument.
 
-```
+```bash
 cp config.default.jsonc config.jsonc
 nano config.jsonc
 ```
 
-Parameters: see comments in `config.jsonc`.
+Parameter descriptions are in comments inside `config.jsonc` (Use only parameters for modules included in the basic MM bot).
 
 ## Launching
 
-You can start the bot with the `node app` command, but it is recommended to run it under a process manager:
+You can start the bot with `node app.js`, but a process manager is recommended.
 
+### NPM scripts
+
+```bash
+npm start                               # config.default.jsonc or config.jsonc
+npm run start:config -- <name>          # config.<name>.jsonc
+npm run start:dev                       # config.dev.jsonc
+npm run clear                           # clear DB for default config
+npm run clear:config -- <name> clear_db # clear DB for config.<name>.jsonc
 ```
+
+### PM2
+
+```bash
 pm2 start app.js --name tradebot
 ```
 
-Remember to add tradebot to `pm2 startup` or cron.
+With a named config:
+
+```bash
+pm2 start app.js --name tradebot-p2b -- p2b_mmtest
+```
+
+Add the process to `pm2 startup` or cron so it restarts on reboot.
 
 ## Updating
 
-```
+```bash
 su - adamant
-cd ./adamant-tradebot
+cd adamant-tradebot
 pm2 stop tradebot
 git pull
 npm i
 ```
 
-Revise `config.jsonc` if `config.default.jsonc` changed.
+If `config.default.jsonc` changed, merge new fields into your `config.jsonc`.
 
-Then `pm2 restart tradebot`.
+Then:
+
+```bash
+pm2 restart tradebot
+```
+
+## Tests
+
+See [CONTRIBUTING.md — Tests](CONTRIBUTING.md#tests) for Jest suites, interactive simulators, and live exchange scripts.
+
+**Do not run `npm test` without arguments** — use scoped scripts (`npm run test:general`, `test:features`, `test:api-webui`, `test:trader`) or pass an explicit file path.

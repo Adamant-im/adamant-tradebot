@@ -1,0 +1,9 @@
+{
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "typescript.enablePromptUseWorkspaceTsdk": true,
+  "github.copilot.chat.codeGeneration.instructions": [
+    {
+      "file": ".github/ai-agent-instructions.md"
+    }
+  ]
+}

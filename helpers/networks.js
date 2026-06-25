@@ -1,3 +1,18 @@
+'use strict';
+
+/**
+ * Blockchain network metadata keyed by canonical network code.
+ * Used for address validation hints and display names across exchanges.
+ *
+ * @module helpers/networks
+ */
+
+/**
+ * @typedef {import('types/bot/helpers.d.js').NetworkInfo} NetworkInfo
+ * @typedef {import('types/bot/helpers.d.js').NetworksMap} NetworksMap
+ */
+
+/** @type {NetworksMap} */
 const networks = {
   TRC20: {
     code: 'TRC20',
@@ -172,6 +187,31 @@ const networks = {
     code: 'BRC20',
     name: 'Ordinals',
     sampleAddress: 'bc1pxaneaf3w4d27hl2y93fuft2xk6m4u3wc4rafevc6slgd7f5tq2dqyfgy06',
+  },
+  UNICHAIN: {
+    code: 'UNICHAIN',
+    name: 'Unichain',
+    sampleAddress: '0xF110E32D351Cedba6400E85f3bfa308DC606e079',
+  },
+  XT20: {
+    code: 'XT20',
+    name: 'XT Smart Chain',
+    sampleAddress: '0x0BbFb5508E3c3caC6cd65D91D328c23f99E1ACf0',
+  },
+  GT20: {
+    code: 'GT20',
+    name: 'Gate Chain',
+    sampleAddress: '0x4151ab5072198d0843cd2999590ef292f49d6c66',
+  },
+  TON: {
+    code: 'TON',
+    name: 'Telegram Open Network',
+    sampleAddress: 'EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs',
+  },
+  APT: {
+    code: 'APT',
+    name: 'Aptos',
+    sampleAddress: '0x357b0b74bc833e95a115ad22604854d6b0fca151cecd94111770e5d6ffc9dc2b',
   },
 };
 

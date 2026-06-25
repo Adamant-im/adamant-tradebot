@@ -1,9 +1,20 @@
-const { Router } = require('express');
+'use strict';
 
-const router = new Router();
+/**
+ * @module routes/health
+ * Health check route (`GET /ping`).
+ */
 
-router.get('/ping', (req, res) => {
-  res.status(200).send({ timestamp: Date.now() });
-});
+/**
+ * Registers health routes on a Fastify instance.
+ *
+ * @param {import('fastify').FastifyInstance} fastify Parent Fastify instance
+ * @returns {Promise<void>}
+ */
+async function healthRoutes(fastify) {
+  fastify.get('/ping', async () => ({
+    timestamp: Date.now(),
+  }));
+}
 
-module.exports = router;
+module.exports = healthRoutes;

@@ -1,10 +1,17 @@
 /**
- * Helpers for order processing
- */
-
-/**
+ * Helpers for order processing.
+ *
  * @module trade/orderUtils
  * @typedef {import('types/bot/parsedMarket.d').ParsedMarket} ParsedMarket
+ * @typedef {import('../types/bot/checkBalanceReq.d').CheckBalanceRequest} CheckBalanceRequest
+ * @typedef {import('types/depth.d').DepthResult} DepthResult
+ * @typedef {import('types/assets.d').Result} AssetsResult
+ * @typedef {import('types/assets.d').ResultWithTimestamp} AssetsResultWithTimestamp
+ * @typedef {import('types/bot/orderMetrics.d.js').FillsByPurposeMap} FillsByPurposeMap
+ * @typedef {import('types/bot/orderMetrics.d.js').FillsDbRecord} FillsDbRecord
+ * @typedef {import('types/bot/orderMetrics.d').FillOrder} FillOrder
+ * @typedef {import('types/bot/ordersDb.d.js').BotOrderDbRecord} BotOrderDbRecord
+ * @typedef {import('types/bot/perpetualApi.d.js').GetPerpetualApi} GetPerpetualApi
  */
 
 const constants = require('../helpers/const');
@@ -22,18 +29,37 @@ const traderapi = require('./trader_' + config.exchange)(
     config.exchange_socket,
     config.exchange_socket_pull,
 );
+
 const db = require('../modules/DB');
 const tradeParams = require('./settings/tradeParams_' + config.exchange);
+const balancesHistory = require('../helpers/balancesHistory');
 
-const perpetualApi = undefined;
+// Optional: modules/perpetualApi.js — loaded via softRequire; used only when config.perpetual is set
+const perpetualEnabled = Boolean(config.perpetual);
+const perpetualApiModule = './../modules/perpetualApi'; // Optional: omitted in trimmed/free bot builds
+/** @type {GetPerpetualApi | undefined} */
+const getPerpetualApi = utils.softRequire(perpetualApiModule, __filename);
+let perpetualApi;
+if (perpetualEnabled && getPerpetualApi) {
+  perpetualApi = getPerpetualApi();
+}
 
 // Cache is stored for the first trading account only
 let openOrdersCached = [];
-const openOrdersValidMs = 1000;
+const openOrdersValidMs = constants.REST_DATA_CACHE_MS;
 let orderBookCached = [];
-const orderBookCachedValidMs = 1000;
+const orderBookCachedValidMs = constants.REST_DATA_CACHE_MS;
 let balancesCached = { timestamp: 0, data: [] };
-const balancesCachedValidMs = 1000;
+const balancesCachedValidMs = constants.REST_DATA_CACHE_MS;
+
+// Conditions for a falsely empty order list
+const SUSPICIOUS_PRICE_DELTA_PERCENT = 20;
+const SUSPICIOUS_ORDER_COUNT = 5;
+const SUSPICIOUS_TOTAL_USD = config.amount_to_confirm_usd || 500;
+const SUSPICIOUS_RECENT_CHECKTIME = 5 * constants.MINUTE;
+
+const lastOrdersSnapshot = {};
+let lastNotifyFalsyEmptyOrdersTs = 0;
 
 const moduleId = /** @type {NodeJS.Module} */ (module).id;
 const moduleName = utils.getModuleName(moduleId);
@@ -42,22 +68,22 @@ module.exports = {
   readableModuleName: 'orderUtils',
 
   /**
-   * Returns cross-type order
-   * @param {string} type Order type, 'buy' | 'sell'
+   * Returns cross-side order direction
+   * @param {string} side Order side, 'buy' | 'sell'
    * @return {'buy' | 'sell'}
    */
-  crossType(type) {
-    return type === 'buy' ? 'sell' : 'buy';
+  crossSide(side) {
+    return side === 'buy' ? 'sell' : 'buy';
   },
 
   /**
-   * Returns position type
-   * @param {string} type Position familiar type, 'buy' | 'sell'
+   * Returns financial position side using trade side, 'buy' or 'sell' -> 'long' or 'short'
+   * @param {string} side Position familiar side, 'buy' | 'sell'
    * @param {boolean} [capitalize=false] long -> Long
    * @return {'long' | 'short' | 'Long' | 'Short'}
    */
-  positionType(type, capitalize = false) {
-    if (type === 'buy') {
+  positionSide(side, capitalize = false) {
+    if (side === 'buy') {
       return capitalize ? 'Long' : 'long';
     } else {
       return capitalize ? 'Short' : 'short';
@@ -70,34 +96,36 @@ module.exports = {
    * E.g., Sell 2 BTC for 80,000 USDT on BTCUSDT
    * Works with Spot and Contracts, and the second trading account
    * Note: the function supposes that a pair/contract is valid and exists on exchange, and doesn't check it
-   * @param {string} type Order type, 'buy' | 'sell'
-   * @param {string | ParsedMarket} pair ADM/USDT, ADMUSDT, or formattedPair from parseMarket()
-   * @param {number} [base] (When selling) Check if an account have enough base coin balance, 2 BTC
-   * @param {number} [quote] (When buying) Check if an account have enough quote coin balance, 80000 USDT
+   * @param {string} side Order side, 'buy' | 'sell'
+   * @param {string | ParsedMarket} pairFp ADM/USDT, ADMUSDT, or formattedPair from parseMarket()
+   * @param {number} base (When selling) Check if an account have enough base coin balance, 2 BTC
+   * @param {number} quote (When buying) Check if an account have enough quote coin balance, 80000 USDT
    * @param {string} purpose Order purpose, e.g. 'pm', virtual order, 'fill', 'ld2'. For logging and send back message.
-   * @param {string} [additionalInfo=''] E.g., ' to achieve 10.00 USDT price' or ' with 15 ladder index'. With leading space, no ending dot. For logging and send back message.
+   * @param {string} additionalInfo='' E.g., ' to achieve 10.00 USDT price' or ' with 15 ladder index'. With leading space, no ending dot. For logging and send back message.
    * @param {string} callerModuleName For logging
    * @param {Object} [api=traderapi] Exchange API to use; may be a second trade account. If not set, the first spot account will be used.
-   * @return {Promise<{ result: boolean, message?: string }>} Returns error message if you want to notify()
+   * @return {Promise<CheckBalanceRequest>} Returns error message if you want to notify()
    */
-  async isEnoughCoins(type, pair, base, quote, purpose, additionalInfo = '', callerModuleName, api = traderapi) {
+  async isEnoughCoins(side, pairFp, base, quote, purpose, additionalInfo = '', callerModuleName, api = traderapi) {
     const logModule = `${moduleName}/${callerModuleName}`;
 
     let formattedPair;
 
-    if (typeof pair === 'string') {
-      formattedPair = /** @type {ParsedMarket} */ (this.parseMarket(pair));
+    if (typeof pairFp === 'string') {
+      formattedPair = /** @type {ParsedMarket} */ (this.parseMarket(pairFp));
     } else {
-      formattedPair = pair;
+      formattedPair = pairFp;
     }
+
+    const { coin1, coin2, coin1Decimals, coin2Decimals, pair } = formattedPair;
 
     const onWhichAccount = api.isSecondAccount ? ' on second account' : '';
 
     const walletType = formattedPair.perpetual ? '__contract' : '__spot';
-    const balances = await this.getBalancesCached(false, `${moduleName}-isEnoughCoins`, false, walletType, api);
+    const balances = /** @type {AssetsResult} */ (await this.getBalancesCached(false, `${logModule}-isEnoughCoins`, false, walletType, api));
 
     if (!balances) {
-      const errorString = `Unable to receive balances${onWhichAccount} for placing ${purpose}-order on ${formattedPair.pair}${additionalInfo}.`;
+      const errorString = `Unable to receive balances${onWhichAccount} for placing ${purpose}-order on ${pair}${additionalInfo}.`;
       log.warn(`${logModule}: ${errorString}`);
 
       return {
@@ -118,36 +146,36 @@ module.exports = {
 
       if (formattedPair.perpetual) {
         if (b.free2 < quote) {
-          // Perpetual contracts are always paid in coin2 independent from order type
+          // Perpetual contracts are always paid in coin2 independent from order side
           // Not enough USDT balance to place ob-order to buy/sell 1 BTC contracts for 40,000 USDT on BTCUSDT
-          const baseString = base?.toFixed(formattedPair.coin1Decimals);
-          const quoteString = quote.toFixed(formattedPair.coin2Decimals);
-          coin = formattedPair.coin2;
+          const baseString = base?.toFixed(coin1Decimals);
+          const quoteString = quote.toFixed(coin2Decimals);
+          coin = coin2;
           balanceFree = b.free2s;
           balanceFreezed = b.freezed2s;
-          orderString = `${purpose}-order to ${type} ${baseString} ${formattedPair.coin1} contracts for ${quoteString} ${formattedPair.coin2} on ${formattedPair.pair}`;
+          orderString = `${purpose}-order to ${side} ${baseString} ${coin1} contracts for ${quoteString} ${coin2} on ${pair}`;
 
           isBalanceEnough = false;
         }
-      } else if (type === 'buy') {
+      } else if (side === 'buy') {
         if (b.free2 < quote) {
           // Not enough USDT balance to place buy tw-order for 40,000 USDT on ADM/USDT
-          amount = quote.toFixed(formattedPair.coin2Decimals);
-          coin = formattedPair.coin2;
+          amount = quote.toFixed(coin2Decimals);
+          coin = coin2;
           balanceFree = b.free2s;
           balanceFreezed = b.freezed2s;
-          orderString = `${type} ${purpose}-order for ${amount} ${coin} on ${formattedPair.pair}`;
+          orderString = `${side} ${purpose}-order for ${amount} ${coin} on ${pair}`;
 
           isBalanceEnough = false;
         }
       } else {
         if (b.free1 < base) {
           // Not enough BTC balance to place 1 BTC sell tw-order
-          amount = base.toFixed(formattedPair.coin1Decimals);
-          coin = formattedPair.coin1;
+          amount = base.toFixed(coin1Decimals);
+          coin = coin1;
           balanceFree = b.free1s;
           balanceFreezed = b.freezed1s;
-          orderString = `${amount} ${coin} ${type} ${purpose}-order on ${formattedPair.pair}`;
+          orderString = `${amount} ${coin} ${side} ${purpose}-order on ${pair}`;
 
           isBalanceEnough = false;
         }
@@ -164,7 +192,7 @@ module.exports = {
         message: output,
       };
     } catch (e) {
-      const errorString = `Unable to process balances${onWhichAccount} for placing ${purpose}-order on ${formattedPair.pair}: ${e}`;
+      const errorString = `Unable to process balances${onWhichAccount} for placing ${purpose}-order on ${pair}: ${e}`;
       log.warn(`${logModule}: ${errorString}`);
 
       return {
@@ -175,40 +203,60 @@ module.exports = {
   },
 
   /**
-   * Returns minimum order amount in coin1, allowed on the exchange, and upper bound for minimal order
-   * Considers coin1MinAmount, coin2MinAmount (converted in coin1) set by an exchange
-   * Or default values set in the config or by constants
-   * @param {number} price Calculate min amount for a specific price, if coin2MinAmount is set for the trade pair. Optional.
-   * @return {{ min: number, upperBound: number } | undefined} Minimum order amount, and upper bound for minimal order
+   * Returns the minimum order amount in coin1 allowed on the exchange — and the upper bound used for minimal orders.
+   * Considers both coin1MinAmount and coin2MinAmount (converted into coin1), depending on what the exchange provides,
+   * falling back to defaults defined in config or constants.
+   * Works with both Spot and Contracts.
+   *
+   * @param {number} [price] When provided, calculates the minimum amount for a specific price
+   *                         (used when the pair defines `coin2MinAmount`). Optional.
+   * @return {{
+   *     min: number, minFixed: string,
+   *     minReliable: number,
+   *     minCoin2: number, minCoin2Fixed: string,
+   *     minCoin2Reliable: number,
+   *     upperBound: number,
+   *   } | undefined }
+   *   Minimum amount in coin1, and the upper bound for minimal orders;
+   *   Minimum value in coin2,
+   *   Reliable values with 10% added on top.
    */
   getMinOrderAmount(price) {
     const exchangerUtils = require('../helpers/cryptos/exchanger');
 
     try {
-      let minOrderAmount; let upperBound;
+      let minOrderAmount;
+      let upperBound;
 
-      // Consider both coin1MinAmount and coin2MinAmount on an exchange
+      const formattedPair = /** @type {ParsedMarket} */ (this.parseMarket(config.defaultPair));
+      const { coin1, coin2, coin1Decimals, coin2Decimals, pair, isPerpetual } = formattedPair;
 
-      const coin1MinAmount = traderapi.marketInfo(config.pair)?.coin1MinAmount;
+      const marketInfo = isPerpetual ?
+          perpetualApi?.instrumentInfo(pair) :
+          traderapi.marketInfo(pair);
+
+      // Consider both coin1MinAmount and coin2MinAmount defined by the exchange
+
+      const coin1MinAmount = marketInfo?.coin1MinAmount;
       if (utils.isPositiveNumber(coin1MinAmount)) {
         minOrderAmount = coin1MinAmount;
       }
 
-      const coin2MinAmount = traderapi.marketInfo(config.pair)?.coin2MinAmount;
+      const coin2MinAmount = marketInfo?.coin2MinAmount;
       if (utils.isPositiveNumber(coin2MinAmount)) {
-        let coin2MinAmountInCoin1;
+        let coin1MinAmountCalculated;
 
         if (utils.isPositiveNumber(price)) {
-          coin2MinAmountInCoin1 = coin2MinAmount / price;
+          coin1MinAmountCalculated = coin2MinAmount / price;
         } else {
-          coin2MinAmountInCoin1 = exchangerUtils.convertCryptos(config.coin2, config.coin1, coin2MinAmount).outAmount;
+          coin1MinAmountCalculated = exchangerUtils.convertCryptos(coin2, coin1, coin2MinAmount).outAmount;
         }
 
-        if (utils.isPositiveNumber(coin2MinAmountInCoin1)) {
+        if (utils.isPositiveNumber(coin1MinAmountCalculated)) {
           if (utils.isPositiveNumber(coin1MinAmount)) {
-            minOrderAmount = Math.max(coin1MinAmount, coin2MinAmountInCoin1);
+            minOrderAmount = Math.max(coin1MinAmount, coin1MinAmountCalculated);
           } else {
-            minOrderAmount = coin2MinAmountInCoin1;
+            minOrderAmount = coin1MinAmountCalculated;
           }
         }
       }
@@ -216,7 +264,7 @@ module.exports = {
       if (minOrderAmount) {
         upperBound = minOrderAmount * 2;
       } else {
-        // Use constants if an exchange doesn't provide min amounts
+        // Use constants if the exchange doesn't provide min amounts
 
         const defaultMinOrderAmountUSD =
             config.exchange_restrictions?.minOrderAmountUSD ||
@@ -229,8 +277,15 @@ module.exports = {
         upperBound = exchangerUtils.convertCryptos('USD', config.coin1, defaultMinOrderAmountUpperBoundUSD).outAmount;
       }
 
+      const minCoin2 = exchangerUtils.convertCryptos(coin1, coin2, minOrderAmount).outAmount;
+
       return {
         min: minOrderAmount,
+        minFixed: minOrderAmount?.toFixed(coin1Decimals),
+        minReliable: minOrderAmount * 1.1,
+        minCoin2,
+        minCoin2Fixed: minCoin2?.toFixed(coin2Decimals),
+        minCoin2Reliable: minCoin2 * 1.1,
         upperBound,
       };
     } catch (e) {
@@ -264,7 +319,7 @@ module.exports = {
     const exchangeLc = exchange?.toLowerCase();
 
     try {
-      const isPerpetual = utils.isPerpetual(pair);
+      const isPerpetual = !!utils.isPerpetual(pair);
 
       if (!pair || (pair.indexOf('/') === -1 && !isPerpetual)) {
         log.warn(`orderUtils/parseMarket: Cannot parse a market pair/contract from the string '${pair}'.`);
@@ -272,7 +327,7 @@ module.exports = {
       }
 
       if (isPerpetual && !perpetualApi) {
-        log.warn(`orderUtils/parseMarket: The pair '${pair}' seems to be a perpetual contract, but perpetual trading is disabled in the config.`);
+        log.warn(`orderUtils/parseMarket: The pair '${pair}' seems to be a perpetual contract, but perpetual trading is disabled in the config or modules/perpetualApi.js is missing.`);
         return false;
       }
 
@@ -294,9 +349,9 @@ module.exports = {
 
       const [coin1, coin2] = pairReadable.split('/');
 
-      if (exchange && exchangeLc !== config.exchange +1) { // If not a config's exchange, create the exchange instance and fetch markets
+      if (exchange && exchangeLc !== config.exchange) { // If not a config's exchange, create the exchange instance and fetch markets
         if (isPerpetual) {
-          exchangeApi = undefined;
+          exchangeApi = getPerpetualApi ? getPerpetualApi(exchangeLc) : undefined;
 
           if (!exchangeApi) {
             log.warn(`orderUtils/parseMarket: Failed to create perpetual API for the ${exchange} exchange.`);
@@ -347,14 +402,20 @@ module.exports = {
         log.warn(`orderUtils/parseMarket: Cannot get info about the ${pair} market/contract on the ${exchange} exchange. Returning default values for decimal places.`);
       }
 
+      const coin2DecimalsForStable = utils.isStableCoin(coin2) ?
+          Math.min(coin2Decimals, 4) :
+          coin2Decimals;
+
       return {
-        pair,
+        pair, // Spot trading pair (e.g., `ADM/USDT`) or perpetual contract ticker (e.g., `ADMUSDT`)
         pairReadable,
-        perpetual,
+        isPerpetual,
+        perpetual, // Perpetual contract ticker (e.g., `ADMUSDT`). If the market is not a perpetual contract, the value is `undefined`.
         coin1,
         coin2,
         coin1Decimals, // Fallback to 8 in case if we can't find the market
         coin2Decimals, // Fallback to 8 in case if we can't find the market
+        coin2DecimalsForStable, // 13.5578 USDT instead of excessive 13.55787133 USDT (don't use it for price!)
         isParsed,
         marketInfoSupported,
         exchangeApi,
@@ -373,12 +434,12 @@ module.exports = {
    * Note: the function supposes that a pair/contract is valid and exists on exchange, and doesn't check it
    * Also, all other params are expected to be correct, including a set of price, coin1Amount and coin2Amount
    * If price is set, the function calculates coin1Amount from coin2Amount and vice versa
-   * @param {'buy' | 'sell'} orderType Order type
-   * @param {string} pair BTC/USDT for spot or BTCUSDT for perpetual
-   * @param {number} [price] Order price in case of limit order
-   * @param {number} [coin1Amount] Base coin qty
+   * @param {'buy' | 'sell'} orderSide Order side
+   * @param {string} pairRaw BTC/USDT for spot or BTCUSDT for perpetual
+   * @param {number} price Order price, required for limit orders
+   * @param {number} coin1Amount Base coin quantity. May be omitted if coin2Amount is set.
    * @param {1 | 0} limit 1 for limit order, 0 for market order
-   * @param {number} [coin2Amount] Quote coin qty
+   * @param {number} [coin2Amount] Quote coin quantity. May be omitted if coin1Amount is set.
    * @param {string} [purpose='man'] Order purpose to store in the database
    * @param {Object} [api=traderapi] Exchange API to use; may be a second trade account. If not set, the first account will be used.
    * @param {{
@@ -391,8 +452,8 @@ module.exports = {
    * @return {Promise<Object | { message: string } | undefined>} A database record for a placed orders
    */
   async addGeneralOrder(
-      orderType,
-      pair,
+      orderSide,
+      pairRaw,
       price,
       coin1Amount,
       limit,
@@ -402,11 +463,8 @@ module.exports = {
       perpetualOptions,
   ) {
     try {
-      const isPerpetual = utils.isPerpetual(pair);
-      const formattedPair = /** @type {ParsedMarket} */ (this.parseMarket(pair));
-
-      const coin1 = formattedPair.coin1;
-      const coin2 = formattedPair.coin2;
+      const formattedPair = /** @type {ParsedMarket} */ (this.parseMarket(pairRaw));
+      const { pair, coin1, coin2, coin1Decimals, coin2Decimals, isPerpetual } = formattedPair;
 
       let whichAccount = ''; let whichAccountMsg = ''; let isSecondAccountOrder;
 
@@ -419,7 +477,7 @@ module.exports = {
 
       // Logging parameters
 
-      let orderParamsString = `type=${orderType}, limit=${limit}, pair=${pair}, price=${limit ? price : 'Market'}, coin1Amount=${coin1Amount}, coin2Amount=${coin2Amount}`;
+      let orderParamsString = `side=${orderSide}, limit=${limit}, pair=${pairRaw}, price=${limit ? price : 'Market'}, coin1Amount=${coin1Amount}, coin2Amount=${coin2Amount}`;
 
       if (isPerpetual) {
         orderParamsString += `, reduceOnly=${perpetualOptions?.reduceOnly}, takeProfitPrice=${perpetualOptions?.takeProfitPrice}, stopLossPrice=${perpetualOptions?.stopLossPrice}, timeInForce=${perpetualOptions?.timeInForce}, smpType=${perpetualOptions?.smpType}`;
@@ -453,8 +511,8 @@ module.exports = {
       }
 
       const orderReq = isPerpetual ?
-          await perpetualApi.placeOrder(orderType, pair, price, coin1Amount, limit ? 'limit' : 'market', perpetualOptions?.reduceOnly, perpetualOptions?.takeProfitPrice, perpetualOptions?.stopLossPrice, perpetualOptions?.timeInForce, perpetualOptions?.smpType) :
-          await api.placeOrder(orderType, pair, price, coin1Amount, limit, coin2Amount);
+          await perpetualApi.placeOrder(orderSide, pair, price, coin1Amount, limit ? 'limit' : 'market', perpetualOptions?.reduceOnly, perpetualOptions?.takeProfitPrice, perpetualOptions?.stopLossPrice, perpetualOptions?.timeInForce, perpetualOptions?.smpType) :
+          await api.placeOrder(orderSide, pair, price, coin1Amount, limit, coin2Amount);
 
       if (orderReq?.orderId) {
         const { ordersDb } = db;
@@ -463,7 +521,7 @@ module.exports = {
           _id: orderReq.orderId,
           date: utils.unixTimeStampMs(),
           purpose,
-          type: orderType,
+          side: orderSide,
           exchange: config.exchange,
           pair,
           coin1,
@@ -479,8 +537,8 @@ module.exports = {
           isCoin2AmountEstimated: !coin2Amount,
           LimitOrMarket: limit, // 1 for limit price. 0 for Market price.
           ...perpetualOptions,
-          isProcessed: !limit,
-          isExecuted: false, // 'man' orders are not marked as executed
+          isProcessed: false, // Man-orders are not processed initially as well; orderCollector and orderStats may call updateOrders() to process them later
+          isExecuted: false, // Limit orders are marked as executed when they fill; Market orders are immediately executed, but we can't be sure that the order was actually executed or cancelled
           isCancelled: false,
           isSecondAccountOrder,
           message: whichAccountMsg + orderReq?.message,
@@ -492,33 +550,33 @@ module.exports = {
 
         let output;
 
-        const amountString = coin1Amount?.toFixed(formattedPair.coin1Decimals);
-        const quoteString = coin2Amount?.toFixed(formattedPair.coin2Decimals);
-        const priceString = price?.toFixed(formattedPair.coin2Decimals);
+        const amountString = coin1Amount?.toFixed(coin1Decimals);
+        const quoteString = coin2Amount?.toFixed(coin2Decimals);
+        const priceString = price?.toFixed(coin2Decimals);
 
         if (limit) {
           // buy 100 ADM for 1000 USDT at 10 USDT price
           // sell 100 ADM for 10 USDT at 10 USDT price
-          output = `${orderType} ${amountString} ${coin1} for ${quoteString} ${coin2} at ${priceString} ${coin2} price`;
+          output = `${orderSide} ${amountString} ${coin1} for ${quoteString} ${coin2} at ${priceString} ${coin2} price`;
         } else {
           if (coin2Amount) {
             // buy ADM for 1000 USDT at Market price
             // sell ADM for 1000 USDT at Market price
-            output = `${orderType} ${coin1} for ${quoteString} ${coin2} at Market Price`;
+            output = `${orderSide} ${coin1} for ${quoteString} ${coin2} at Market Price`;
           } else {
             // buy 100 ADM at Market price
             // sell 100 ADM at Market price
-            output = `${orderType} ${amountString} ${coin1} at Market Price`;
+            output = `${orderSide} ${amountString} ${coin1} at Market Price`;
           }
         }
 
-        log.info(`orderUtils: Successfully executed ${purpose}-order${whichAccount} to ${output} on ${formattedPair.pair}.`);
+        log.info(`orderUtils: Successfully placed ${purpose}-order${whichAccount} to ${output} on ${pair}.`);
 
         return order;
       } else {
         const details = orderReq?.message ? ` [${utils.trimAny(orderReq?.message, ' .')}].` : ' { No details }.';
 
-        log.warn(`orderUtils: Unable to execute ${purpose}-order${whichAccount} with params: ${orderParamsString}.${details}`);
+        log.warn(`orderUtils: Unable to place ${purpose}-order${whichAccount} with params: ${orderParamsString}.${details}`);
 
         return {
           message: whichAccountMsg + orderReq?.message,
@@ -530,25 +588,178 @@ module.exports = {
   },
 
   /**
-   * Updates local bot's orders database dbOrders, independent of its purpose (but logs purpose if received in moduleName).
-   * It loops through all the orders in local dbOrders and compares them with the current exchange orders.
-   * If found one, updates its status.
-   * If not found, closes it as not actual. Note: This method doesn't close ld-orders, as they may be saved but not exist.
-   * Additionally, stores all order fills in the fillsDb.
-   * Works for both spot and perpetual contract orders.
-   * Note: the function supposes that a pair/contract is valid and exists on exchange, and doesn't check it
-   * @param {Array<Object>} dbOrders Local orders database
-   * @param {string} pair BTC/USDT for spot or BTCUSDT for perpetual
+   * If we don’t fully trust the exchange API,
+   * It may sometimes return a falsely empty order list `[]` even when orders actually exist on the exchange.
+   *
+   * This function performs an additional verification to decide whether we should:
+   * - trust the empty order list and continue normal processing, or
+   * - treat it as a likely API failure and keep local orders unchanged, or
+   * - enter a SAFE mode and pause trading.
+   *
+   * Process:
+   * 1. Analyze the current local orders `dbOrders`:
+   *    - detect whether there are both buy and sell orders,
+   *    - measure the price delta between the farthest buy/sell orders,
+   *    - calculate the total notional value of the orders in USD,
+   *    - read the last known snapshot for this pair (time and number of orders).
+   * 2. Based on this data, decide whether individual order re-checks are needed (`shouldRecheckOrdersIndividually`), for example when:
+   *    - the API is marked as "dontTrustApi", or
+   *    - there is a large price delta, or
+   *    - there are many orders with a large total notional, or
+   *    - a lot of orders were present on the previous check not long ago.
+   * 3. If individual re-checks are needed and the exchange provides `getOrderDetails()`:
+   *    - for each local order (skipping virtual orders and orders from other API keys),
+   *      call `api.getOrderDetails(orderId, pair)`;
+   *    - if any order still has status 'new' or 'part_filled', or no status is returned,
+   *      consider the empty order list result to be false-positive and fill `falseResultDetails`.
+   * 4. If `falseResultDetails` is set:
+   *    - the caller should keep `dbOrders` unchanged,
+   *    - send a high-priority notification,
+   *    - and re-try fetching a correct order list on the next iteration.
+   * 5. If we couldn’t verify the result, but the situation still looks highly suspicious
+   *    (many orders on both sides, large price delta, recent snapshot with many orders),
+   *    `shouldEnterSafeMode` is set to `true`, and the caller may pause all trading modules
+   *    until manual intervention.
+   *
+   * @param {Object[]} dbOrdersOpened Local orders database. Excludes ld-orders which are not in open states. The function does not modify the orders themselves, but analyses them to decide how risky the situation is.
+   * @param {ParsedMarket} formattedPair Parsed market information, spot or perpetual
+   * @param {Object} api Exchange API instance to use; may represent the main or a secondary spot account, or perpetual account
+   * @param {string} purposeSuffix Suffix used to access the correct record in `lastOrdersSnapshot`. E.g., `ld2-` results in key `ETHUSDTld2-`.
+   * @return {Promise<{falseResultDetails: string | undefined, shouldEnterSafeMode: boolean}>}
+   *         - `falseResultDetails`: non-empty string if the exchange most likely returned a
+   *           falsely empty order list (based on `getOrderDetails()` checks). In this case,
+   *           the caller should keep `dbOrders` unchanged and notify.
+   *         - `shouldEnterSafeMode`: `true` if we were unable to prove the API failure, but
+   *           there is a strong suspicion that the empty order list is unreliable. In this case,
+   *           the caller may pause trading until manual review.
+   */
+  async verifyEmptyOrderList(dbOrdersOpened, formattedPair, api, purposeSuffix) {
+    const paramString = `dbOrdersOpened-length: ${dbOrdersOpened.length}, pair: ${formattedPair.pair}, purposeSuffix: ${purposeSuffix}, api-isPerpetual: ${api.isPerpetual}, api-isSecondAccount: ${api.isSecondAccount}`;
+
+    let falseResultDetails;
+    let shouldEnterSafeMode;
+
+    try {
+      log.log(`orderUtils: Verifying whether the exchange correctly returned an empty order list → and whether the ${dbOrdersOpened.length} locally stored ${purposeSuffix}orders are actually filled…`);
+
+      const buyOrders = dbOrdersOpened.filter((o) => o.side === 'buy');
+      const sellOrders = dbOrdersOpened.filter((o) => o.side === 'sell');
+
+      const hasBothSides = buyOrders.length > 0 && sellOrders.length > 0;
+
+      let hasBigPriceDelta = false;
+
+      if (hasBothSides) {
+        const maxSell = Math.max(...sellOrders.map((o) => o.price));
+        const minBuy = Math.min(...buyOrders.map((o) => o.price));
+        hasBigPriceDelta = utils.numbersDifferencePercent(minBuy, maxSell) > SUSPICIOUS_PRICE_DELTA_PERCENT;
+      }
+
+      const orderCount = dbOrdersOpened.length;
+      const totalQuote = dbOrdersOpened.reduce((sum, o) => sum + (o.coin2AmountLeft || o.coin2Amount || 0), 0);
+
+      const exchangerUtils = require('../helpers/cryptos/exchanger');
+      const totalUsd = exchangerUtils.convertCryptos(formattedPair.coin2, 'USD', totalQuote).outAmount;
+
+      const hasManyOrders = orderCount > SUSPICIOUS_ORDER_COUNT;
+      const hasBigNotional = totalUsd > SUSPICIOUS_TOTAL_USD;
+
+      const lastSnapshot = lastOrdersSnapshot[formattedPair.pair + purposeSuffix] || { ts: 0, count: 0 };
+      const wasRecentlyChecked = Date.now() - lastSnapshot.ts <= SUSPICIOUS_RECENT_CHECKTIME;
+      const hadManyOrdersLastTime = lastSnapshot.count > SUSPICIOUS_ORDER_COUNT;
+
+      const shouldRecheckOrdersIndividually =
+          api.features().dontTrustApi ||
+          (hasBothSides && hasBigPriceDelta) ||
+          (hasManyOrders && hasBigNotional) ||
+          (wasRecentlyChecked && hadManyOrdersLastTime);
+
+      if (shouldRecheckOrdersIndividually) {
+        if (api.getOrderDetails) {
+          log.log(`orderUtils: Received an empty order list from the ${config.exchangeName} API while we have ${dbOrdersOpened.length} ${purposeSuffix}orders stored locally. Verifying orders one by one, since we don’t fully trust the exchange API…`);
+
+          for (const dbOrder of dbOrdersOpened) {
+            if (
+              !dbOrder.isVirtual && // Skip virtual ld-orders that are not created
+              (!dbOrder.apikey || dbOrder.apikey === config.apikey) // Skip orders that were placed with other API keys
+            ) {
+              const orderDetails = await api.getOrderDetails(dbOrder._id, dbOrder.pair);
+              const orderStatus = orderDetails?.status;
+
+              /**
+               * Checking possible order statuses:
+               *   - 'new', 'part_filled', or no `orderStatus` → API failure, do not trust the result
+               *   - 'filled', 'cancelled' → an empty order list is still possible
+               *   - 'unknown' → the order does not exist or the orderId is wrong → an empty order list is still possible
+               */
+
+              if (!orderStatus) {
+                falseResultDetails = `No status received for order ${dbOrder._id}; the exchange API may be experiencing issues. Request result: ${JSON.stringify(orderDetails)}`;
+                break;
+              }
+
+              if (['new', 'part_filled'].includes(orderStatus)) {
+                falseResultDetails = `Order ${dbOrder._id} real status is '${orderStatus}'`;
+                break;
+              }
+            }
+          }
+        } else {
+          log.warn(`orderUtils: Received an empty order list from the ${config.exchangeName} API while we have ${dbOrdersOpened.length} ${purposeSuffix}orders stored locally. However, we are unable to verify this because the exchange does not provide a getOrderDetails() method.`);
+        }
+      }
+
+      shouldEnterSafeMode =
+          // hasBigNotional doesn't matter
+          !falseResultDetails &&
+          hasBothSides &&
+          hasBigPriceDelta &&
+          hasManyOrders &&
+          wasRecentlyChecked &&
+          hadManyOrdersLastTime;
+    } catch (e) {
+      log.error(`Error in verifyEmptyOrderList(${paramString}) of ${moduleName} module: ${e}`);
+    }
+
+    return {
+      // Whether the exchange returned a falsely empty order list (verified using `getOrderDetails()`).
+      // In this case, skip further `updateOrders()` processing, send a notification,
+      // and re-try fetching a correct order list on the next iteration.
+      // String containing order check details.
+      falseResultDetails,
+      // Unable to verify whether the empty order list is false-positive,
+      // but there is strong suspicion it is. Notify and pause all bot modules.
+      shouldEnterSafeMode,
+    };
+  },
+
+  /**
+   * Updates the bot's local orders database (dbOrders), regardless of purpose.
+   * If `callerModuleName` is provided, it may contain the purpose for logging.
+   *
+   * Process:
+   * - Iterates through all orders in local dbOrders and compares them with current exchange orders
+   * - If an order is found → updates its status
+   * - If an order is not found → means cancelled or filled, but we always consider it filled. Removes it from the local database (and cautiously try to cancel it on the exchange).
+   * - Stores all order fills in fillsDb
+   *
+   * Note: This method does not close or cancel ld-orders, since they may be stored locally as 'Not opened' but not actually exist on the exchange.
+   * The Ladder module handles missing ld-orders on its own.
+   * Pay attention to `hideNotOpened` parameter.
+   * Note: The trading pair/contract is valid and exists on the exchange. This function does not validate the pair/contract itself.
+   *
+   * @param {Object[]} dbOrders Local orders database. The function modifies it, e.g., with new order states and filled amounts.
+   * @param {string} pairRaw BTC/USDT for spot or BTCUSDT for perpetual
    * @param {string} callerModuleName Name of the module (and order purpose), which requests the method. E.g., 'mm_ladder.js(2):ld2-'. For logging only.
    * @param {boolean} [noCache=false] If true, get fresh open order data, not cached
-   * @param {Object} [api=traderapi] Exchange API to use; may be a second trade account. If not set, the first account will be used.
-   * @param {boolean} [hideNotOpened=true] Hide ld-orders in [Not opened, Filled, Cancelled] states
-   * @return {Promise<Array<Object> | Object>} Updated local orders database, with or without details
+   * @param {Object} [api=traderapi] API instance to use: spot (first or second account) or perpetual. Defaults to the first spot API.
+   * @param {boolean} [hideNotOpened=true] Hide ld-orders in [Not opened, Filled, Cancelled, Missed, To be removed, Removed] states
+   * @return {Promise<Object[]>} Updated local orders database `updatedOrders`, with or without details
   */
-  async updateOrders(dbOrders, pair, callerModuleName, noCache = false, api = traderapi, hideNotOpened = true) {
-    const paramString = `dbOrders-length: ${dbOrders.length}, pair: ${pair}, moduleName: ${callerModuleName}, noCache: ${noCache}, api: ${api}, hideNotOpened: ${hideNotOpened}`;
-
-    const isPerpetual = utils.isPerpetual(pair);
+  async updateOrders(dbOrders, pairRaw, callerModuleName, noCache = false, api = traderapi, hideNotOpened = true) {
+    const paramString = `dbOrders-length: ${dbOrders.length}, pair: ${pairRaw}, moduleName: ${callerModuleName}, noCache: ${noCache}, api-isPerpetual: ${api.isPerpetual}, api-isSecondAccount: ${api.isSecondAccount}, hideNotOpened: ${hideNotOpened}`;
+    const formattedPair = /** @type {ParsedMarket} */ (this.parseMarket(pairRaw));
+    const { pair, coin1, coin2, coin1Decimals, coin2Decimals } = formattedPair;
 
     let updatedOrders = [];
 
@@ -559,109 +770,104 @@ module.exports = {
     // Used in Liquidity module to protect from balance depleting
 
     const orderPurposes = orderCollector.orderPurposes;
+    // Optional: helpers/fillsEngine.js — when omitted, order sync still runs but fillsDb/VWAP are not updated
+    const fillsEngine = utils.softRequire('../helpers/fillsEngine', __filename);
+
+    /** @type {FillsByPurposeMap} */
     const fills = Object.keys(orderPurposes).reduce((acc, purpose) => {
-      acc[purpose] = {
-        partlyFilledOrders: [],
-        notFoundOrders: [],
-        filledOrders: [],
-        buyFilledAmount: 0,
-        sellFilledAmount: 0,
-        buyFilledQuote: 0,
-        sellFilledQuote: 0,
-      };
+      acc[purpose] = fillsEngine ?
+        fillsEngine.emptyFill() :
+        {
+          partlyFilledOrders: [],
+          filledOrders: [],
+          buyFilledAmount: 0,
+          sellFilledAmount: 0,
+          buyFilledQuote: 0,
+          sellFilledQuote: 0,
+        };
       return acc;
     }, {});
 
-    let ldFilledCount = 0;
+    let ldFilledCountBuy = 0;
+    let ldFilledCountSell = 0;
 
-    let samePurpose; // If all of the orders are of same purpose, e.g., 'ld', callerModuleName receives value like 'Ladder:ld-' and 'ld2' like 'mm_ladder.js(2):ld2-'. For logging only.
+    let samePurpose; // If all orders have the same purpose, e.g., 'ld', callerModuleName receives value like 'Ladder:ld-' and 'ld2' like 'mm_ladder.js(2):ld2-'
     [callerModuleName, samePurpose = ''] = callerModuleName.split(':');
 
     const parsedPurpose = orderCollector.parsePurpose(samePurpose.replace('-', ''));
     const moduleIndexString = parsedPurpose.moduleIndexString || ''; // For logging like ld2-orders
 
+    let exchangeOrdersCount;
+
     try {
       const onWhichAccount = api.isSecondAccount ? ' (on second account)' : '';
       const exchangeOrders = await this.getOpenOrdersCached(pair, `${moduleName}/${callerModuleName}`, noCache, api);
 
-      log.log(`orderUtils: Updating ${dbOrders.length} ${samePurpose}dbOrders on ${pair} for ${callerModuleName}, noCache: ${noCache}, hideNotOpened: ${hideNotOpened}… Received ${exchangeOrders?.length} orders from the exchange.`);
+      exchangeOrdersCount = exchangeOrders?.length;
+      log.log(`orderUtils: Updating ${dbOrders.length} ${samePurpose}dbOrders on ${pair} for ${callerModuleName}, noCache: ${noCache}, hideNotOpened: ${hideNotOpened}… Received ${exchangeOrdersCount} orders from the exchange.`);
 
       if (!exchangeOrders) {
-        log.warn(`orderUtils: Unable to get ${pair} exchangeOrders${onWhichAccount} in updateOrders(), leaving ${samePurpose}dbOrders as is.`);
+        log.warn(`orderUtils: Unable to get ${pair} exchangeOrders${onWhichAccount} in updateOrders(), keeping ${samePurpose}dbOrders unchanged.`);
         return dbOrders;
       }
 
-      // If we don't trust the exchange API, it can return a false-empty order list even if there are orders. Re-check then.
-      // Bullshit, but it's a reality. We'll deal with it.
-      // For spot only
+      // We do not fully trust the exchange API. If it returns an empty order list, verify that the response is not false.
 
-      if (
-        !isPerpetual &&
-        dbOrders.length !== 0 &&
-        exchangeOrders.length === 0 &&
-        traderapi.features().dontTrustApi &&
-        traderapi.getOrderDetails
-      ) {
-        let falseResultDetails;
+      const dbOrdersOpened = dbOrders.filter((order) => order.purpose !== 'ld' || constants.LADDER_OPENED_STATES.includes(order.ladderState));
+      const isSuspiciousEmptyResult = dbOrdersOpened.length > 0 && exchangeOrdersCount === 0;
 
-        for (const dbOrder of dbOrders) {
-          if (
-            !dbOrder.isVirtual &&
-            (!dbOrder.apikey || dbOrder.apikey === config.apikey)
-          ) {
-            const orderDetails = await traderapi.getOrderDetails(dbOrder._id, dbOrder.pair);
-            const orderStatus = orderDetails?.status;
-
-            /**
-             * !orderStatus, 'new', 'part_filled' -> API failed, don't trust
-             * 'filled', 'cancelled' -> Empty order list is still possible
-             * 'unknown' means Order doesn't exist or Wrong orderId. It's possible/accepted, if:
-             * - Order is virtual (ld-order which is not created)
-             * - Order placed with other API keys. We check it where an order stores API key.
-             * - On other exchange. Don't check it as we already filtered orders by exchange.
-             * - If any order is not 'unknown', empty order list is still possible
-             */
-
-            if (!orderStatus) {
-              falseResultDetails = `No order ${dbOrder._id} status received. Request result is ${JSON.stringify(orderDetails)}`;
-              break;
-            }
-
-            if (['new', 'part_filled'].includes(orderStatus)) {
-              falseResultDetails = `Order ${dbOrder._id} status is ${orderStatus}`;
-              break;
-            }
-          }
-        } // for (const dbOrder of dbOrders)
+      if (isSuspiciousEmptyResult) {
+        const verification = await this.verifyEmptyOrderList(dbOrdersOpened, formattedPair, api, samePurpose);
+        const { falseResultDetails, shouldEnterSafeMode } = verification;
 
         if (falseResultDetails) {
-          const falseResultString = `It seems ${config.exchangeName} API returned false empty order list: ${falseResultDetails}`;
-          const checkLogsString = 'For additional info, check logs';
+          const falseResultString = `It seems the ${config.exchangeName} API returned a falsely empty order list: ${falseResultDetails}`;
 
-          log.warn(`orderUtils: ${falseResultString}. Leaving ${samePurpose}dbOrders as is.`);
-          notify(`${config.notifyName}: ${falseResultString}. ${checkLogsString}`, 'warn', undefined, true); // Priority notification
+          log.warn(`orderUtils: ${falseResultString}. Keeping ${samePurpose}dbOrders unchanged.`);
+
+          if (Date.now()-lastNotifyFalsyEmptyOrdersTs > 5 * constants.MINUTE) {
+            notify(`${config.notifyName}: ${falseResultString}. If the issue is temporary, the bot resolves it automatically without your involvement. Logs contain more details. (This notification won't repeat more often than every 5 minutes.)`, 'warn', undefined, true); // Priority notification
+            lastNotifyFalsyEmptyOrdersTs = Date.now();
+          }
 
           return dbOrders;
+        } else if (shouldEnterSafeMode) {
+          log.error(`orderUtils: Exchange API returned a suspicious empty order list. Local records contain many orders on both sides, the price delta is significant, and the recent snapshot also includes multiple orders.`);
+
+          const commandTxs = require('../modules/commandTxs');
+
+          let details = `The ${config.exchangeName} API returned a suspicious empty order list. To prevent unexpected behavior, the bot has been stopped as a safety measure. `;
+          details += `It may happen due to an unhandled exchange API failure, or if you cancelled orders manually via the exchange UI, or if the bot was inactive for a long time and market conditions changed significantly`;
+
+          commandTxs.commands.emergencyStop('orderUtils', details);
+
+          return dbOrders;
+        } else {
+          log.log(`orderUtils: Empty order list is a valid response from the exchange, and ${dbOrdersOpened.length} ${samePurpose}dbOrders are likely filled.`);
         }
       }
 
-      // Loop through all orders in the local dbOrders and compare them with the current exchange orders
+      // Loop through all orders in local dbOrders and compare them with current exchange orders
+      // Note: ld-orders are not sorted by ladderIndex, which does not affect functionality
 
       for (const dbOrder of dbOrders) {
         const purposeIndexed = `${dbOrder.purpose}${dbOrder.moduleIndex > 1 ? dbOrder.moduleIndex : ''}`; // E.g., 'ld2' or 'man'
-        const orderInfoString = `${purposeIndexed}-order${dbOrder.subPurposeString || ''}${onWhichAccount} with params: id=${dbOrder._id}, type=${dbOrder.type}, pair=${dbOrder.pair}, price=${dbOrder.price}, coin1Amount=${dbOrder.coin1Amount} (${dbOrder.coin1AmountLeft} left), coin2Amount=${dbOrder.coin2Amount}`;
+        const orderInfoString = `${purposeIndexed}-order${dbOrder.subTypeString || dbOrder.subPurposeString || ''}${onWhichAccount} with params: id=${dbOrder._id}, side=${dbOrder.side}, pair=${dbOrder.pair}, price=${dbOrder.price}, coin1Amount=${dbOrder.coin1Amount} (${dbOrder.coin1AmountLeft} left), coin2Amount=${dbOrder.coin2Amount}`;
 
         let isOrderFound = false;
 
         const coin1AmountBeforeIteration = dbOrder.coin1AmountLeft ?? dbOrder.coin1Amount;
 
         for (const exchangeOrder of exchangeOrders) {
-          if (dbOrder._id?.toString() === exchangeOrder.orderId?.toString()) { // While dbOrders stores IDs in native type (can be number), getOpenOrders always returns ids as strings
+          if (dbOrder._id?.toString() === exchangeOrder.orderId?.toString()) { // While dbOrders stores IDs in native format (can be number), getOpenOrders always returns ids as strings
             isOrderFound = true;
 
             switch (exchangeOrder.status) {
               // Possible values: new, part_filled
+
               case 'part_filled':
+                // Update order's filled amounts and `fills` object
+
                 if (coin1AmountBeforeIteration > exchangeOrder.amountLeft) {
                   if (dbOrder.purpose === 'ld') {
                     dbOrder.update({
@@ -673,27 +879,23 @@ module.exports = {
                     isExecuted: true,
                     coin1AmountFilled: exchangeOrder.amountExecuted,
                     coin1AmountLeft: exchangeOrder.amountLeft,
+                    // Update coin2 amounts when price is known (limit orders)
+                    ...(utils.isPositiveNumber(dbOrder.price) && {
+                      coin2AmountFilled: exchangeOrder.amountExecuted * dbOrder.price,
+                      coin2AmountLeft: exchangeOrder.amountLeft * dbOrder.price,
+                    }),
                     amountUpdateCount: (dbOrder.amountUpdateCount || 0) + 1,
                   }, true);
 
                   const coin1AmountFilled = coin1AmountBeforeIteration - dbOrder.coin1AmountLeft;
-                  const coin2AmountFilled = coin1AmountFilled * dbOrder.price;
-
-                  fills[dbOrder.purpose][`${dbOrder.type}FilledAmount`] += coin1AmountFilled;
-                  fills[dbOrder.purpose][`${dbOrder.type}FilledQuote`] += coin2AmountFilled;
-                  fills[dbOrder.purpose].partlyFilledOrders.push({
-                    orderId: dbOrder._id,
-                    type: dbOrder.type,
-                    coin1AmountFilled,
-                    coin2AmountFilled,
-                    price: dbOrder.price,
-                    subPurpose: dbOrder.subPurpose,
-                    subPurposeString: dbOrder.subPurposeString,
-                  });
+                  // Record the partial fill information in fillsDb, later fills may be processed via fillsEngine.processFills()
+                  // To calculate VWAP/fill stats
+                  if (fillsEngine) {
+                    fillsEngine.addFill(fills[dbOrder.purpose], dbOrder, 'partlyFilledOrders', coin1AmountFilled);
+                  }
 
                   const filledPercent = (dbOrder.coin1AmountFilled / dbOrder.coin1Amount * 100).toFixed(2);
-
-                  log.log(`orderUtils: Updating ${orderInfoString}. It's partly filled ${utils.inclineNumber(dbOrder.amountUpdateCount)} time: ${coin1AmountBeforeIteration} -> ${dbOrder.coin1AmountLeft} ${dbOrder.coin1} (${filledPercent}% filled${dbOrder.amountUpdateCount > 1 ? ' in total.' : '.'})`);
+                  log.log(`orderUtils: Updating ${orderInfoString}. It's partly filled ${utils.inclineNumber(dbOrder.amountUpdateCount)} time: ${coin1AmountBeforeIteration} -> ${dbOrder.coin1AmountLeft} ${dbOrder.coin1} (${filledPercent}% filled${dbOrder.amountUpdateCount > 1 ? ' in total' : ''}).`);
                 }
 
                 break;
@@ -712,77 +914,91 @@ module.exports = {
           continue;
         }
 
-        // An order is missing in the exchangeOrders, remove it (if not an ld-order)
+        // When we are here, the order is missing in exchangeOrders:
+        //   - Check that it's not a ld-order stub
+        //   - Treat it as filled and record the fill information in fillsDb
+        //   - Remove it from the local database (and cautiously attempt to cancel it on the exchange,
+        //     except for ld-orders, which are handled separately by the Ladder module)
 
-        let isOrderFilled = false;
-        fills[dbOrder.purpose].notFoundOrders.push({
-          orderId: dbOrder._id,
-          type: dbOrder.type,
-          coin1AmountFilled: coin1AmountBeforeIteration,
-          coin2AmountFilled: coin1AmountBeforeIteration * dbOrder.price,
-          price: dbOrder.price,
-          subPurpose: dbOrder.subPurpose,
-          subPurposeString: dbOrder.subPurposeString,
-        });
+        let isOrderFilled;
 
         if (dbOrder.purpose === 'ld') {
+          // Ladder orders are a special case, and the Ladder module performs an extra check to confirm whether the order is truly filled
+
           const previousState = dbOrder.ladderState;
 
           if (constants.LADDER_OPENED_STATES.includes(previousState)) {
             dbOrder.update({
+              ladderBeforeFilledState: previousState, // 'Open' or 'Partly filled'
+              ladderFlaggedFilledTs: Date.now(),
               ladderState: 'Filled',
             });
 
-            isOrderFilled = true;
-            ldFilledCount++;
+            dbOrder.side === 'buy' ? ldFilledCountBuy++ : ldFilledCountSell++;
 
-            log.log(`orderUtils: Changing state of ${orderInfoString} from ${previousState} to ${dbOrder.ladderState}. Ladder index: ${dbOrder.ladderIndex}. Unable to find it in the exchangeOrders, consider it's filled.`);
+            isOrderFilled = true;
+
+            log.info(`orderUtils: Changing ladder state of ${orderInfoString} from ${previousState} to ${dbOrder.ladderState}. Ladder index: ${dbOrder.ladderIndex}. Unable to find it in exchangeOrders — considering it filled. The Ladder module will verify and handle it next.`);
+
             await dbOrder.save();
           } else {
-            log.log(`orderUtils: Not found ${orderInfoString}, it's ok for a ladder order with state ${dbOrder.ladderState}${dbOrder.ladderNotPlacedReason ? ' (' + dbOrder.ladderNotPlacedReason + ')' : ''}. Ladder index: ${dbOrder.ladderIndex}.`);
+            isOrderFilled = false;
+
+            log.debug(`orderUtils: Did not find ${orderInfoString}. This is expected for a ladder order in state ${dbOrder.ladderState}${dbOrder.ladderNotPlacedReason ? ' (' + dbOrder.ladderNotPlacedReason + ')' : ''}. Ladder index: ${dbOrder.ladderIndex}.`);
           }
 
-          updatedOrders.push(dbOrder);
+          updatedOrders.push(dbOrder); // Keep all ld-orders here; filtering is handled below
         } else {
-          const reasonToClose = 'Unable to find it in the exchangeOrders';
+          // All other order purposes except Ld: Treat the order as filled
+          // Even if the order is already closed on the exchange, try to cancel it to avoid leaving it as `unknown`
+
+          const reasonToClose = 'Unable to find it in exchangeOrders — considering it filled';
           const reasonObject = {
             isNotFound: true,
           };
 
+          // Any processed cancellation marks an order as isProcessed & isClosed; successful cancellation also marks it as isCancelled
           const cancellation = await orderCollector.clearOrderById(
-              dbOrder, dbOrder.pair, dbOrder.type, this.readableModuleName, reasonToClose, reasonObject, api);
+              dbOrder, dbOrder.pair, dbOrder.side, this.readableModuleName, reasonToClose, reasonObject, api);
 
-          if (cancellation.isCancelRequestProcessed) {
+          if (cancellation.isOrderCancelled) {
             isOrderFilled = true;
+
+            log.info(`orderUtils: Unable to find ${orderInfoString} in exchangeOrders. Although the cautious cancellation request was reported as successful, we still count it as filled — some exchanges respond this way even for already filled orders.`);
+          } else if (cancellation.isCancelRequestProcessed) {
+            isOrderFilled = true;
+
+            log.info(`orderUtils: Considering the ${orderInfoString} as filled.`);
           } else {
+            isOrderFilled = false;
+
             updatedOrders.push(dbOrder);
+
+            log.warn(`orderUtils: Unable to find ${orderInfoString} in exchangeOrders. Keeping it in ordersDb until next time because the cautious cancellation request failed.`);
           }
         }
 
         if (isOrderFilled) {
-          fills[dbOrder.purpose][`${dbOrder.type}FilledAmount`] += coin1AmountBeforeIteration;
-          fills[dbOrder.purpose][`${dbOrder.type}FilledQuote`] += coin1AmountBeforeIteration * dbOrder.price;
-          fills[dbOrder.purpose].filledOrders.push({
-            orderId: dbOrder._id,
-            type: dbOrder.type,
-            coin1AmountFilled: coin1AmountBeforeIteration,
-            coin2AmountFilled: coin1AmountBeforeIteration * dbOrder.price,
-            price: dbOrder.price,
-            subPurpose: dbOrder.subPurpose,
-            subPurposeString: dbOrder.subPurposeString,
-          });
+          // Record the fill information in fillsDb, later fills may be processed via fillsEngine.processFills()
+          // To mark orders as isExecuted (verify fill via API) and calculate VWAP/fill stats
+          if (fillsEngine) {
+            fillsEngine.addFill(fills[dbOrder.purpose], dbOrder, 'filledOrders', coin1AmountBeforeIteration);
+          }
         }
-      }
+      } // for (const dbOrder of dbOrders)
     } catch (e) {
       log.error(`Error in updateOrders(${paramString})-1 of ${moduleName} module: ${e}`);
-      log.warn(`orderUtils: Because of error in updateOrders(), returning ${samePurpose}dbOrders before the processing is finished. It may be partly modified.`);
+      log.warn(`orderUtils: Because of an error in updateOrders(), returning ${samePurpose}dbOrders before processing is finished. The result set may be partially modified.`);
 
       return dbOrders;
     }
 
+    // At this point, updatedOrders is populated from dbOrders.
+    // The new updated set includes only orders that exist on the exchange, plus non-existent ld-orders as a special case.
+
     try {
-      // dbOrders may include 'not placed' orders ~placeholders for ladder
-      // We can include them in the result, or hide
+      // Include non-existent ld-orders in the result, or filter them out,
+      // Depending on the `hideNotOpened` parameter
 
       const orderCountAll = updatedOrders.length;
       const updatedOrdersOpened = updatedOrders.filter((order) => order.purpose !== 'ld' || constants.LADDER_OPENED_STATES.includes(order.ladderState));
@@ -790,24 +1006,24 @@ module.exports = {
       const orderCountHidden = orderCountAll - orderCountOpened;
 
       let openOrdersString = '';
+      const andFilledLdString = ldFilledCountBuy || ldFilledCountSell ? ' & filled' : '';
 
       if (hideNotOpened) {
         if (orderCountHidden > 0) {
           updatedOrders = updatedOrdersOpened;
-          openOrdersString = ` (${orderCountHidden} not placed ld${moduleIndexString}-orders are hidden)`;
+          openOrdersString = ` (${orderCountHidden} not placed${andFilledLdString} ld${moduleIndexString}-orders are hidden)`;
         }
       } else {
         if (orderCountHidden > 0) {
-          openOrdersString = ` (including ${orderCountHidden} not placed ld${moduleIndexString}-orders)`;
+          openOrdersString = ` (including ${orderCountHidden} not placed${andFilledLdString} ld${moduleIndexString}-orders)`;
         }
       }
 
-      // Store non-empty fills data
+      // Store non-empty fills data for this specific updateOrders() call
 
       Object.keys(fills).forEach((purpose) => {
         if (purpose !== 'all') {
           fills[purpose].partlyFilledOrders.forEach((order) => fills['all'].partlyFilledOrders.push(order));
-          fills[purpose].notFoundOrders.forEach((order) => fills['all'].notFoundOrders.push(order));
           fills[purpose].filledOrders.forEach((order) => fills['all'].filledOrders.push(order));
           fills['all'].buyFilledAmount += fills[purpose].buyFilledAmount;
           fills['all'].sellFilledAmount += fills[purpose].sellFilledAmount;
@@ -816,30 +1032,22 @@ module.exports = {
         }
       });
 
-      const { fillsDb } = db;
-
-      for (const purpose in fills) {
-        const purposeFills = fills[purpose];
-
-        if (purposeFills.partlyFilledOrders.length > 0 || purposeFills.filledOrders.length > 0) {
-          const fill = new fillsDb({
+      if (fillsEngine) {
+        for (const purpose in fills) {
+          const purposeFills = fills[purpose];
+          await fillsEngine.addFillsDbRecord({
             purpose,
-            date: utils.unixTimeStampMs(),
-            exchange: config.exchange,
-            pair,
-            isProcessed: false,
-            ...purposeFills,
-          });
-
-          await fill.save();
+            callerModuleName,
+            noCache,
+            dbOrdersCount: dbOrders.length,
+            exchangeOrdersCount,
+          }, purposeFills, api);
         }
       }
 
       // Log results
 
-      const formattedPair = /** @type {ParsedMarket} */ (this.parseMarket(pair));
-
-      let logString = `orderUtils: ${samePurpose}dbOrders updated for ${callerModuleName} with ${updatedOrders.length} live orders${openOrdersString} on ${formattedPair.pair}.`;
+      let logString = `orderUtils: ${samePurpose}dbOrders updated for ${callerModuleName} with ${updatedOrders.length} live orders${openOrdersString} on ${pair}.`;
 
       if (fills['all'].filledOrders.length > 0) {
         logString += ` ${fills['all'].filledOrders.length} orders filled.`;
@@ -850,22 +1058,39 @@ module.exports = {
       }
 
       if (fills['all'].filledOrders.length > 0 || fills['all'].partlyFilledOrders.length > 0) {
-        logString += ` Asks are filled with ${fills['all'].sellFilledAmount} ${formattedPair.coin1} (${fills['all'].sellFilledQuote} ${formattedPair.coin2})`;
-        logString += ` and bids with ${fills['all'].buyFilledAmount} ${formattedPair.coin1} (${fills['all'].buyFilledQuote} ${formattedPair.coin2}).`;
+        logString += ` Asks are filled with ${fills['all'].sellFilledAmount?.toFixed(coin1Decimals)} ${coin1} (${fills['all'].sellFilledQuote?.toFixed(coin2Decimals)} ${coin2})`;
+        logString += ` and bids with ${fills['all'].buyFilledAmount?.toFixed(coin1Decimals)} ${coin1} (${fills['all'].buyFilledQuote?.toFixed(coin2Decimals)} ${coin2}).`;
       }
 
       log.log(logString);
 
       // Warn if most ladder orders are filled
 
-      const ladderCount = tradeParams[`mm_ladderCount${moduleIndexString}`];
+      const ladderCount = tradeParams[`mm_ladderCount${moduleIndexString}`]; // One side ld-order count
 
-      if (ldFilledCount/ladderCount > 0.7) {
-        log.warn(`orderUtils: ${ldFilledCount} of ${ladderCount} ld${moduleIndexString}-orders considered as filled.`);
+      if (ladderCount) {
+        const ldFilledWarning = [];
+
+        if (ldFilledCountBuy / ladderCount > 0.5) {
+          ldFilledWarning.push(`${ldFilledCountBuy} of ${ladderCount} buy ld${moduleIndexString}-orders`);
+        }
+
+        if (ldFilledCountSell / ladderCount > 0.5) {
+          ldFilledWarning.push(`${ldFilledCountSell} of ${ladderCount} sell ld${moduleIndexString}-orders`);
+        }
+
+        if (ldFilledWarning.length) {
+          log.warn(`orderUtils: ${ldFilledWarning.join(' and ')} considered as filled.`);
+        }
       }
+
+      lastOrdersSnapshot[pair + samePurpose] = { // E.g, `ETHUSDTld2-`, or `ETH/USDT`
+        ts: Date.now(),
+        count: orderCountOpened,
+      };
     } catch (e) {
       log.error(`Error in updateOrders(${paramString})-2 of ${callerModuleName} module: ${e}`);
-      log.warn(`orderUtils: Because of error in updateOrders(), returning updated ${samePurpose}dbOrders, but the processing is finished partly.`);
+      log.warn(`orderUtils: Because of an error in updateOrders(), returning ${samePurpose}updatedOrders, but processing was only partially completed.`);
     }
 
     return updatedOrders;
@@ -878,7 +1103,7 @@ module.exports = {
    * @param {string} pair BTC/USDT for spot or BTCUSDT for perpetual
    * @param {string} moduleName Name of module, which requests the method. For logging only.
    * @param {boolean} [noCache=false] If true, return fresh data (make a request unconditionally)
-   * @param {Object} [api=traderapi] Exchange API to use, it may be the second trading account (always makes a request, no cache). Default is the first trading API account.
+   * @param {Object} [api=traderapi] API instance to use: spot (first or second account) or perpetual. Defaults to the first spot API.
    * @return {Promise<Object[]> | undefined} A clone of Open orders, cached or fresh
   */
   async getOpenOrdersCached(pair, moduleName, noCache = false, api = traderapi) {
@@ -912,9 +1137,7 @@ module.exports = {
 
         log.log(`orderUtils: Returning cached ${pair} open orders for ${moduleName}, term: ${cacheTerm} ms. ${result.length} orders retrieved.`);
       } else {
-        const exchangeOrders = isPerpetual ?
-            await perpetualApi.getOpenOrders(pair) :
-            await api.getOpenOrders(pair);
+        const exchangeOrders = await api.getOpenOrders(pair);
 
         const maxRateCounter = exchangeOrders?.[0]?.maxRateCounter;
         const rateCounterString = utils.isPositiveOrZeroInteger(maxRateCounter) ? ` Rate limit counter: ${maxRateCounter}.` : '';
@@ -949,7 +1172,7 @@ module.exports = {
    * @param {string} pair BTC/USDT for spot or BTCUSDT for perpetual
    * @param {string} moduleName Name of module, which requests the method. For logging only.
    * @param {boolean} [noCache=false] If true, return fresh data (make a request unconditionally)
-   * @return {Promise<Object[]>} Order book, cached or fresh
+   * @return {Promise<DepthResult | undefined>} Order book, cached or fresh
   */
   async getOrderBookCached(pair, moduleName, noCache = false) {
     let result;
@@ -979,7 +1202,7 @@ module.exports = {
       ) {
         result = utils.cloneObject(cached.data);
 
-        log.log(`orderUtils: Returning cached ${pair} order book for ${moduleName} — ${result.bids.length} bids and ${result.asks.length} asks, term: ${isCacheValid} ms.`);
+        log.log(`orderUtils: Returning cached ${pair} order book for ${moduleName} — ${result.bids.length} bids and ${result.asks.length} asks, term: ${cacheTerm} ms.`);
       } else {
         const ob = isPerpetual ?
             await perpetualApi.getOrderBook(pair) :
@@ -1023,24 +1246,35 @@ module.exports = {
   },
 
   /**
-   * Refers to traderapi.getBalances, but caches request results.
-   * Cache works with the first trading API account and 'trade' account/wallet type only. If the second trading API, perpetual API, or another account/wallet type is used, it always makes a request.
-   * Returns socket data if available (no cache).
-   * If cache data is outdated (balancesCachedValidMs), makes a new balances request.
-   * @param {boolean} [nonzero=true] Filter out return zero balances. Anyway, store everything including zeroes.
-   * @param {string} moduleName Name of module, which requested the method. For logging only.
-   * @param {boolean} [noCache=false] If true, return fresh data (make a request unconditionally)
-   * @param {'__contract' | '__spot' | string} [walletType] Account/wallet type. E.g., __spot, __contract, main, trade, margin, or 'full'.
-   * @param {Object} [api=traderapi] Exchange API to use, it may be the second trading account (always makes a request, no cache). Default is the first trading API account.
-   * @return {Promise<Object[] | { success: boolean, message: string } | undefined>} Account balances, cached or fresh
-  */
+   * Refers to `traderapi.getBalances`, but caches the results.
+   *
+   * Cache is used **only** for:
+   *   - the first trading API account, and
+   *   - the default account/wallet type.
+   *
+   * If the second trading API, perpetual API, or any non-default account/wallet type is used,
+   * the method always makes a fresh request (no cache).
+   * If socket-delivered balance data is available, it is returned directly (no caching).
+   * If cached data is outdated (based on `balancesCachedValidMs`), a new balance request is made.
+   *
+   * @param {boolean} nonzero=true Whether to filter out zero balances in the returned result. Zero balances are still stored internally in the cache.
+   * @param {string} moduleName Name of the module calling the method — used only for logging
+   * @param {boolean} [noCache=false] If `true`, always return fresh data (skip cache)
+   * @param {'__contract' | '__spot' | string} [walletType]
+   *   Account/wallet type (e.g., `__spot`, `__contract`, `main`, `trade`, `margin`, or `full`).
+   *   The actual list depends on `features().accountTypes`.
+   * @param {Object} [api=traderapi] Exchange API instance to use. If the second trading account's API is passed, caching is bypassed and a fresh request is made.
+   * @return {Promise<AssetsResultWithTimestamp | { success: boolean, message: string } | undefined>}
+   *   Account balances — cached or fresh, depending on conditions
+   */
   async getBalancesCached(nonzero = true, moduleName, noCache = false, walletType, api = traderapi) {
+    /** @type {AssetsResultWithTimestamp} */
     let result;
 
     try {
       const onWhichAccount = api.isSecondAccount ? ' on second account' : '';
 
-      const isPerpetual = Boolean(perpetualApi) && (!walletType || walletType === '__contract');
+      const isPerpetual = perpetualEnabled && (!walletType || walletType === '__contract');
 
       if (walletType === '__contract') {
         walletType = perpetualApi.features().tradingAccountType;
@@ -1076,6 +1310,9 @@ module.exports = {
             `-> ${b.coin2s}.` :
             `-> ${b.coin1s}. ${b.coin2s}.`;
 
+        // Use original fetch timestamp
+        result._timestamp = cached.timestamp;
+
         log.log(`orderUtils: Returning cached balances for ${moduleName}, cache term: ${cacheTerm} ms. ${result.length} coin balances retrieved. ${coinString}`);
       } else {
         const balances = isPerpetual ?
@@ -1084,21 +1321,44 @@ module.exports = {
 
         const b = utils.balanceHelper(balances, config.defaultPair);
         const coinString = isPerpetual ?
-            `-> ${b.coin2s}.` :
-            `-> ${b.coin1s}. ${b.coin2s}.`;
+            `-> ${b?.coin2s}.` :
+            `-> ${b?.coin1s}. ${b?.coin2s}.`;
 
         log.log(`orderUtils: Getting fresh${walletTypeString} balances${onWhichAccount} for ${moduleName}… ${balances?.length} coin balances received. ${coinString}`);
 
         const errorMessage = balances?.message; // For some exchanges, getBalances() implementations may include 'message' error info
 
         if (balances && !errorMessage) {
+          const fetchTimestamp = Date.now();
+
           // Update cached balances
           if (!walletType && !api.isSecondAccount) {
             balancesCached.data = balances;
-            balancesCached.timestamp = Date.now(); // in ms
+            balancesCached.timestamp = fetchTimestamp;
           }
 
           result = utils.cloneArray(balances);
+          result._timestamp = fetchTimestamp;
+
+          const historyBalances = utils.cloneArray(balances);
+          const addedTotals = balancesHistory.addBalanceTotals(historyBalances, 'allcoins');
+          const balancesWithTotals = addedTotals.balancesWithTotals;
+
+          // Store all balances history
+          const accountNo = api.isSecondAccount ? 1 : 0;
+          balancesHistory.saveSnapshotIfChanged({
+            accountNo,
+            walletType: walletType || null,
+            balances: balancesWithTotals,
+            source: 'getBalancesCached',
+            callerName: `${moduleName}|getBalancesCached`,
+            timestamp: fetchTimestamp,
+          });
+
+          // Balance Watcher && Guard
+
+          const bw = utils.softRequire('../trade/mm_balance_watcher');
+          await bw?.guardBalances(accountNo, walletType, `${moduleName}|getBalancesCached`);
         } else {
           const message = `Unable to get${walletTypeString} balances${onWhichAccount}: ${errorMessage || '{ No details }'}`;
           log.warn(`orderUtils: ${message}`);
@@ -1110,13 +1370,111 @@ module.exports = {
         }
       }
 
-      if (nonzero) {
-        result = result.filter((crypto) => crypto.free || crypto.freezed);
+      // Filter out zero balances
+      if (nonzero && Array.isArray(result)) {
+        // Filter in-place to preserve array identity and its extra properties (like _timestamp)
+        for (let i = result.length - 1; i >= 0; i -= 1) {
+          const crypto = result[i];
+          if (!crypto.free && !crypto.freezed) {
+            result.splice(i, 1);
+          }
+        }
       }
     } catch (e) {
       log.error(`Error in getBalancesCached() of ${moduleName} module: ${e}`);
     }
 
     return result;
+  },
+
+  /**
+   * Compose contract position information for logs and notifications
+   * @param {Object} p Position object
+   * @param {'human multi-line' | 'values' | 'block'} presentation Type of information representation: human multi-line, comma-delimited values, or code block
+   * @param {boolean} [fullInfo=false] Whether to include:
+   *   - Position status (usually it's `normal`)
+   *   - Entry price
+   *   - Liquidation price
+   * @returns {string}
+   */
+  getPositionString(p, presentation, fullInfo = false) {
+    let positionString = '';
+
+    try {
+      const formattedPair = /** @type {ParsedMarket} */ (this.parseMarket(p.symbol));
+      const { coin1, coin2, coin1Decimals, coin2Decimals } = formattedPair;
+
+      const side = this.positionSide(p.side, true);
+      const leverage = +p.leverage?.toFixed(2);
+
+      const amountString = p.size?.toFixed(coin1Decimals);
+      const quoteString = +p.positionValue?.toFixed(coin2Decimals);
+      const priceString = p.avgPrice?.toFixed(coin2Decimals);
+
+      const liqPriceString = p.liqPrice?.toFixed(coin2Decimals);
+      const tpPriceString = p.takeProfit?.toFixed(coin2Decimals);
+      const slPriceString = p.stopLoss?.toFixed(coin2Decimals);
+
+      const unrealisedPnlString = +p.unrealisedPnl?.toFixed(coin2Decimals);
+      const realisedPnlString = +p.curRealisedPnl?.toFixed(coin2Decimals);
+
+      if (presentation === 'human multi-line') {
+        positionString = `${side} ${amountString} ${coin1} @ avg entry ${priceString} ${coin2} · ${leverage}× → position value: ${quoteString} ${coin2}`;
+        positionString += `\nUnrealised P&L ${unrealisedPnlString} ${coin2}`;
+
+        if (p.curRealisedPnl) {
+          positionString += `, Realised P&L ${realisedPnlString} ${coin2}`;
+        }
+
+        positionString += `\nLiquidation @ ${liqPriceString} ${coin2}`;
+
+        if (p.stopLoss) {
+          positionString += `\nStop loss @ ${slPriceString} ${coin2}`;
+        }
+
+        if (p.takeProfit) {
+          positionString += `\nTake profit @ ${tpPriceString} ${coin2}`;
+        }
+
+        if (fullInfo) {
+          positionString += `\nOpened: ${utils.formatDate(new Date(p.time))} | Reduce only: ${p.isReduceOnly} | Status: ${p.positionStatus} | Risk ID: ${p.riskId} | Risk limit value: ${p.riskLimitValue}`;
+        }
+      } else if (presentation === 'values') {
+        if (fullInfo) {
+          positionString += `status '${p.positionStatus}, `;
+        }
+
+        positionString += `side ${side}, size ${amountString} ${coin1}, value ${quoteString} ${coin2}, leverage '${leverage}, `;
+
+        if (fullInfo) {
+          positionString += `entry price ${priceString} ${coin2}, liquidation price ${liqPriceString} ${coin2}, `;
+        }
+
+        if (p.curRealisedPnl) {
+          positionString += `realised PnL ${realisedPnlString} ${coin2} and `;
+        }
+
+        positionString += `unrealised PnL ${unrealisedPnlString} ${coin2}`;
+      } else {
+        positionString = utils.codeBlock(JSON.stringify(p, null, 2));
+      }
+    } catch (e) {
+      log.error(`Error in getPositionString() of ${moduleName} module: ${e}`);
+    }
+
+    return positionString;
+  },
+
+  /**
+   * Builds a human-readable order description string for logging.
+   * Works with both Fill records (which use `orderId`) and Order objects (which use `_id`).
+   * @param {FillOrder | BotOrderDbRecord} order Fill record or OrderDbRecord object
+   * @returns {string} Human-readable order info, e.g. `sell liq-order (spread support) with id=3e5b69fa-042e-434c-a3c6-4d0371d1a5e5`
+   */
+  buildShortOrderInfo(order) {
+    const anyOrder = /** @type {any} */ (order);
+    const orderId = anyOrder.orderId || anyOrder._id; // Universal for both Fill order record and Order object
+    const { side, purpose, subPurposeString, subTypeString } = order;
+    return `${side} ${purpose}-order${subTypeString || subPurposeString || ''} with id=${orderId}`;
   },
 };

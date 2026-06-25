@@ -568,7 +568,7 @@ module.exports = (
             amount: +crypto.amount,
             price: +crypto.price,
             count: 1,
-            type: 'ask-sell-right',
+            side: 'sell',
           });
         });
         result.asks.sort((a, b) => {
@@ -580,7 +580,7 @@ module.exports = (
             amount: +crypto.amount,
             price: +crypto.price,
             count: 1,
-            type: 'bid-buy-left',
+            side: 'buy',
           });
         });
         result.bids.sort((a, b) => {
@@ -623,7 +623,7 @@ module.exports = (
             price: +trade.price, // trade price
             coin2Amount: +trade.amount * +trade.price, // quote in coin2
             date: Date.parse(trade.timeConverted + '+00:00'), // e.g. StakeCube timestamp (trade.timeConverted) 2023-04-10 10:17:03, converting to 1681111023000
-            type: trade.direction.toLowerCase(), // 'buy' or 'sell'
+            side: trade.direction.toLowerCase(), // 'buy' or 'sell'
             tradeId: null,
           });
         });
