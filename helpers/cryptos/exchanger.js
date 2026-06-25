@@ -1,6 +1,12 @@
+'use strict';
+
 /**
+ * Crypto rate lookup, conversion, and market-making volume helpers.
+ *
+ * Rates are fetched from the ADAMANT Infoservice and cached in memory.
+ * The module also parses extended pair strings and estimates MM trade volumes.
+ *
  * @module helpers/cryptos/exchanger
- * @typedef {import('types/bot/parsedMarket.d').ParsedMarket} ParsedMarket
  */
 
 const config = require('../../modules/configReader');
@@ -9,75 +15,105 @@ const orderUtils = require('../../trade/orderUtils');
 const log = require('../log');
 const constants = require('../const');
 const utils = require('../utils');
+
+/**
+ * @typedef {import('types/bot/parsedMarket.d').ParsedMarket} ParsedMarket
+ * @typedef {import('types/bot/exchanger.d.js').CryptoRatesMap} CryptoRatesMap
+ * @typedef {import('types/bot/exchanger.d.js').ConvertCryptosResult} ConvertCryptosResult
+ * @typedef {import('types/bot/exchanger.d.js').ParsedPairInfo} ParsedPairInfo
+ * @typedef {import('types/bot/exchanger.d.js').Coin1VolumeEstimate} Coin1VolumeEstimate
+ * @typedef {import('types/bot/exchanger.d.js').ExchangerModule} ExchangerModule
+ */
+
+/** @type {import('axios').AxiosInstance} */
+// @ts-ignore axios is a callable instance
 const axios = require('axios');
-const adm_utils = require('./adm_utils');
 
-module.exports = {
+const moduleId = /** @type {NodeJS.Module} */ (module).id;
+const moduleName = utils.getModuleName(moduleId);
 
+log.log(`Module ${moduleName} is loaded.`);
+
+/** @type {ExchangerModule} */
+const exchanger = {
+  /** @type {CryptoRatesMap | undefined} */
   currencies: undefined,
   markets: {},
 
   /**
-   * Fetches global crypto rates from InfoService
-   * And stores them in this.currencies
+   * Fetches global crypto rates from Infoservice and stores them in `this.currencies`.
+   *
+   * @returns {Promise<void>}
    */
   async updateCryptoRates() {
-    const url = config.infoservice + '/get';
-    const rates = await axios.get(url, {})
-        .then((response) => {
-          return response.data ? response.data.result : undefined;
-        })
-        .catch((error) => {
-          log.warn(`Unable to fetch crypto rates in updateCryptoRates() of ${utils.getModuleName(module.id)} module. Request to ${url} failed with ${error.response ? error.response.status : undefined} status code, ${error.toString()}${error.response && error.response.data ? '. Message: ' + error.response.data.toString().trim() : ''}.`);
-        });
+    const url = `${config.infoservice}/get`;
 
-    if (rates) {
-      this.currencies = rates;
-    } else {
-      log.warn(`Unable to fetch crypto rates in updateCryptoRates() of ${utils.getModuleName(module.id)} module. Request was successful, but got unexpected results: ` + rates);
+    try {
+      const response = await axios.get(url, {});
+      const rates = response.data?.result;
+
+      if (rates) {
+        this.currencies = rates;
+        log.debug(`${moduleName}/updateCryptoRates: Updated crypto rates (${Object.keys(rates).length} pairs) from ${url}.`);
+        return;
+      }
+
+      log.warn(`${moduleName}/updateCryptoRates: Request to ${url} succeeded but returned no rates.`);
+    } catch (error) {
+      const axiosError = /** @type {import('axios').AxiosError} */ (error);
+      log.warn(`${moduleName}/updateCryptoRates: Request to ${url} failed with ${axiosError?.response?.status ?? 'no'} status code, ${String(error)}${axiosError?.response?.data ? '. Message: ' + String(axiosError.response.data).trim() : ''}.`);
     }
   },
 
   /**
-   * Returns the price for the 'from' currency. E.g., 1 ADM = 0.03 USDT.
-   * @param {string} from Currency to get rate. E.g., 'ADM'.
-   * @param {string} to Notional currency. E.g., 'USDT'.
-   * @return {number} The coin price or undefined
+   * Returns the price of one unit of `from` expressed in `to`.
+   * Example: `getRate('ADM', 'USDT')` may return `0.03` for 1 ADM = 0.03 USDT.
+   *
+   * Resolution order:
+   * 1. Direct ticker `from/to`
+   * 2. Reverse ticker `to/from`
+   * 3. Cross-rate via `/USD` prices
+   *
+   * @param {string} from Source currency symbol, e.g. `ADM`
+   * @param {string} to Target currency symbol, e.g. `USDT`
+   * @returns {number | undefined} Exchange rate, `1` for identical currencies, or `undefined` when unavailable
    */
   getRate(from, to) {
     try {
       if (!from || !to) return;
       if (from === to) return 1; // 1 USDT = 1 USDT
 
-      let price = this.currencies[from + '/' + to] || 1 / this.currencies[to + '/' + from];
+      let price = this.currencies?.[from + '/' + to] || 1 / this.currencies?.[to + '/' + from];
 
       if (!price) {
-        // We don't have direct or reverse rate, calculate it from /USD rates
-        const priceFrom = this.currencies[from + '/USD'];
-        const priceTo = this.currencies[to + '/USD'];
+        // No direct or reverse ticker — derive the rate from USD quotes.
+        const priceFrom = this.currencies?.[from + '/USD'];
+        const priceTo = this.currencies?.[to + '/USD'];
         price = priceFrom / priceTo;
       }
 
-      if (!price) {
-        log.warn(`Unable to calculate the ${from} price in ${to}. Probably, Infoservice doesn't provide rates for one of these.`);
+      if (!price && !config.isDemoAccount) {
+        // Be quite
+        // log.warn(`Unable to calculate the ${from} price in ${to}. CurrencyInfo likely does not provide rates for one of these currencies.`);
         return;
       }
 
       return price;
     } catch (e) {
-      log.error(`Unable to calculate the ${from} price in ${to} in the getPrice() of ${utils.getModuleName(module.id)} module: ${e}`);
+      log.error(`${moduleName}/getRate: Unable to calculate the ${from} price in ${to}. ${e}`);
     }
   },
 
   /**
-   * Returns value of amount 'from' currency in 'to' currency
-   * @param {string} from Currency to convert from. E.g., 'ADM'.
-   * @param {string} to Currency to convert to. E.g., 'ETH'.
-   * @param {number} [amount=1] Amount of 'from' currency
-   * @param {boolean} [considerExchangerFee=false] Whether to deduct fees (for the ADAMANT Exchanger bot)
-   * @param {number} [specificRate] Convert using specific rate
-   * @param {boolean} [validateSpecificRate=true] Whether to validate that specificRate differs from the global (Infoservice) no more, than allowed %.
-   * @return {{ outAmount: number | NaN, exchangePrice: number | NaN }}
+   * Converts an amount from one cryptocurrency into another.
+   *
+   * @param {string} from Source currency symbol
+   * @param {string} to Target currency symbol
+   * @param {number} [amount=1] Amount of the source currency
+   * @param {boolean} [considerExchangerFee=false] Whether to deduct exchanger fees (ADAMANT Exchanger bot)
+   * @param {number} [specificRate] Optional override rate instead of the global Infoservice rate
+   * @param {boolean} [validateSpecificRate=true] Whether to reject overrides that differ too much from the global rate
+   * @returns {ConvertCryptosResult}
    */
   convertCryptos(from, to, amount = 1, considerExchangerFee = false, specificRate, validateSpecificRate = true) {
     const ALLOWED_GLOBAL_RATE_DIFFERENCE_PERCENT = 20;
@@ -93,7 +129,7 @@ module.exports = {
           const rateDifferencePercent = utils.numbersDifferencePercent(rate, specificRate);
 
           if (rateDifferencePercent > ALLOWED_GLOBAL_RATE_DIFFERENCE_PERCENT) {
-            log.warn(`Provided specific rate and the global ${from}/${to} rate differ too much: ${specificRate} and ${rate} (${rateDifferencePercent.toFixed(2)}%). Refusing to convert.`);
+            log.warn(`${moduleName}/convertCryptos: Specific ${from}/${to} rate ${specificRate} differs too much from the global rate ${rate} (${rateDifferencePercent.toFixed(2)}%). Refusing to convert.`);
 
             return {
               outAmount: NaN,
@@ -109,7 +145,7 @@ module.exports = {
       if (considerExchangerFee) {
         rate *= 1 - config['exchange_fee_' + from] / 100;
         networkFee = this[to].FEE;
-        if (this.isERC20(to)) {
+        if (typeof this.isERC20 === 'function' && this.isERC20(to)) {
           networkFee = this.convertCryptos('ETH', to, networkFee).outAmount;
         }
       }
@@ -121,7 +157,7 @@ module.exports = {
         exchangePrice: rate,
       };
     } catch (e) {
-      log.error(`Unable to calculate ${amount} ${from} in ${to} in convertCryptos() of ${utils.getModuleName(module.id)} module: ${e}`);
+      log.error(`${moduleName}/convertCryptos: Unable to convert ${amount} ${from} into ${to}. ${e}`);
 
       return {
         outAmount: NaN,
@@ -130,30 +166,40 @@ module.exports = {
     }
   },
 
+  /**
+   * Checks whether a currency symbol is treated as fiat by Infoservice helpers.
+   *
+   * @param {string} coin Currency symbol
+   * @returns {boolean}
+   */
   isFiat(coin) {
     return ['USD', 'RUB', 'EUR', 'CNY', 'JPY', 'KRW'].includes(coin);
   },
 
   /**
-   * Returns if coin has ticker like COIN/OTHERCOIN or OTHERCOIN/COIN in InfoService
-   * @param {String} coin Like 'ADM'
-   * @return {Boolean}
+   * Checks whether Infoservice exposes at least one ticker containing the coin.
+   *
+   * @param {string} coin Currency symbol, e.g. `ADM`
+   * @returns {boolean}
    */
   hasTicker(coin) {
-    const pairs = Object.keys(this.currencies).toString();
+    // Object.keys().toString() yields `KEY1,KEY2,...`, so we can search for `,COIN/` or `/COIN`.
+    const pairs = Object.keys(this.currencies || {}).toString();
     return pairs.includes(',' + coin + '/') || pairs.includes('/' + coin);
   },
 
   /**
-   * Parses a pair, exchange, account and project name from full pair string
-   * @param {string} pair A pair or a pair with an exchange, account and project name.
-   * Examples:
-   *   - ADM/USDT
-   *   - ADM/USDT@Bittrex
-   *   - ADM/USDT@Bittrex-acc1
-   *   - ADM/USDT@Bittrex-acc1 TradeBot
-   *   - ADM/USDT@Bittrex-acc1+TradeBot
-   * @return {Object}
+   * Parses a pair string that may also include exchange, account, and project suffixes.
+   *
+   * Supported examples:
+   * - `ADM/USDT`
+   * - `ADM/USDT@Bittrex`
+   * - `ADM/USDT@Bittrex-acc1`
+   * - `ADM/USDT@Bittrex-acc1 TradeBot`
+   * - `ADM/USDT@Bittrex-acc1+TradeBot`
+   *
+   * @param {string} pair Full pair string
+   * @returns {ParsedPairInfo}
    */
   parsePair(pair) {
     let baseCoin; let quoteCoin; let exchange; let account; let project;
@@ -189,9 +235,13 @@ module.exports = {
   },
 
   /**
-   * Estimates daily mm trading volume according to tradeParams
-   * @param {number} maxAmount If to override tradeParams.mm_maxAmount
-   * @return {Object} Estimate mm trade volume in coin1, coin2, USD, USDT and BTC
+   * Estimates the current daily market-making volume from trade params.
+   *
+   * Uses the midpoint of min/max amount and min/max interval, then converts
+   * the resulting coin1 volume into several reference currencies.
+   *
+   * @param {number} [maxAmount] Optional override for `tradeParams.mm_maxAmount`
+   * @returns {Coin1VolumeEstimate | undefined}
    */
   estimateCurrentDailyTradeVolume(maxAmount) {
     try {
@@ -204,14 +254,15 @@ module.exports = {
 
       return this.calcCoin1AmountInOtherCoins(dailyVolumeCoin1);
     } catch (e) {
-      log.error(`Error in estimateCurrentDailyTradeVolume() of ${utils.getModuleName(module.id)} module: ${e}`);
+      log.error(`${moduleName}/estimateCurrentDailyTradeVolume: ${e}`);
     }
   },
 
   /**
-   * Calculates coin1 amount in coin1, coin2, USD, USDT and BTC
-   * @param {number} coin1Amount Amount in coin1
-   * @return {Object}
+   * Converts a coin1 amount into coin1, coin2, USD, USDT, and BTC equivalents.
+   *
+   * @param {number} coin1Amount Amount in the configured base coin
+   * @returns {Coin1VolumeEstimate | undefined}
    */
   calcCoin1AmountInOtherCoins(coin1Amount) {
     try {
@@ -223,14 +274,17 @@ module.exports = {
         BTC: this.convertCryptos(config.coin1, 'BTC', coin1Amount).outAmount,
       };
     } catch (e) {
-      log.error(`Error in calcCoin1AmountInOtherCoins() of ${utils.getModuleName(module.id)} module: ${e}`);
+      log.error(`${moduleName}/calcCoin1AmountInOtherCoins: ${e}`);
     }
   },
 
   /**
-   * Calculates mm_maxAmount from mm trade volume.
-   * mm_minInterval, mm_maxInterval and mm_minAmount will stay the same
-   * @return {Number} New tradeParams.mm_maxAmount
+   * Calculates `mm_maxAmount` from a target daily coin1 volume.
+   *
+   * `mm_minInterval`, `mm_maxInterval`, and `mm_minAmount` are kept unchanged.
+   *
+   * @param {number} dailyVolumeCoin1 Target daily volume in coin1
+   * @returns {number | undefined} New `tradeParams.mm_maxAmount`, or `undefined` when invalid
    */
   calcMaxAmountFromDailyTradeVolume(dailyVolumeCoin1) {
     try {
@@ -239,37 +293,47 @@ module.exports = {
       const new_mm_maxAmount = (2 * dailyVolumeCoin1 / dailyTrades) - tradeParams.mm_minAmount;
       return utils.isPositiveNumber(new_mm_maxAmount) ? new_mm_maxAmount : undefined;
     } catch (e) {
-      log.error(`Error in calcMaxAmountFromDailyTradeVolume() of ${utils.getModuleName(module.id)} module: ` + e);
+      log.error(`${moduleName}/calcMaxAmountFromDailyTradeVolume: ${e}`);
     }
   },
 
   /**
-   * Creates daily estimate volume change infoString
-   * E.g., from 1 366.33663366 ADM (100 USDT) to 3 445.54455446 ADM (300 USDT)
+   * Builds a human-readable volume change string.
+   *
+   * Example: `from 1 366.33663366 ADM (100 USDT) to 3 445.54455446 ADM (300 USDT)`.
    * Uses default trading pair/contract
-   * @param {Object} oldVolume Trading volume before update
-   * @param {Object} newVolume Trading volume after update
-   * @return {string}
+   *
+   * @param {Coin1VolumeEstimate} oldVolume Volume before the update
+   * @param {Coin1VolumeEstimate} newVolume Volume after the update
+   * @returns {string | undefined}
    */
   getVolumeChangeInfoString(oldVolume, newVolume) {
     try {
-      const formattedPair = /** @type {ParsedMarket} */ (orderUtils.parseMarket(config.defaultPair));
-      const coin1 = formattedPair.coin1;
-      const coin2 = formattedPair.coin2;
-      const coin1Decimals = formattedPair.coin1Decimals;
-      const coin2Decimals = formattedPair.coin2Decimals;
-
-      let infoString = `from ${utils.formatNumber(oldVolume.coin1.toFixed(coin1Decimals), true)} ${coin1} (${utils.formatNumber(oldVolume.coin2.toFixed(coin2Decimals), true)} ${coin2})`;
-      infoString += ` to ${utils.formatNumber(newVolume.coin1.toFixed(coin1Decimals), true)} ${coin1} (${utils.formatNumber(newVolume.coin2.toFixed(coin2Decimals), true)} ${coin2})`;
-
-      return infoString;
+      return `from ${this.getVolumeInfoString(oldVolume)} to ${this.getVolumeInfoString(newVolume)}`;
     } catch (e) {
-      log.error(`Error in getVolumeChangeInfoString() of ${utils.getModuleName(module.id)} module: ${e}`);
+      log.error(`${moduleName}/getVolumeChangeInfoString: ${e}`);
     }
   },
 
-  ADM: new adm_utils(),
+  /**
+   * Builds a human-readable volume string for the configured default pair.
+   *
+   * @param {Coin1VolumeEstimate} volume Volume estimate in coin1 and coin2
+   * @returns {string | undefined}
+   */
+  getVolumeInfoString(volume) {
+    const formattedPair = /** @type {ParsedMarket} */ (orderUtils.parseMarket(config.defaultPair));
+    const { coin1, coin2, coin1Decimals, coin2DecimalsForStable } = formattedPair;
+
+    try {
+      return `${utils.formatNumber(volume.coin1.toFixed(coin1Decimals), true)} ${coin1} (${utils.formatNumber(volume.coin2.toFixed(coin2DecimalsForStable), true)} ${coin2})`;
+    } catch (e) {
+      log.error(`${moduleName}/getVolumeInfoString: ${e}`);
+    }
+  },
 };
+
+module.exports = exchanger;
 
 module.exports.updateCryptoRates();
 

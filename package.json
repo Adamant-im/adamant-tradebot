@@ -1,16 +1,21 @@
 {
   "name": "adamant-tradebot",
-  "version": "7.0.1",
+  "version": "8.0.0",
   "description": "ADAMANT's self-hosted market-making bot for crypto projects & token issuers. Volume, spread, liquidity, price ranges, and dynamic order books.",
-  "main": "index.js",
+  "main": "app.js",
   "scripts": {
     "lint": "npx eslint -f visualstudio .",
     "lint:fix": "npx eslint -f visualstudio --fix",
     "lint:fixrule": "npx eslint -f visualstudio --no-eslintrc --fix --env node,es2021,commonjs --parser-options=ecmaVersion:12 --rule",
+    "typecheck:webui-api": "tsc -p tsconfig.webui-api.json --pretty false",
     "start": "node app.js",
+    "start:config": "node app.js",
     "start:dev": "node app.js dev",
-    "clear": "node app.js dev clear_db",
-    "test": "jest"
+    "clear": "node app.js clear_db",
+    "clear:config": "node app.js",
+    "test": "node scripts/run-jest.js",
+    "test:general": "JEST_SCOPE=1 jest tests/general",
+    "test:api-webui": "JEST_SCOPE=1 jest tests/api-webui"
   },
   "keywords": [
     "market-making",
@@ -35,35 +40,54 @@
     "price watching",
     "making price"
   ],
-  "author": "ADAMANT Developer Community <devs@adamant.im> (https://adamant.im)",
-  "license": "GPL-3.0",
+  "author": "ADAMANT community developers <devs@adamant.im>",
+  "private": true,
+  "license": "UNLICENSED",
   "dependencies": {
-    "adamant-api": "^2.4.0",
-    "axios": "^1.11.0",
+    "@fastify/cors": "^11.2.0",
+    "@fastify/jwt": "^10.1.0",
+    "@fastify/sensible": "^6.0.4",
+    "adamant-api": "^3.0.0",
+    "axios": "^1.18.1",
     "deep-object-diff": "^1.1.9",
-    "express": "^4.21.2",
     "fast-deep-equal": "^3.1.3",
-    "form-data": "^4.0.4",
+    "fast-jwt": "^6.2.4",
+    "fastify": "^5.8.5",
+    "json-parse-bigint": "^1.0.4",
     "jsonminify": "^0.4.2",
-    "mongodb": "^6.19.0",
-    "uuid": "^12.0.0"
+    "mongodb": "^7.3.0",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@babel/core": "^7.28.4",
-    "@babel/eslint-parser": "^7.28.4",
-    "@babel/plugin-transform-runtime": "^7.28.3",
-    "@babel/preset-env": "^7.28.3",
-    "@eslint/js": "^9.35.0",
-    "eslint": "^9.35.0",
+    "@babel/core": "^8.0.1",
+    "@babel/eslint-parser": "^8.0.1",
+    "@babel/plugin-transform-runtime": "^8.0.1",
+    "@babel/preset-env": "^8.0.2",
+    "@babel/runtime": "^8.0.0",
+    "@eslint/js": "^10.0.1",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^26.0.0",
+    "axios-mock-adapter": "^2.1.0",
+    "eslint": "^10.5.0",
     "eslint-config-google": "^0.14.0",
-    "eslint-formatter-visualstudio": "^8.40.0",
-    "globals": "^16.3.0",
-    "jest": "^30.1.3",
-    "nodemon": "^3.1.10"
+    "eslint-formatter-visualstudio": "^9.0.1",
+    "globals": "^17.7.0",
+    "jest": "^30.4.2",
+    "lightweight-charts": "^5.2.0",
+    "typescript": "^6.0.3"
   },
   "engines": {
-    "node": ">=18.18",
+    "node": ">=22.2",
     "npm": ">=9.0.1"
+  },
+  "overrides": {
+    "flatted": "^3.4.2",
+    "ws": "^8.21.0",
+    "qs": "^6.15.2",
+    "path-to-regexp": "^8.4.2",
+    "picomatch": "^4.0.4",
+    "js-yaml": "^4.1.0",
+    "socket.io-parser": "^4.2.6"
   },
   "publishConfig": {
     "access": "public"

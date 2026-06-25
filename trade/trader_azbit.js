@@ -3,6 +3,9 @@ const utils = require('../helpers/utils');
 const constants = require('../helpers/const');
 const config = require('./../modules/configReader');
 
+const moduleId = /** @type {NodeJS.Module} */ (module).id;
+const moduleName = utils.getModuleName(moduleId);
+
 // API endpoints:
 // Base URL for requests: https://data.azbit.com for v1, https://api2.azbit.com for v2 (public requests only)
 const apiServer = 'https://data.azbit.com';
@@ -25,15 +28,15 @@ module.exports = (
 
   azbitClient.setConfig(apiServer, apiKey, secretKey, pwd, log, publicOnly);
 
-  // Fulfill markets and currencies on initialization
+  // Fetch markets and currencies on initialization
   if (loadMarket) {
     getMarkets();
     getCurrencies();
   }
 
   /**
-   * Get exchange trade pairs config
-   * @param {String} pair In classic format as BTC/USDT
+   * Get exchange trade pairs configuration.
+   * @param {string} [pair] In classic format as BTC/USDT
    * @returns {Object}
    */
   function getMarkets(pair) {
@@ -83,7 +86,7 @@ module.exports = (
           resolve(undefined);
         }
       }).catch((err) => {
-        log.warn(`API request getMarkets(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
+        log.warn(`API request getMarkets(${paramString}) of ${moduleName} module failed. ${err}`);
         resolve(undefined);
       }).finally(() => {
         module.exports.gettingMarkets = false;
@@ -92,8 +95,8 @@ module.exports = (
   }
 
   /**
-   * Get exchange coins
-   * @param {String} coin As BTC
+   * Get exchange coins.
+   * @param {string} [coin] As BTC
    * @returns {Object}
    */
   function getCurrencies(coin) {
@@ -125,7 +128,7 @@ module.exports = (
           resolve(undefined);
         }
       }).catch((err) => {
-        log.warn(`API request getCurrencies(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
+        log.warn(`API request getCurrencies(${paramString}) of ${moduleName} module failed. ${err}`);
         resolve(undefined);
       }).finally(() => {
         module.exports.gettingCurrencies = false;
@@ -135,7 +138,7 @@ module.exports = (
 
   return {
     /**
-     * Getter for stored markets info
+     * Getter for stored markets info.
      * @returns {Object}
      */
     get markets() {
@@ -143,7 +146,7 @@ module.exports = (
     },
 
     /**
-     * Getter for stored currencies info
+     * Getter for stored currencies info.
      * @returns {Object}
      */
     get currencies() {
@@ -151,8 +154,8 @@ module.exports = (
     },
 
     /**
-     * Get info for a specific market
-     * @param pair In classic format as BTC/USDT
+     * Get info for a specific market.
+     * @param {string} pair In classic format as BTC/USDT
      * @returns {Object}
      */
     marketInfo(pair) {
@@ -160,8 +163,8 @@ module.exports = (
     },
 
     /**
-     * Get info for a specific coin
-     * @param coin As BTC
+     * Get info for a specific coin.
+     * @param {string} coin As BTC
      * @returns {Object}
      */
     currenciesInfo(coin) {
@@ -183,14 +186,14 @@ module.exports = (
         allowAmountForMarketBuy: false,
         amountForMarketOrderNecessary: false,
         dontTrustApi: true, // Azbit can return false empty order list even if there are orders
-        apiProcessingDelayMs: 300, // Override DEFAULT_API_PROCESSING_DELAY_MS const
+        apiProcessingDelayMs: 400, // Override DEFAULT_API_PROCESSING_DELAY_MS const
       };
     },
 
     /**
-     * Get user balances
-     * @param {Boolean} nonzero Return only non-zero balances
-     * @returns {Object[]} [code: String, free: Float, freezed: Float, total: Float]
+     * Get user balances.
+     * @param {boolean} nonzero Return only non-zero balances
+     * @returns {Promise<Object[]|undefined>} Array of objects with properties: code (string), free (number), freezed (number), total (number)
      */
     getBalances(nonzero = true) {
       const paramString = `nonzero: ${nonzero}`;
@@ -221,16 +224,16 @@ module.exports = (
             resolve(undefined);
           }
         }).catch((err) => {
-          log.warn(`API request getBalances(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
+          log.warn(`API request getBalances(${paramString}) of ${moduleName} module failed. ${err}`);
           resolve(undefined);
         });
       });
     },
 
     /**
-     * List of all account open orders
-     * @param {String} pair  In classic format as BTC/USDT
-     * @returns {Object} [{orderId: String, symbol: String, price: Float, side: String, timestamp: Integer, status: String}]
+     * List of all account open orders.
+     * @param {string} pair In classic format as BTC/USDT
+     * @returns {Promise<Object[]|undefined>} Array of order objects with properties: orderId (string), symbol (string), price (number), side (string), timestamp (number), status (string), amount (number), amountExecuted (number), amountLeft (number), type (string)
      */
     async getOpenOrders(pair) {
       const paramString = `pair: ${pair}`;
@@ -241,7 +244,7 @@ module.exports = (
       try {
         data = await azbitClient.getOrders(pair_.pair, 'active');
       } catch (err) {
-        log.warn(`API request getOpenOrders(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
+        log.warn(`API request getOpenOrders(${paramString}) of ${moduleName} module failed. ${err}`);
         return undefined;
       }
 
@@ -250,13 +253,25 @@ module.exports = (
         const result = [];
 
         openOrders.forEach((order) => {
+          const amountInitial = +order.initialAmount;
+          const amountExecuted = +order.amount;
+
           let orderStatus;
-          if (order.initialAmount === order.amount) {
-            orderStatus = 'new';
-          } else if (order.amount === 0) {
-            orderStatus = 'filled';
-          } else {
+
+          // Determine order status from exchange's status field first, then fallback to amount comparison for redundancy
+          if (order.status === 'PartiallyCompleted') {
             orderStatus = 'part_filled';
+          } else if (order.status === 'Created') {
+            orderStatus = 'new';
+          } else {
+            // Fallback to amount-based detection for redundancy
+            if (amountExecuted === 0) {
+              orderStatus = 'new';
+            } else if (amountInitial === amountExecuted) {
+              orderStatus = 'filled';
+            } else {
+              orderStatus = 'part_filled';
+            }
           }
 
           result.push({
@@ -266,11 +281,10 @@ module.exports = (
             side: order.isBid ? 'buy' : 'sell', // 'buy' or 'sell'
             type: 'limit', // 'limit' or 'market'
             timestamp: new Date(order.date + '+00:00').getTime(), // '2023-03-17T18:31:13.225615'
-            amount: +order.initialAmount,
-            amountExecuted: +order.initialAmount - +order.amount,
-            amountLeft: +order.amount,
+            amount: amountInitial,
+            amountExecuted,
+            amountLeft: amountInitial - amountExecuted,
             status: orderStatus,
-            // Additionally: isCanceled
           });
         });
 
@@ -298,46 +312,78 @@ module.exports = (
       try {
         data = await azbitClient.getOrderDeals(orderId);
       } catch (err) {
-        log.warn(`API request getOrderDetails(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
+        log.warn(`API request getOrderDetails(${paramString}) of ${moduleName} module failed. ${err}`);
         return undefined;
       }
 
+      /**
+       * Example of part_filled order:
+        {
+          deals: [], // May be empty even for filled orders
+          id: 'c4f37c11-6df1-499c-96dc-cbfb9165da38',
+          isBid: true,
+          price: 0.0118,
+          initialAmount: 20,
+          amount: 15, // Filled amount!
+          currencyTo: 15,
+          quoteAmount: 0.236,
+          currencyFrom: 0.236,
+          date: '2026-02-01T16:08:27.924066',
+          userId: 'c4e13261-9006-4922-ab81-36698117004f',
+          isCanceled: false,
+          status: 'PartiallyCompleted',
+          currencyPairCode: 'ADM_USDT'
+        }
+       */
+
       try {
         if (data && !data.azbitErrorInfo) {
-          // data.deals is not reliable. E.g., initialAmount: 10, amount: 5, but deals: []
-          // const orderTrades = data.deals;
+          // data.deals may be empty even for filled orders, so we rely on multiple fields for redundancy
+          // Possible statuses from exchange: Created | Completed | PartiallyCompleted | Canceled
 
-          // Response includes data.status: Created | Completed | PartiallyCompleted, but current approach seems more reliable
+          const price = +data.price;
+          const amountInitial = +data.initialAmount;
+          const amountExecuted = +data.amount;
+          const volumeExecuted = amountExecuted * price;
+
           let orderStatus;
-          if (data.isCanceled) {
-            orderStatus = 'cancelled';
-          } else if (data.initialAmount === data.amount) {
-            orderStatus = 'new';
-          } else if (data.amount === 0) {
-            orderStatus = 'filled';
-          } else {
-            orderStatus = 'part_filled';
-          }
 
-          const price = data.price;
-          const amountExecuted = data.initialAmount - data.amount;
+          // Primary status determination using exchange's status field
+          if (data.isCanceled || data.status === 'Canceled') {
+            orderStatus = 'cancelled';
+          } else if (data.status === 'Completed') {
+            orderStatus = 'filled';
+          } else if (data.status === 'PartiallyCompleted') {
+            orderStatus = 'part_filled';
+          } else if (data.status === 'Created') {
+            orderStatus = 'new';
+          } else {
+            // Fallback to amount-based detection for redundancy
+            if (amountExecuted === 0) {
+              orderStatus = 'new';
+            } else if (amountInitial === amountExecuted) {
+              orderStatus = 'filled';
+            } else {
+              orderStatus = 'part_filled';
+            }
+          }
 
           const result = {
             orderId: data.id,
-            tradesCount: null, // orderTrades.length is not reliable
+            tradesCount: Array.isArray(data.deals) ? data.deals.length : null, // Note: Not reliable, may be empty even for filled orders
 
             price,
-            amount: data.initialAmount,
-            volume: data.quoteAmount,
+            amount: amountInitial,
+            volume: +data.quoteAmount,
             amountExecuted,
-            volumeExecuted: amountExecuted * price,
+            volumeExecuted,
 
-            pairPlain: pair_.pairPlain, // The same as data.currencyPairCode, e.g., 'ADM_USDT'
+            pairPlain: pair_.pairPlain, // Same as data.currencyPairCode, e.g., 'ADM_USDT'
             pairReadable: pair_.pairReadable,
             totalFeeInCoin2: undefined, // Azbit doesn't provide fee info
 
-            side: data.isBid ? 'buy' : 'sell', // 'buy' or 'sell'
-            type: undefined, // 'limit', 'market', Azbit doesn't provide order type
+            side: data.isBid ? 'buy' : 'sell',
+            type: undefined, // Azbit doesn't provide order type ('limit' or 'market')
 
             timestamp: new Date(data.date + 'Z').getTime(), // '2024-06-26T06:12:14.8323632' -> 1719382334832 in milliseconds
             updateTimestamp: undefined,
@@ -351,7 +397,7 @@ module.exports = (
 
           return {
             orderId,
-            status: 'unknown', // Order doesn't exist or Wrong orderId
+            status: 'unknown', // Order doesn't exist or wrong orderId
           };
         }
       } catch (e) {
@@ -361,11 +407,11 @@ module.exports = (
     },
 
     /**
-     * Cancel an order
-     * @param {String} orderId Example: '70192a8b-c34e-48ce-badf-889584670507'
-     * @param {String} side Not used for Azbit
-     * @param {String} pair Not used for Azbit
-     * @returns {Promise<unknown>}
+     * Cancel an order.
+     * @param {string} orderId Example: '70192a8b-c34e-48ce-badf-889584670507'
+     * @param {string} side Not used for Azbit
+     * @param {string} pair Not used for Azbit
+     * @returns {Promise<boolean|undefined>}
      */
     cancelOrder(orderId, side, pair) {
       const paramString = `orderId: ${orderId}, side: ${side}, pair: ${pair}`;
@@ -378,20 +424,20 @@ module.exports = (
             resolve(true);
           } else {
             const errorMessage = data?.azbitErrorInfo || 'No details';
-            log.log(`Unable to cancel ${orderId} on ${pair_.pairReadable}: ${errorMessage}.`);
+            log.log(`Unable to cancel order ${orderId} on ${pair_.pairReadable}: ${errorMessage}.`);
             resolve(false);
           }
         }).catch((err) => {
-          log.warn(`API request cancelOrder(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
+          log.warn(`API request cancelOrder(${paramString}) of ${moduleName} module failed. ${err}`);
           resolve(undefined);
         });
       });
     },
 
     /**
-     * Cancel all order on specific pair
-     * @param pair In classic format as BTC/USDT
-     * @returns {Promise<unknown>}
+     * Cancel all orders on a specific pair.
+     * @param {string} pair In classic format as BTC/USDT
+     * @returns {Promise<boolean|undefined>}
      */
     cancelAllOrders(pair) {
       const paramString = `pair: ${pair}`;
@@ -408,16 +454,16 @@ module.exports = (
             resolve(false);
           }
         }).catch((err) => {
-          log.warn(`API request cancelAllOrders(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
+          log.warn(`API request cancelAllOrders(${paramString}) of ${moduleName} module failed. ${err}`);
           resolve(undefined);
         });
       });
     },
 
     /**
-     * Get info on trade pair
-     * @param pair In classic format as BTC/USDT
-     * @returns {Object} [{ask: Number, bid: Number, volume: Number, volumeInCoin2: Number}]
+     * Get info on a trade pair.
+     * @param {string} pair In classic format as BTC/USDT
+     * @returns {Promise<Object|undefined>} Object with properties: ask (number), bid (number), volume (number), volumeInCoin2 (number), high (number), low (number), last (number)
      */
     getRates(pair) {
       const paramString = `pair: ${pair}`;
@@ -442,24 +488,24 @@ module.exports = (
             resolve(undefined);
           }
         }).catch((err) => {
-          log.warn(`API request getRates(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
+          log.warn(`API request getRates(${paramString}) of ${moduleName} module failed. ${err}`);
           resolve(undefined);
         });
       });
     },
 
     /**
-     * Create buy or sell limit order on a specific pair
-     * @param {String} orderType 'buy' or 'sell'
-     * @param {String} pair In classic format as BTC/USDT
-     * @param {Number} price Order price
-     * @param {Number} coin1Amount Amount for coin1
-     * @param {Number} limit Azbit supports only limits orders
-     * @param {Number} coin2Amount Quote coin value
-     * @returns {Object}
+     * Create a buy or sell limit order on a specific pair.
+     * @param {string} orderSide 'buy' or 'sell'
+     * @param {string} pair In classic format as BTC/USDT
+     * @param {number} price Order price
+     * @param {number} coin1Amount Amount in coin1
+     * @param {number} limit Azbit supports only limit orders
+     * @param {number} coin2Amount Quote coin value
+     * @returns {{orderId?: string|boolean, message?: string}|Promise<{orderId?: string|boolean, message?: string}>}
      */
-    placeOrder(orderType, pair, price, coin1Amount, limit = 1, coin2Amount) {
-      const paramString = `orderType: ${orderType}, pair: ${pair}, price: ${price}, coin1Amount: ${coin1Amount}, limit: ${limit}, coin2Amount: ${coin2Amount}`;
+    placeOrder(orderSide, pair, price, coin1Amount, limit = 1, coin2Amount) {
+      const paramString = `orderSide: ${orderSide}, pair: ${pair}, price: ${price}, coin1Amount: ${coin1Amount}, limit: ${limit}, coin2Amount: ${coin2Amount}`;
 
       const marketInfo = this.marketInfo(pair);
 
@@ -473,18 +519,18 @@ module.exports = (
         };
       }
 
-      // for Limit orders, calculate coin1Amount if only coin2Amount is provided
+      // For limit orders, calculate coin1Amount if only coin2Amount is provided
       if (!coin1Amount && coin2Amount && price) {
         coin1Amount = coin2Amount / price;
       }
 
-      // for Limit orders, calculate coin2Amount if only coin1Amount is provided
+      // For limit orders, calculate coin2Amount if only coin1Amount is provided
       if (!coin2Amount && coin1Amount && price) {
         coin2Amount = coin1Amount * price;
       }
 
-      // Round coin1Amount, coin2Amount and price to a certain number of decimal places, and check if they are correct.
-      // Note: any value may be small, e.g., 0.000000033. In this case, its number representation will be 3.3e-8.
+      // Round coin1Amount, coin2Amount and price to the required decimal places and validate.
+      // Note: Values may be very small (e.g., 0.000000033), which would be represented as 3.3e-8.
       // That's why we store values as strings. If an exchange doesn't support string type for values, cast them to numbers.
 
       if (coin1Amount) {
@@ -521,7 +567,7 @@ module.exports = (
       }
 
       if (+coin1Amount < marketInfo.coin1MinAmount) {
-        message = `Unable to place an order on ${exchangeName} exchange. Order amount ${coin1Amount} ${marketInfo.coin1} is less minimum ${marketInfo.coin1MinAmount} ${marketInfo.coin1} on ${marketInfo.pairReadable} pair.`;
+        message = `Unable to place an order on ${exchangeName} exchange. Order amount ${coin1Amount} ${marketInfo.coin1} is less than minimum ${marketInfo.coin1MinAmount} ${marketInfo.coin1} on ${marketInfo.pairReadable} pair.`;
         log.warn(message);
         return {
           message,
@@ -529,7 +575,7 @@ module.exports = (
       }
 
       if (coin2Amount && +coin2Amount < marketInfo.coin2MinAmount) { // coin2Amount may be null or undefined
-        message = `Unable to place an order on ${exchangeName} exchange. Order volume ${coin2Amount} ${marketInfo.coin2} is less minimum ${marketInfo.coin2MinAmount} ${marketInfo.coin2} on ${pair} pair.`;
+        message = `Unable to place an order on ${exchangeName} exchange. Order volume ${coin2Amount} ${marketInfo.coin2} is less than minimum ${marketInfo.coin2MinAmount} ${marketInfo.coin2} on ${pair} pair.`;
         log.warn(message);
         return {
           message,
@@ -541,10 +587,10 @@ module.exports = (
 
       if (limit) { // Limit order
         const pairName = formatPairName(pair);
-        output = `${orderType} ${coin1Amount} ${pairName.coin1} at ${price} ${pairName.coin2}.`;
+        output = `${orderSide} ${coin1Amount} ${pairName.coin1} at ${price} ${pairName.coin2}.`;
 
         return new Promise((resolve, reject) => {
-          azbitClient.addOrder(marketInfo.pairPlain, coin1Amount, price, orderType).then((data) => {
+          azbitClient.addOrder(marketInfo.pairPlain, coin1Amount, price, orderSide).then((data) => {
             try {
               if (data && !data.azbitErrorInfo && data.match(constants.REGEXP_UUID)) {
                 message = `Order placed to ${output} Order Id: ${data}.`;
@@ -567,7 +613,7 @@ module.exports = (
               resolve(order);
             }
           }).catch((err) => {
-            log.warn(`API request addOrder(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
+            log.warn(`API request addOrder(${paramString}) of ${moduleName} module failed. ${err}`);
             resolve(undefined);
           });
         });
@@ -582,9 +628,9 @@ module.exports = (
     }, // placeOrder()
 
     /**
-     * Get orderbook on a specific pair
-     * @param pair In classic format as BTC/USDT
-     * @returns {Object}
+     * Get orderbook for a specific pair.
+     * @param {string} pair In classic format as BTC/USDT
+     * @returns {Promise<Object|undefined>}
      */
     getOrderBook(pair) {
       const paramString = `pair: ${pair}`;
@@ -604,18 +650,19 @@ module.exports = (
                   amount: +order.amount,
                   price: +order.price,
                   count: 1,
-                  type: 'bid-buy-left',
+                  side: 'buy',
                 });
               } else {
                 result.asks.push({
                   amount: +order.amount,
                   price: +order.price,
                   count: 1,
-                  type: 'ask-sell-right',
+                  side: 'sell',
                 });
               }
             });
 
+            // Sort asks ascending (lowest price first) and bids descending (highest price first)
             result.asks.sort((a, b) => {
               return parseFloat(a.price) - parseFloat(b.price);
             });
@@ -631,18 +678,17 @@ module.exports = (
           }
 
         }).catch((err) => {
-          log.warn(`API request getOrderBook(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}`);
+          log.warn(`API request getOrderBook(${paramString}) of ${moduleName} module failed. ${err}`);
           resolve(undefined);
         });
       });
     },
 
     /**
-     * Get history of trades
-     * @param {String} pair In classic format as BTC/USDT
-     * @param {Number} limit Number of records to return
-     * @returns {Object[]} [{coin1Amount: Number, price: Number, coin2Amount: Number, date: Date, type: String,
-     *   tradeId: String (GUID)}]
+     * Get history of trades.
+     * @param {string} pair In classic format as BTC/USDT
+     * @param {number} limit Number of records to return
+     * @returns {Promise<Object[]|undefined>} Array of trade objects with properties: coin1Amount (number), price (number), coin2Amount (number), date (number), side (string), tradeId (string)
      */
     async getTradesHistory(pair, limit) {
       const paramString = `pair: ${pair}, limit: ${limit}`;
@@ -655,16 +701,16 @@ module.exports = (
 
             data.forEach((trade) => {
               result.push({
-                coin1Amount: +trade.volume, // amount in coin1
-                price: +trade.price, // trade price
-                coin2Amount: +trade.volume * +trade.price, // quote in coin2
+                coin1Amount: +trade.volume, // Amount in coin1
+                price: +trade.price, // Trade price
+                coin2Amount: +trade.volume * +trade.price, // Quote in coin2
                 date: new Date(trade.dealDateUtc + '+00:00').getTime(), // '2023-03-21T20:18:17.0724200'
-                type: trade.isBuy? 'buy' : 'sell', // 'buy' or 'sell'
+                side: trade.isBuy ? 'buy' : 'sell',
                 tradeId: trade.id,
               });
             });
 
-            // We need ascending sort order
+            // Sort by date in ascending order (oldest first)
             result.sort((a, b) => {
               return parseFloat(a.date) - parseFloat(b.date);
             });
@@ -675,16 +721,16 @@ module.exports = (
             resolve(undefined);
           }
         }).catch((err) => {
-          log.log(`API request getTradesHistory(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}.`);
+          log.log(`API request getTradesHistory(${paramString}) of ${moduleName} module failed. ${err}.`);
           resolve(undefined);
         });
       });
     },
 
     /**
-     * Get deposit address for a coin
-     * @param {String} coin As BTC
-     * @returns {Object}
+     * Get deposit address for a coin.
+     * @param {string} coin As BTC
+     * @returns {Promise<Object[]|false|undefined>}
      */
     getDepositAddress(coin) {
       const paramString = `coin: ${coin}`;
@@ -693,31 +739,27 @@ module.exports = (
       return new Promise((resolve, reject) => {
         azbitClient.getDepositAddress(coin).then((data) => {
           try {
-            const result = {};
-
             if (data?.length) {
-              // Note: chain returns as Id (Number). To map it, re-build getCurrencies() with all the info.
+              // Note: chain returns as ID (number). To map it, rebuild getCurrencies() with all the info.
               // Also, getDepositAddress() returns additional fields.
               resolve(data.map(({ chain, address }) => ({ network: chain, address })));
             } else {
               resolve(false);
             }
-
-            resolve(result);
           } catch (e) {
             log.warn(`Error while processing getDepositAddress(${paramString}) request: ${e}`);
             resolve(undefined);
           }
         }).catch((err) => {
-          log.log(`API request getDepositAddress(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${err}.`);
+          log.log(`API request getDepositAddress(${paramString}) of ${moduleName} module failed. ${err}.`);
           resolve(undefined);
         });
       });
     },
 
     /**
-     * Get trading fees for account
-     * @param coinOrPair Coin in classic format as BTC, or pair in classic format as BTC/USD
+     * Get trading fees for account.
+     * @param {string} coinOrPair Coin in classic format as BTC, or pair in classic format as BTC/USD
      */
     async getFees(coinOrPair) {
       // Azbit supports it, but we haven't implemented
@@ -726,9 +768,9 @@ module.exports = (
 };
 
 /**
- * Returns pair in Azbit format like ETH_USDT
- * @param pair Pair in any format
- * @returns { Object }
+ * Returns pair in Azbit format like ETH_USDT.
+ * @param {string} pair Pair in any format
+ * @returns {Object}
  */
 function formatPairName(pair) {
   pair = pair?.toUpperCase();
@@ -751,9 +793,9 @@ function formatPairName(pair) {
 }
 
 /**
- * Returns pair in classic format like ETH/USDT
- * @param pair Pair in Azbit format ETH_USDT
- * @returns { Object }
+ * Returns pair in classic format like ETH/USDT.
+ * @param {string} pair Pair in Azbit format ETH_USDT
+ * @returns {Object}
  */
 function deformatPairName(pair) {
   pair = pair?.toUpperCase();

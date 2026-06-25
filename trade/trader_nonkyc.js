@@ -1,3 +1,39 @@
+/**
+ * Connector to NonKYC Spot API.
+ * Intended for use by bot modules through a unified trader interface.
+ *
+ * @typedef {import('types/nonkyc/markets.d').NonkycMarket} NonkycMarket
+ * @typedef {import('types/nonkyc/markets.d').NonkycMarkets} NonkycMarkets
+ * @typedef {import('types/nonkyc/assets.d').NonkycAsset} NonkycAsset
+ * @typedef {import('types/nonkyc/assets.d').NonkycAssets} NonkycAssets
+ * @typedef {import('types/nonkyc/ticker.d').NonkycTicker} NonkycTicker
+ * @typedef {import('types/nonkyc/depth.d').NonkycDepth} NonkycDepth
+ * @typedef {import('types/nonkyc/trades.d').NonkycTrade} NonkycTrade
+ * @typedef {import('types/nonkyc/trades.d').NonkycTrades} NonkycTrades
+ * @typedef {import('types/nonkyc/balances.d').NonkycBalance} NonkycBalance
+ * @typedef {import('types/nonkyc/balances.d').NonkycBalances} NonkycBalances
+ * @typedef {import('types/nonkyc/orders.d').NonkycOrder} NonkycOrder
+ * @typedef {import('types/nonkyc/orders.d').NonkycOrders} NonkycOrders
+ * @typedef {import('types/nonkyc/order.d').NonkycOrderDetail} NonkycOrderDetail
+ * @typedef {import('types/nonkyc/create-order.d').NonkycCreateOrder} NonkycCreateOrder
+ * @typedef {import('types/nonkyc/cancel-order.d').NonkycCancelOrder} NonkycCancelOrder
+ * @typedef {import('types/nonkyc/cancel-all-orders.d').NonkycCancelAllOrders} NonkycCancelAllOrders
+ * @typedef {import('types/nonkyc/deposit-address.d').NonkycDepositAddress} NonkycDepositAddress
+ * @typedef {import('types/nonkyc/withdrawal.d').NonkycWithdrawal} NonkycWithdrawal
+ *
+ * @typedef {import('types/assets.d').Result} AssetsResult
+ * @typedef {import('types/currencies.d').CurrenciesResult} CurrenciesResult
+ * @typedef {import('types/currencies.d').ResultItem} CurrenciesResultItem
+ * @typedef {import('types/depth.d').DepthResult} DepthResult
+ * @typedef {import('types/markets.d').MarketsResult} MarketsResult
+ * @typedef {import('types/markets.d').ResultItem} MarketsResultItem
+ * @typedef {import('types/orders.d').ResultItem} OrdersResultItem
+ * @typedef {import('types/order-info.d').Result} OrderInfoResult
+ * @typedef {import('types/order-place.d').Result} OrderPlaceResult
+ * @typedef {import('types/rates.d').RatesResult} RatesResult
+ * @typedef {import('types/trades.d').TradesResult} TradesResult
+ */
+
 const NonkycAPI = require('./api/nonkyc_api');
 const utils = require('../helpers/utils');
 const _networks = require('./../helpers/networks');
@@ -10,6 +46,8 @@ const config = require('./../modules/configReader');
 const apiServer = 'https://api.nonkyc.io/api/v2';
 const exchangeName = 'NonKYC';
 
+const moduleId = /** @type {NodeJS.Module} */ (module).id;
+
 // Map NonKYC's order status -> Bot's status
 const orderStatusMap = {
   Active: 'new',
@@ -19,6 +57,21 @@ const orderStatusMap = {
   'Partly Filled': 'part_filled',
 };
 
+/**
+ * Builds a NonKYC trader adapter instance compatible with the unified bot trader interface.
+ * @param {string} apiKey Exchange API key used for signed requests
+ * @param {string} secretKey Exchange API secret used to sign requests
+ * @param {string} pwd Reserved; NonKYC does not require a trade password
+ * @param {import('../helpers/log')} log Logger instance used for connector diagnostics
+ * @param {boolean} [publicOnly=false] If true, skip authenticated initialization
+ * @param {boolean} [loadMarket=true] If true, preloads markets/currencies cache during initialization
+ * @param {boolean} [useSocket=false] Reserved unified-interface flag; NonKYC does not use WebSocket
+ * @param {boolean} [useSocketPull=false] Reserved unified-interface flag for pull-style websocket adapters
+ * @param {number} [accountNo=0] Optional account index used by two-account bot setups
+ * @param {string} [coin1=config.coin1] Base currency code used as fallback pair context
+ * @param {string} [coin2=config.coin2] Quote currency code used as fallback pair context
+ * @returns {Object} Configured trader adapter instance for NonKYC
+ */
 module.exports = (
     apiKey,
     secretKey,
@@ -46,25 +99,28 @@ module.exports = (
    * Get info on all markets and store in module.exports.exchangeMarkets
    * It's an internal function, not called outside of this module
    * @param {String} [pair] In classic format as BTC/USDT. If markets are already cached, get info for the pair.
-   * @returns {Promise<unknown>|*}
+   * @returns {Promise<MarketsResult | MarketsResultItem | undefined>}
    */
   function getMarkets(pair) {
     const paramString = `pair: ${pair}`;
 
-    if (module.exports.gettingMarkets) return;
-    if (module.exports.exchangeMarkets) return module.exports.exchangeMarkets[pair ? formatPairName(pair).pairPlain : pair];
+    if (module.exports.exchangeMarkets && !pair) return module.exports.exchangeMarkets;
+    if (module.exports.exchangeMarkets && pair) return module.exports.exchangeMarkets[formatPairName(pair).pairPlain];
+    // @ts-ignore -- TypeScript doesn't track module.exports dynamic property initialization
+    if (module.exports.gettingMarkets) return Promise.resolve(undefined);
 
     module.exports.gettingMarkets = true;
 
     return new Promise((resolve) => {
       nonkycApiClient.markets().then((markets) => {
         try {
+          /** @type {MarketsResult} */
           const result = {};
 
           for (const market of markets) {
             const pairNames = formatPairName(market.symbol);
 
-            result[pairNames.pairPlain] = {
+            result[pairNames.pairPlain] = /** @type {MarketsResultItem & { pairId: string }} */ ({
               pairReadable: pairNames.pairReadable,
               pairPlain: pairNames.pairPlain,
               coin1: pairNames.coin1,
@@ -75,12 +131,13 @@ module.exports = (
               coin2Precision: utils.getPrecision(+market.priceDecimals),
               coin1MinAmount: +market.minimumQuantity,
               coin1MaxAmount: null,
-              coin2MinPrice: +market.minAllowedPrice || null,
-              coin2MaxPrice: +market.maxAllowedPrice || null,
-              minTrade: +market.minimumQuantity, // in coin1
+              coin2MinAmount: market.isMinQuoteActive ? +market.minQuote : null, // in coin2
+              coin2MinPrice: market.minAllowedPrice !== null ? +market.minAllowedPrice : null,
+              coin2MaxPrice: market.maxAllowedPrice !== null ? +market.maxAllowedPrice : null,
+              minTrade: market.isMinQuoteActive ? +market.minQuote : null, // in coin2
               status: market.isActive && !market.isPaused ? 'ONLINE' : 'OFFLINE', // 'ONLINE', 'OFFLINE'
               pairId: market.id,
-            };
+            });
           }
 
           if (Object.keys(result).length > 0) {
@@ -94,7 +151,7 @@ module.exports = (
           resolve(undefined);
         }
       }).catch((error) => {
-        log.warn(`API request getMarkets() of ${utils.getModuleName(module.id)} module failed. ${error}`);
+        log.warn(`API request getMarkets() of ${utils.getModuleName(moduleId)} module failed. ${error}`);
         resolve(undefined);
       }).finally(() => {
         module.exports.gettingMarkets = false;
@@ -109,33 +166,43 @@ module.exports = (
    * @returns {Promise<unknown>|*}
    */
   function getCurrencies(coin, forceUpdate = false) {
-    if (module.exports.gettingCurrencies) return;
-    if (module.exports.exchangeCurrencies && !forceUpdate) return module.exports.exchangeCurrencies[coin];
+    if (module.exports.exchangeCurrencies && !forceUpdate) {
+      if (!coin) return module.exports.exchangeCurrencies;
+      return module.exports.exchangeCurrencies[coin];
+    }
+    // @ts-ignore -- TypeScript doesn't track module.exports dynamic property initialization
+    if (module.exports.gettingCurrencies) return Promise.resolve(undefined);
 
     module.exports.gettingCurrencies = true;
 
     return new Promise((resolve) => {
       nonkycApiClient.currencies().then((currencies) => {
         try {
+          /** @type {CurrenciesResult} */
           const result = {};
 
           const childless = currencies.filter((el) => el.childOf === null);
 
           for (const currency of childless) {
-            result[currency.ticker] = {
+            result[currency.ticker] = /** @type {CurrenciesResultItem} */ ({
               symbol: currency.ticker,
               name: currency.name,
               status: currency.isActive && !currency.isMaintenance ? 'ONLINE' : 'OFFLINE',
               comment: currency.maintenanceNotes,
-              confirmations: undefined,
-              withdrawalFee: undefined,
+              confirmations: null,
+              withdrawalFee: null,
               logoUrl: currency.logo,
-              exchangeAddress: undefined,
-              decimals: undefined,
-              precision: undefined,
+              exchangeAddress: null,
+              decimals: null,
+              precision: null,
               networks: {},
-              defaultNetwork: undefined,
-            };
+              defaultNetwork: null,
+              depositEnabled: null,
+              id: null,
+              maxWithdraw: null,
+              minWithdraw: null,
+              withdrawEnabled: null,
+            });
 
             if (currency.hasChildren) {
               const children = currencies.filter((el) => el.childOf === currency.id);
@@ -147,9 +214,9 @@ module.exports = (
 
                 const [, rawNetwork] = child.ticker.split('-');
 
-                const network = formatNetworkName(child.network, currency.ticker);
+                const network = formatNetworkName(child.network || '', currency.ticker);
 
-                result[currency.ticker].networks[network] = {
+                result[currency.ticker].networks[network] = /** @type {any} */ ({
                   chainName: rawNetwork,
                   chainNameFull: child.network,
                   status: child.isActive && !child.isMaintenance ? 'ONLINE' : 'OFFLINE',
@@ -161,11 +228,11 @@ module.exports = (
                   withdrawalFeeCurrency: child.tokenOf?.ticker?.split('-')[0],
                   decimals: +child.withdrawDecimals,
                   precision: utils.getPrecision(+child.withdrawDecimals),
-                };
+                });
               }
             } else {
               // Coin has no networks (children)
-              result[currency.ticker].networks[currency.ticker] = {
+              result[currency.ticker].networks[currency.ticker] = /** @type {any} */ ({
                 chainName: currency.ticker,
                 chainNameFull: currency.network,
                 status: currency.isActive && !currency.isMaintenance ? 'ONLINE' : 'OFFLINE',
@@ -176,7 +243,7 @@ module.exports = (
                 withdrawalFee: +currency.withdrawFee,
                 decimals: +currency.withdrawDecimals,
                 precision: utils.getPrecision(+currency.withdrawDecimals),
-              };
+              });
             }
           }
 
@@ -193,7 +260,7 @@ module.exports = (
           resolve(undefined);
         }
       }).catch((error) => {
-        log.warn(`API request getCurrencies() of ${utils.getModuleName(module.id)} module failed. ${error}`);
+        log.warn(`API request getCurrencies() of ${utils.getModuleName(moduleId)} module failed. ${error}`);
         resolve(undefined);
       }).finally(() => {
         module.exports.gettingCurrencies = false;
@@ -207,7 +274,7 @@ module.exports = (
 
     /**
      * Getter for stored markets info
-     * @return {Object}
+     * @return {MarketsResult | undefined}
      */
     get markets() {
       return module.exports.exchangeMarkets;
@@ -215,16 +282,24 @@ module.exports = (
 
     /**
      * Getter for stored currencies info
-     * @return {Object}
+     * @return {CurrenciesResult | undefined}
      */
     get currencies() {
       return module.exports.exchangeCurrencies;
     },
 
+    /**
+     * @param {string} pair
+     * @returns {Promise<MarketsResult | MarketsResultItem | undefined>}
+     */
     marketInfo(pair) {
       return getMarkets(pair);
     },
 
+    /**
+     * @param {string} [coin]
+     * @returns {Promise<CurrenciesResult | CurrenciesResultItem | undefined>}
+     */
     currencyInfo(coin) {
       return getCurrencies(coin);
     },
@@ -257,7 +332,7 @@ module.exports = (
     /**
      * Get user balances
      * @param {Boolean} [nonzero=true] Return only non-zero balances
-     * @returns {Promise<Array|undefined>}
+     * @returns {Promise<AssetsResult|undefined>}
      */
     async getBalances(nonzero = true) {
       const paramString = `nonzero: ${nonzero}`;
@@ -267,11 +342,12 @@ module.exports = (
       try {
         balances = await nonkycApiClient.getBalances();
       } catch (error) {
-        log.warn(`API request getBalances(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${error}`);
+        log.warn(`API request getBalances(${paramString}) of ${utils.getModuleName(moduleId)} module failed. ${error}`);
         return undefined;
       }
 
       try {
+        /** @type {AssetsResult} */
         let result = [];
 
         for (const crypto of balances) {
@@ -296,10 +372,10 @@ module.exports = (
 
     /**
      * Get one page of account open orders
-     * @param {String} pair In classic format as BTC/USDT
-     * @param {String} [limit=500]
-     * @param {Number} [offset=0]
-     * @returns {Promise<[]|undefined>}
+     * @param {string} pair In classic format as BTC/USDT
+     * @param {number} [limit=500]
+     * @param {number} [offset=0]
+     * @returns {Promise<OrdersResultItem[]|undefined>}
      */
     async getOpenOrdersPage(pair, limit = 500, offset = 0) {
       const paramString = `pair: ${pair}, offset: ${offset}, limit: ${limit}`;
@@ -310,17 +386,19 @@ module.exports = (
       try {
         orders = await nonkycApiClient.getOrders(coinPair.pairPlain, limit, offset);
       } catch (error) {
-        log.warn(`API request getOpenOrdersPage(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${error}`);
+        log.warn(`API request getOpenOrdersPage(${paramString}) of ${utils.getModuleName(moduleId)} module failed. ${error}`);
         return undefined;
       }
 
       try {
+        /** @type {OrdersResultItem[]} */
         const result = [];
 
         for (const order of orders) {
           result.push({
             orderId: order.id.toString(),
             symbol: order.market.symbol, // In readable format as BTC/USDT
+            symbolPlain: formatPairName(order.market.symbol).pairPlain,
             price: +order.price,
             side: order.side, // 'buy' or 'sell'
             type: order.type, // 'limit' or 'market'
@@ -341,16 +419,18 @@ module.exports = (
 
     /**
      * List of all account open orders
-     * @param {String} pair In classic format as BTC/USDT
-     * @returns {Promise<[]|undefined>}
+     * @param {string} pair In classic format as BTC/USDT
+     * @returns {Promise<OrdersResultItem[]|undefined>}
      */
     async getOpenOrders(pair) {
+      /** @type {OrdersResultItem[]} */
       let allOrders = [];
       let ordersInfo;
       let offset = 0;
       const limit = 500;
 
       do {
+        // @ts-ignore -- TypeScript doesn't infer method names inside an object literal factory return
         ordersInfo = await this.getOpenOrdersPage(pair, limit, offset);
         if (!ordersInfo) return undefined;
         allOrders = allOrders.concat(ordersInfo);
@@ -377,7 +457,7 @@ module.exports = (
       try {
         order = await nonkycApiClient.getOrder(orderId);
       } catch (error) {
-        log.warn(`API request getOrderDetails(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${error}`);
+        log.warn(`API request getOrderDetails(${paramString}) of ${utils.getModuleName(moduleId)} module failed. ${error}`);
         return undefined;
       }
 
@@ -421,7 +501,7 @@ module.exports = (
      * Cancel an order
      * @param {String} orderId Example: '655f28a1f6849a420b2e913d'
      * @param {String} side Not used for NonKYC
-     * @param {String} pair Not used for NonKYC. In classic format as BTC/USDT
+     * @param {String} pair Not used for NonKYC. In classic format as BTC/USDT.
      * @returns {Promise<Boolean|undefined>}
      */
     async cancelOrder(orderId, side, pair) {
@@ -432,7 +512,7 @@ module.exports = (
       try {
         order = await nonkycApiClient.cancelOrder(orderId);
       } catch (error) {
-        log.warn(`API request cancelOrder(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${error}`);
+        log.warn(`API request cancelOrder(${paramString}) of ${utils.getModuleName(moduleId)} module failed. ${error}`);
         return undefined;
       }
 
@@ -454,8 +534,8 @@ module.exports = (
 
     /**
      * Cancel all order on specific pair
-     * @param pair In classic format as BTC/USDT
-     * @param side Cancel buy or sell orders. Cancel both if not set.
+     * @param {string} pair In classic format as BTC/USDT
+     * @param {string} [side] Cancel buy or sell orders. Cancel both if not set.
      * @returns {Promise<Boolean|undefined>}
      */
     async cancelAllOrders(pair, side) {
@@ -467,7 +547,7 @@ module.exports = (
       try {
         orders = await nonkycApiClient.cancelAllOrders(coinPair.pairPlain);
       } catch (error) {
-        log.warn(`API request cancelAllOrders(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${error}`);
+        log.warn(`API request cancelAllOrders(${paramString}) of ${utils.getModuleName(moduleId)} module failed. ${error}`);
         return undefined;
       }
 
@@ -488,8 +568,8 @@ module.exports = (
 
     /**
      * Get info on trade pair
-     * @param pair In classic format as BTC/USDT
-     * @returns {Promise<Object|undefined>}
+     * @param {string} pair In classic format as BTC/USDT
+     * @returns {Promise<RatesResult|undefined>}
      */
     async getRates(pair) {
       const paramString = `pair: ${pair}`;
@@ -500,7 +580,7 @@ module.exports = (
       try {
         ticker = await nonkycApiClient.ticker(coinPair.pairPlain);
       } catch (error) {
-        log.warn(`API request getRates(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${error}`);
+        log.warn(`API request getRates(${paramString}) of ${utils.getModuleName(moduleId)} module failed. ${error}`);
         return undefined;
       }
 
@@ -525,18 +605,18 @@ module.exports = (
     /**
      * Places an order
      * NonKYC supports both limit and market orders
-     * @param {String} side 'buy' or 'sell'
-     * @param {String} pair In classic format like BTC/USDT
-     * @param {Number} price Order price
-     * @param {Number} coin1Amount Base coin amount. Provide either coin1Amount or coin2Amount.
-     * @param {Number} limit 1 if order is limit (default), 0 in case of market order
-     * @param {Number} coin2Amount Quote coin amount. Provide either coin1Amount or coin2Amount.
-     * @returns {Promise<Object>|undefined}
+     * @param {string} side 'buy' or 'sell'
+     * @param {string} pair In classic format like BTC/USDT
+     * @param {number} price Order price
+     * @param {number} coin1Amount Base coin amount. Provide either coin1Amount or coin2Amount.
+     * @param {number} [limit=1] 1 if order is limit (default), 0 in case of market order
+     * @param {number} [coin2Amount] Quote coin amount. Provide either coin1Amount or coin2Amount.
+     * @returns {Promise<OrderPlaceResult>}
      */
     async placeOrder(side, pair, price, coin1Amount, limit = 1, coin2Amount) {
       const paramString = `side: ${side}, pair: ${pair}, price: ${price}, coin1Amount: ${coin1Amount}, limit: ${limit}, coin2Amount: ${coin2Amount}`;
 
-      const marketInfo = this.marketInfo(pair);
+      const marketInfo = /** @type {MarketsResultItem | undefined} */ (await getMarkets(pair));
 
       let message;
 
@@ -553,20 +633,23 @@ module.exports = (
         coin1Amount = coin2Amount / price;
       }
 
-      // for Limit orders, calculate coin2Amount if only coin1Amount is provided
-      let coin2AmountCalculated;
-      if (!coin2Amount && coin1Amount && price) {
-        coin2AmountCalculated = coin1Amount * price;
-      }
-
       // Round coin1Amount, coin2Amount and price to a certain number of decimal places, and check if they are correct.
       // Note: any value may be small, e.g., 0.000000033. In this case, its number representation will be 3.3e-8.
       // That's why we store values as strings. If an exchange doesn't support string type for values, cast them to numbers.
 
+      /** @type {number | string} */
+      let coin1AmountStr = coin1Amount;
+      /** @type {number | string | undefined} */
+      let coin2AmountStr = coin2Amount;
+      /** @type {number | string} */
+      let priceStr = price;
+      /** @type {string | undefined} */
+      let coin2AmountCalculatedStr;
+
       if (coin1Amount) {
-        coin1Amount = (+coin1Amount).toFixed(marketInfo.coin1Decimals);
-        if (!+coin1Amount) {
-          message = `Unable to place an order on ${exchangeName} exchange. After rounding to ${marketInfo.coin1Decimals} decimal places, the order amount is wrong: ${coin1Amount}.`;
+        coin1AmountStr = (+coin1Amount).toFixed(marketInfo.coin1Decimals);
+        if (!+coin1AmountStr) {
+          message = `Unable to place an order on ${exchangeName} exchange. After rounding to ${marketInfo.coin1Decimals} decimal places, the order amount is wrong: ${coin1AmountStr}.`;
           log.warn(message);
           return {
             message,
@@ -575,9 +658,9 @@ module.exports = (
       }
 
       if (coin2Amount) {
-        coin2Amount = (+coin2Amount).toFixed(marketInfo.coin2Decimals);
-        if (!+coin2Amount) {
-          message = `Unable to place an order on ${exchangeName} exchange. After rounding to ${marketInfo.coin2Decimals} decimal places, the order volume is wrong: ${coin2Amount}.`;
+        coin2AmountStr = (+coin2Amount).toFixed(marketInfo.coin2Decimals);
+        if (!+coin2AmountStr) {
+          message = `Unable to place an order on ${exchangeName} exchange. After rounding to ${marketInfo.coin2Decimals} decimal places, the order volume is wrong: ${coin2AmountStr}.`;
           log.warn(message);
           return {
             message,
@@ -586,9 +669,9 @@ module.exports = (
       }
 
       if (price) {
-        price = (+price).toFixed(marketInfo.coin2Decimals);
-        if (!+price) {
-          message = `Unable to place an order on ${exchangeName} exchange. After rounding to ${marketInfo.coin2Decimals} decimal places, the order price is wrong: ${price}.`;
+        priceStr = (+price).toFixed(marketInfo.coin2Decimals);
+        if (!+priceStr) {
+          message = `Unable to place an order on ${exchangeName} exchange. After rounding to ${marketInfo.coin2Decimals} decimal places, the order price is wrong: ${priceStr}.`;
           log.warn(message);
           return {
             message,
@@ -596,16 +679,22 @@ module.exports = (
         }
       }
 
-      if (+coin1Amount < marketInfo.coin1MinAmount) {
-        message = `Unable to place an order on ${exchangeName} exchange. Order amount ${coin1Amount} ${marketInfo.coin1} is less minimum ${marketInfo.coin1MinAmount} ${marketInfo.coin1} on ${marketInfo.pairReadable} pair.`;
+      if (!coin2AmountStr && +coin1AmountStr && +priceStr) {
+        coin2AmountCalculatedStr = (+coin1AmountStr * +priceStr).toFixed(marketInfo.coin2Decimals);
+      }
+
+      if (+coin1AmountStr < (marketInfo.coin1MinAmount ?? 0)) {
+        message = `Unable to place an order on ${exchangeName} exchange. Order amount ${coin1AmountStr} ${marketInfo.coin1} is less minimum ${marketInfo.coin1MinAmount} ${marketInfo.coin1} on ${marketInfo.pairReadable} pair.`;
         log.warn(message);
         return {
           message,
         };
       }
 
-      if (coin2Amount && +coin2Amount < marketInfo.coin2MinAmount) { // coin2Amount may be null or undefined
-        message = `Unable to place an order on ${exchangeName} exchange. Order volume ${coin2Amount} ${marketInfo.coin2} is less minimum ${marketInfo.coin2MinAmount} ${marketInfo.coin2} on ${pair} pair.`;
+      const effectiveCoin2AmountStr = coin2AmountStr ?? coin2AmountCalculatedStr;
+
+      if (effectiveCoin2AmountStr && +effectiveCoin2AmountStr < (marketInfo.coin2MinAmount ?? 0)) {
+        message = `Unable to place an order on ${exchangeName} exchange. Order volume ${effectiveCoin2AmountStr} ${marketInfo.coin2} is less minimum ${marketInfo.coin2MinAmount} ${marketInfo.coin2} on ${pair} pair.`;
         log.warn(message);
         return {
           message,
@@ -617,32 +706,33 @@ module.exports = (
 
       if (limit) {
         orderType = 'limit';
-        if (coin2Amount) {
-          output = `${side} ${coin1Amount} ${marketInfo.coin1} for ${coin2Amount} ${marketInfo.coin2} at ${price} ${marketInfo.coin2}.`;
+        if (coin2AmountStr) {
+          output = `${side} ${coin1AmountStr} ${marketInfo.coin1} for ${coin2AmountStr} ${marketInfo.coin2} at ${priceStr} ${marketInfo.coin2}.`;
         } else {
-          output = `${side} ${coin1Amount} ${marketInfo.coin1} for ~${coin2AmountCalculated.toFixed(marketInfo.coin2Decimals)} ${marketInfo.coin2} at ${price} ${marketInfo.coin2}.`;
+          output = `${side} ${coin1AmountStr} ${marketInfo.coin1} for ~${coin2AmountCalculatedStr} ${marketInfo.coin2} at ${priceStr} ${marketInfo.coin2}.`;
         }
       } else {
         orderType = 'market';
-        if (coin2Amount) {
-          output = `${side} ${marketInfo.coin1} for ${coin2Amount} ${marketInfo.coin2} at Market Price on ${pair} pair.`;
+        if (coin2AmountStr) {
+          output = `${side} ${marketInfo.coin1} for ${coin2AmountStr} ${marketInfo.coin2} at Market Price on ${pair} pair.`;
         } else {
-          output = `${side} ${coin1Amount} ${marketInfo.coin1} at Market Price on ${pair} pair.`;
+          output = `${side} ${coin1AmountStr} ${marketInfo.coin1} at Market Price on ${pair} pair.`;
         }
       }
 
-      const order = {};
+      const order = /** @type {OrderPlaceResult} */ ({});
       let response;
       let orderId;
       let errorMessage;
 
       try {
-        response = await nonkycApiClient.addOrder(marketInfo.pairPlain, coin1Amount, price, side, orderType);
+        response = await nonkycApiClient.addOrder(
+            marketInfo.pairPlain, String(coin1AmountStr), String(priceStr), side, orderType);
 
         errorMessage = response?.nonkycErrorInfo;
         orderId = response?.id;
       } catch (error) {
-        message = `API request addOrder(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${error}.`;
+        message = `API request addOrder(${paramString}) of ${utils.getModuleName(moduleId)} module failed. ${error}.`;
         log.warn(message);
         order.orderId = false;
         order.message = message;
@@ -668,8 +758,8 @@ module.exports = (
 
     /**
      * Get orderbook on a specific pair
-     * @param pair In classic format as BTC/USDT
-     * @returns {Promise<Object|undefined>}
+     * @param {string} pair In classic format as BTC/USDT
+     * @returns {Promise<DepthResult|undefined>}
      */
     async getOrderBook(pair) {
       const paramString = `pair: ${pair}`;
@@ -680,11 +770,12 @@ module.exports = (
       try {
         book = await nonkycApiClient.orderBook(coinPair.pairPlain);
       } catch (error) {
-        log.warn(`API request getOrderBook(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${error}`);
+        log.warn(`API request getOrderBook(${paramString}) of ${utils.getModuleName(moduleId)} module failed. ${error}`);
         return undefined;
       }
 
       try {
+        /** @type {DepthResult} */
         const result = {
           bids: [],
           asks: [],
@@ -695,24 +786,20 @@ module.exports = (
             amount: +crypto[1],
             price: +crypto[0],
             count: 1,
-            type: 'ask-sell-right',
+            side: 'sell',
           });
         }
-        result.asks.sort((a, b) => {
-          return parseFloat(a.price) - parseFloat(b.price);
-        });
+        result.asks.sort((a, b) => a.price - b.price);
 
         for (const crypto of book.bids) {
           result.bids.push({
             amount: +crypto[1],
             price: +crypto[0],
             count: 1,
-            type: 'bid-buy-left',
+            side: 'buy',
           });
         }
-        result.bids.sort((a, b) => {
-          return parseFloat(b.price) - parseFloat(a.price);
-        });
+        result.bids.sort((a, b) => b.price - a.price);
 
         return result;
       } catch (error) {
@@ -723,8 +810,8 @@ module.exports = (
 
     /**
      * Get history of trades
-     * @param {String} pair In classic format as BTC/USDT
-     * @returns {Promise<Boolean|undefined>}
+     * @param {string} pair In classic format as BTC/USDT
+     * @returns {Promise<TradesResult|undefined>}
      */
     async getTradesHistory(pair) {
       const paramString = `pair: ${pair}`;
@@ -735,11 +822,12 @@ module.exports = (
       try {
         trades = await nonkycApiClient.getTradesHistory(coinPair.pairPlain);
       } catch (error) {
-        log.warn(`API request getTradesHistory(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${error}`);
+        log.warn(`API request getTradesHistory(${paramString}) of ${utils.getModuleName(moduleId)} module failed. ${error}`);
         return undefined;
       }
 
       try {
+        /** @type {TradesResult} */
         const result = [];
 
         for (const trade of trades) {
@@ -748,15 +836,13 @@ module.exports = (
             price: +trade.price, // trade price
             coin2Amount: +trade.target_volume, // quote in coin2
             date: +trade.trade_timestamp, // must be as utils.unixTimeStampMs(): 1641121688194 - 1 641 121 688 194
-            type: trade.type.toLowerCase(), // 'buy' or 'sell'
+            side: /** @type {'buy' | 'sell'} */ (trade.type.toLowerCase()), // 'buy' or 'sell'
             tradeId: trade.trade_id.toString(),
           });
         }
 
         // We need ascending sort order
-        result.sort((a, b) => {
-          return parseFloat(a.date) - parseFloat(b.date);
-        });
+        result.sort((a, b) => a.date - b.date);
 
         return result;
       } catch (error) {
@@ -768,11 +854,12 @@ module.exports = (
     /**
      * Get deposit address for a coin
      * @param {String} coin As BTC
-     * @returns {Promise<Array|undefined>}
+     * @returns {Promise<any[]|undefined>}
      */
     async getDepositAddress(coin) {
       let paramString = `coin: ${coin}`;
 
+      // @ts-ignore -- TypeScript doesn't infer method names inside an object literal factory return
       const currencyInfo = this.currencyInfo(coin);
 
       try {
@@ -791,9 +878,10 @@ module.exports = (
           paramString += ` -> ticker: ${ticker}`;
 
           try {
-            data = await nonkycApiClient.getDepositAddress(ticker);
+            data = /** @type {NonkycDepositAddress & { nonkycErrorInfo?: string }} */
+              (await nonkycApiClient.getDepositAddress(ticker));
           } catch (error) {
-            log.warn(`API request getDepositAddress(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${error}`);
+            log.warn(`API request getDepositAddress(${paramString}) of ${utils.getModuleName(moduleId)} module failed. ${error}`);
             continue;
           }
 
@@ -837,15 +925,17 @@ module.exports = (
       }
 
       // There is an issue withdrawing asset USDT-ARB20
-      // Nonkyc processed a request to https://nonkyc.io/api/v2/createwithdrawal with data ticker=USDT-ARB20&quantity=0.0015&address=0x22137BbFfF376dD910d4040ed28E887bD6245151, but with error: 500 Internal Server Error, [No error code] No error message. Resolving…
+      // Nonkyc processed a request to https://api.nonkyc.io/api/v2/createwithdrawal with data ticker=USDT-ARB20&quantity=0.0015&address=0x22137BbFfF376dD910d4040ed28E887bD6245151, but with error: 500 Internal Server Error, [No error code] No error message. Resolving…
       // Withdrawals of DASH work good
 
+      /** @type {NonkycWithdrawal & { nonkycErrorInfo?: string } | undefined} */
       let data;
 
       try {
-        data = await nonkycApiClient.addWithdrawal(ticker, amount, address);
+        data = /** @type {NonkycWithdrawal & { nonkycErrorInfo?: string }} */
+          (await nonkycApiClient.addWithdrawal(ticker, amount, address));
       } catch (error) {
-        log.warn(`API request withdraw(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${error}`);
+        log.warn(`API request withdraw(${paramString}) of ${utils.getModuleName(moduleId)} module failed. ${error}`);
         return {
           success: undefined,
           error: data?.nonkycErrorInfo ?? error,
@@ -861,9 +951,9 @@ module.exports = (
             amount: +data.quantity,
             address: data.address,
             withdrawalFee: +data.fee,
-            withdrawalFeeCurrency: +data.feecurrency,
+            withdrawalFeeCurrency: data.feecurrency,
             status: data.status.toUpperCase(),
-            date: +data.sentat || +data.requestedat,
+            date: +(data.sentat ?? 0) || +(data.requestedat ?? 0),
             target: null,
             network,
             payment_id: data.paymentid,
@@ -886,6 +976,7 @@ module.exports = (
      * @returns {Promise<{success: boolean, error: string}|{result: *[], success: boolean}>}
      */
     async getWithdrawalHistory(coin, limit) {
+      // @ts-ignore -- TypeScript doesn't infer method names inside an object literal factory return
       return this.processHistoryRecords('getWithdrawalHistory', coin, limit, true);
     },
 
@@ -896,19 +987,26 @@ module.exports = (
      * @returns {Promise<{success: boolean, error: string}|{result: *[], success: boolean}>}
      */
     async getDepositHistory(coin, limit) {
+      // @ts-ignore -- TypeScript doesn't infer method names inside an object literal factory return
       return this.processHistoryRecords('getDepositHistory', coin, limit, false);
     },
 
     // Shared function to process history records
+    /**
+     * @param {string} apiMethod
+     * @param {string} [coin]
+     * @param {number} [limit]
+     * @param {boolean} [isWithdrawal]
+     */
     async processHistoryRecords(apiMethod, coin, limit, isWithdrawal) {
       const paramString = `coin: ${coin}, limit: ${limit}`;
 
       let records;
 
       try {
-        records = await nonkycApiClient[apiMethod](coin, limit);
+        records = await (/** @type {any} */ (nonkycApiClient))[apiMethod](coin, limit);
       } catch (error) {
-        log.warn(`API request ${apiMethod}(${paramString}) of ${utils.getModuleName(module.id)} module failed. ${error}`);
+        log.warn(`API request ${apiMethod}(${paramString}) of ${utils.getModuleName(moduleId)} module failed. ${error}`);
         return {
           success: false,
           error,
@@ -977,11 +1075,12 @@ module.exports = (
 /**
  * Returns network name in classic format
  * Keys in networksNameMap should be in upper case even if exchanger format in lower case
- * @param {String} network
- * @returns {String}
+ * @param {string} network
+ * @param {string} ticker
+ * @returns {string}
  */
 function formatNetworkName(network, ticker) {
-  const networksNameMap = {
+  const networksNameMap = /** @type {Record<string, string>} */ ({
     'Ethereum Main Chain (ETH)': _networks['ERC20'].code,
     'Ethereum Main Chain': _networks['ERC20'].code,
     'Binance Smart Chain (BSC)': _networks['BEP20'].code,
@@ -991,16 +1090,16 @@ function formatNetworkName(network, ticker) {
     'Polygon Main Chain': _networks['MATIC'].code,
     'Arbitrum One Mainnet': _networks['ARBITRUM'].code,
     'Bitcoin Main Chain': _networks['BTC'].code,
-  };
+  });
 
   return networksNameMap[network] || ticker || network;
 }
 
 /**
  * Returns pair in NonKYC format like 'BTC_USDT'
- * @param pair Pair in any format
- * @returns {Object|Boolean} pairReadable, pairPlain, coin1, coin2
-*/
+ * @param {string} pair Pair in any format
+ * @returns {{ coin1: string, coin2: string, pairReadable: string, pairPlain: string }}
+ */
 function formatPairName(pair) {
   if (pair.indexOf('/') > -1) {
     pair = pair.replace('/', '_').toUpperCase();
@@ -1015,3 +1114,8 @@ function formatPairName(pair) {
     pairPlain: pair,
   };
 }
+
+module.exports.exchangeMarkets = undefined;
+module.exports.exchangeCurrencies = undefined;
+module.exports.gettingMarkets = false;
+module.exports.gettingCurrencies = false;

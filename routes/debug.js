@@ -1,29 +1,43 @@
-const { Router } = require('express');
+'use strict';
+
+/**
+ * @module routes/debug
+ * Debug routes for development (`GET /db`).
+ */
+
 const db = require('../modules/DB');
 
-const router = new Router();
+/**
+ * Registers debug routes on a Fastify instance.
+ *
+ * @param {import('fastify').FastifyInstance} fastify Parent Fastify instance
+ * @returns {Promise<void>}
+ */
+async function debugRoutes(fastify) {
+  fastify.get('/db', async (request, reply) => {
+    const { tb } = request.query;
+    const collection = tb ? db[tb]?.db : undefined;
 
-router.get('/db', (req, res) => {
-  const tb = db[req.query.tb].db;
-  if (!tb) {
-    res.json({
-      err: 'tb not find',
-    });
-    return;
-  }
-  tb.find().toArray()
-      .then((result) => {
-        res.json({
-          result,
-          success: true,
-        });
-      })
-      .catch((err) => {
-        res.json({
-          err,
-          success: false,
-        });
+    if (!collection) {
+      return reply.code(400).send({
+        err: 'Unknown table name',
+        success: false,
       });
-});
+    }
 
-module.exports = router;
+    try {
+      const result = await collection.find().toArray();
+      return {
+        result,
+        success: true,
+      };
+    } catch (err) {
+      return reply.code(500).send({
+        err: String(err),
+        success: false,
+      });
+    }
+  });
+}
+
+module.exports = debugRoutes;

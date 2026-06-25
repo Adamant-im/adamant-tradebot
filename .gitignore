@@ -1,7 +1,8 @@
 node_modules/
 logs/
 keys/
-.vscode/
+.vscode/*
+!.vscode/settings.json
 tests.js
 config.*.jsonc
 config.jsonc
@@ -13,7 +14,7 @@ test_*.js
 errcase.py
 error.list
 balances.out
-trade/tests/debug_trader.js
+tests/debug_trader.js
 client.py
 test_encode.py
 coverage/
