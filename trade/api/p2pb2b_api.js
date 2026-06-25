@@ -167,7 +167,7 @@ module.exports = function() {
       const httpOptions = {
         url,
         method: 'post',
-        timeout: 10000,
+        timeout: 20000,
         data,
         headers,
       };
