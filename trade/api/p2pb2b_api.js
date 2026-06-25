@@ -112,7 +112,7 @@ module.exports = function() {
       const httpOptions = {
         url,
         method: 'get',
-        timeout: 10000,
+        timeout: 20000,
         headers: DEFAULT_HEADERS,
       };
 
