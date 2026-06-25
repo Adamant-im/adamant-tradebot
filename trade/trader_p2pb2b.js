@@ -686,8 +686,11 @@ module.exports = (
             throw String(`Request failed with data ${JSON.stringify(data)}`);
           }
         } catch (err) {
-          log.warn(`API request addOrder(${paramString}) of ${moduleName} module failed. ${err}.`);
-          return undefined;
+          message = `API request addOrder(${paramString}) of ${moduleName} module failed. ${err}.`;
+          log.warn(message);
+          order.orderId = false;
+          order.message = message;
+          return order;
         }
 
         try {
