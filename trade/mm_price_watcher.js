@@ -242,7 +242,7 @@ module.exports = {
         ) &&
         (
           tradeParams.mm_isPriceWatcherActive ||
-          tradeParams.mm_priceSupportLowPrice
+          Boolean(tradeParams.mm_priceSupportLowPrice)
         );
 
     return enabled;
@@ -382,8 +382,12 @@ module.exports = {
     const targetExchangeLc = targetExchange.toLowerCase();
 
     if (
-      targetExchangeLc === exchange &&
-      pwExchange !== targetExchange
+      targetExchangeLc === exchange.toLowerCase() &&
+      (
+        pwExchange !== targetExchange ||
+        pwExchangeCoin1 !== coin1 ||
+        pwExchangeCoin2 !== coin2
+      )
     ) {
       // Targeting the config's exchange but a different pair
       // Example: ADM/USDT@Azbit → target ADM/BTC@Azbit
@@ -392,7 +396,7 @@ module.exports = {
 
       log.info(`Price watcher: Switched to internal ${targetExchange} exchange API.`);
     } else if (
-      targetExchangeLc !== exchange &&
+      targetExchangeLc !== exchange.toLowerCase() &&
       (pwExchange !== targetExchange || pwExchangeCoin1 !== coin1 || pwExchangeCoin2 !== coin2)
     ) {
       // Targeting an external exchange
@@ -441,7 +445,8 @@ module.exports = {
    * @return {boolean}
    */
   getIsSameExchangePw() {
-    return (tradeParams.mm_priceWatcherSource?.indexOf('@') > -1) && (pwExchange?.toLowerCase() === exchange);
+    return (tradeParams.mm_priceWatcherSource?.indexOf('@') > -1) &&
+        (pwExchange?.toLowerCase() === exchange.toLowerCase());
   },
 
   run() {
@@ -849,6 +854,7 @@ async function setPriceRange() {
     setPriceRangeCount += 1;
     let l; let h;
     let l_global; let h_global; let lDifferencePercent; let hDifferencePercent; let differenceString = '';
+    isPriceAnomaly = false;
 
     // Calculate the price range
 
@@ -976,9 +982,9 @@ async function setPriceRange() {
           const convertRateForBid = isDirectCrossMarket ? crossMarketBid : 1 / crossMarketAsk;
           const convertRateForAsk = isDirectCrossMarket ? crossMarketAsk : 1 / crossMarketBid;
 
-          l = exchangerUtils.convertCryptos(targetPairObj.coin2, coin2, bidPriceInTargetCoin, false, convertRateForBid)
+          l = exchangerUtils.convertCryptos(targetPairObj.coin2, coin2, bidPriceInTargetCoin, false, convertRateForBid, false)
               .outAmount; // E.g., 1.09 USDT -> 0.00001819 BTC
-          h = exchangerUtils.convertCryptos(targetPairObj.coin2, coin2, askPriceInTargetCoin, false, convertRateForAsk)
+          h = exchangerUtils.convertCryptos(targetPairObj.coin2, coin2, askPriceInTargetCoin, false, convertRateForAsk, false)
               .outAmount; // E.g., 1.10 USDT -> 0.00001837 BTC
         } else {
           // Case 1B.g: Neither direct nor reversed cross-market pairs exist on the target exchange
