@@ -7,9 +7,9 @@
 /**
  * Withdraw history object definition.
  * @typedef {Object} Result
- * @prop {string} [error] Error message.
+ * @prop {string} [error] Error message
  * @prop {Array<WithdrawIdItem>} [result] [{ accountId, chain, ... }]
- * @prop {boolean} success Is the withdrawal successful or not.
+ * @prop {boolean} success Is the withdrawal successful or not
  */
 
 module.exports = {};

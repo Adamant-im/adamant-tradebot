@@ -8,21 +8,39 @@ const orderPurposes = require('./orderCollector').orderPurposes;
 
 /**
  * Order statuses:
- * isProcessed: order created with false, and after it's filled, cancelled, or disappeared, becomes true
- * isExecuted: order created with false, and (mostly taker-orders only: mm, cl, pm, pw) if we consider it's filled, set to true
- * isClosed: order created with false, and after it's filled, cancelled, or disappeared, becomes true
- * isCancelled: order created with false, and after the bot cancels it (orderCollector), becomes true
- *   Every Cancelled order is Closed and Processed as well
- * isExpired: order created with undefined, and has a special status of isExpired if it's life time ends
- *   Every Expired order is Closed and Processed as well
- * isCountExceeded: order created with undefined, and has a special status of isCountExceeded if order count of this type exceeds
- *   Every CountExceeded order is Closed and Processed as well
- * isOutOfPwRange: order created with undefined, and has a special status of isOutOfPwRange if it's already not in Pw price range
- *   Every OutOfPwRange order is Closed and Processed as well
- * isOutOfSpread: liq-order created with undefined, and has a special status of isOutOfSpread if it's already not in ±% of spread
- *   Every OutOfSpread order is Closed and Processed as well
- * isNotFound: order created with undefined, and has a special status of isNotFound if it's not found with traderapi.getOpenOrders
- *   Every NotFound order is Closed and Processed as well
+ *
+ * - isProcessed
+ *   Initialized as `false`. Becomes `true` once the order is *fully* filled, cancelled, disappears, or marked to be closed.
+ *
+ * - isExecuted
+ *   Initialized as `false`. Set to `true` when the order is considered filled or part_filled.
+ *
+ * - isClosed
+ *   Initialized as `false`. Becomes `true` once the order is fully filled, cancelled, or disappears.
+ *
+ * - isCancelled
+ *   Initialized as `false`. Becomes `true` after the bot cancels it (via `orderCollector`).
+ *   Every Cancelled order is also Closed and Processed.
+ *
+ * - isExpired
+ *   Initialized as `undefined`. Becomes `true` when the order's lifetime ends.
+ *   Every Expired* order is also Closed and Processed.
+ *
+ * - isCountExceeded
+ *   Initialized as `undefined`. Special status when the max count of this order purpose is exceeded.
+ *   Every CountExceeded order is also Closed and Processed.
+ *
+ * - isOutOfPwRange
+ *   Initialized as `undefined`. Special status when the order is no longer in the Price Watcher range.
+ *   Every OutOfPwRange order is also Closed and Processed.
+ *
+ * - isOutOfSpread
+ *   Applies to liq-orders only. Initialized as `undefined`. Special status when the order is no longer within the ±% spread.
+ *   Every OutOfSpread order is also Closed and Processed.
+ *
+ * - isNotFound
+ *   Initialized as `undefined`. Special status when the order is missing in exchange's `traderapi.getOpenOrders`.
+ *   NotFound order may be considered later as Executed, Cancelled, Closed, Processed.
  */
 
 const moduleId = /** @type {NodeJS.Module} */ (module).id;
@@ -31,10 +49,10 @@ const moduleName = utils.getModuleName(moduleId);
 module.exports = {
   /**
    * Get stats on all orders by purposes list
-   * Used for statistics
-   * @param {Array<String>} purposes List of purposes
-   * @param {String} pair Filter order trade pair
-   * @return {Object} Aggregated info
+   * Used for statistics (the /stats command)
+   * @param {string[]} purposes List of purposes
+   * @param {string} pair Filter order trade pair
+   * @return {Promise<Object>} Aggregated info
    */
   async getAllOrderStats(purposes, pair) {
     const statList = [];
@@ -43,6 +61,7 @@ module.exports = {
     try {
       let sampleStructure = {};
       for (const purpose of purposes) {
+        // Include executed and processed orders; exclude cancelled orders
         const stats = await this.getOrderStats(true, true, false, purpose, pair);
         statList.push({
           purpose,
@@ -71,16 +90,14 @@ module.exports = {
   /**
    * Aggregates info about locally stored orders
    * Used for statistics
-   * @param {Boolean} isExecuted Filter executed orders or not
-   * @param {Boolean} isProcessed Filter processed orders or not
-   * @param {Boolean} isCancelled Filter processed orders or not
-   * @param {String} purpose Filter order type (purpose)
-   * @param {String} pair Filter order trade pair
-   * @return {Object} Aggregated info
+   * @param {boolean} isExecuted Filter executed orders or not
+   * @param {boolean} isProcessed Filter processed orders or not
+   * @param {boolean} isCancelled Filter processed orders or not
+   * @param {string} purpose Filter order purpose
+   * @param {string} pair Filter order trade pair
+   * @return {Promise<Object>} Aggregated info
    */
   async getOrderStats(isExecuted, isProcessed, isCancelled, purpose, pair) {
-    if (purpose === 'man') isExecuted = false; // 'man' orders are not marked as executed
-
     const { ordersDb } = db;
     let stats = [];
 
@@ -95,7 +112,7 @@ module.exports = {
             pair,
             purpose,
             isProcessed,
-            exchange: config.exchange,
+            exchange: config.exchange, // Only include orders from the current exchange
           },
         },
         {
@@ -215,16 +232,27 @@ module.exports = {
   },
 
   /**
-   * Returns info about locally stored open orders grouped by purpose (type)
-   * Used for /orders command
-   * @param {string} pair BTC/USDT for spot or BTCUSDT for perpetual
-   * @param {Object} api If we should calculate for the second account in case of 2-keys trading
-   * @param {boolean} [hideNotOpened=true] Hide ld-orders in [Not opened, Filled, Cancelled] states
-   * @param {boolean} [splitByModuleIndex=true] Splits indexed purposes like 'ld', 'ld2' according to moduleIndex
-   * @return {Promise<Object>} Aggregated by purpose order info
+   * Returns information about locally stored open orders grouped by purpose.
+   *
+   * Note: It returns empty objects only for non–module-indexed purposes.
+   *   For example, if there are no `ld` and `ld2` orders, the result will not include
+   *   `ordersByPurpose['ld2']`, but will still include `ordersByPurpose['ld']`.
+   *
+   * Note: The function updates the locally stored orders using exchange data by calling `orderUtils.updateOrders()`.
+   *   If the getOpenOrders() request fails, the function
+   *   ignores the failure and returns the orders without that update.
+   *
+   * Used for the `/orders` command.
+   *
+   * @param {string} pair Trading pair: `BTC/USDT` for spot or `BTCUSDT` for perpetual
+   * @param {Object} api API instance to use: spot (first or second account) or perpetual
+   * @param {boolean} [hideNotOpened=true] Hides ld-orders in [Not opened, Filled, Cancelled, Missed, To be removed, Removed] states
+   * @param {boolean} [splitByModuleIndex=true] Splits module-indexed purposes (e.g., `ld`, `ld2`) according to their `moduleIndex`
+   *
+   * @return {Promise<Object>} Aggregated order information grouped by purpose
    */
-  async ordersByType(pair, api, hideNotOpened = true, splitByModuleIndex = true) {
-    const ordersByType = {};
+  async ordersByPurpose(pair, api, hideNotOpened = true, splitByModuleIndex = true) {
+    const ordersByPurpose = {};
 
     try {
       const { ordersDb } = db;
@@ -235,7 +263,7 @@ module.exports = {
         isSecondAccountOrder: api?.isSecondAccount ? true : { $ne: true },
       });
 
-      dbOrders = await orderUtils.updateOrders(dbOrders, pair, `${moduleName}-ordersByType`, false, api, hideNotOpened);
+      dbOrders = await orderUtils.updateOrders(dbOrders, pair, `${moduleName}-ordersByPurpose`, false, api, hideNotOpened);
 
       // Handle specific purposes
 
@@ -252,16 +280,16 @@ module.exports = {
           let sellOrdersAmount = 0;
 
           allOrders.forEach((order) => {
-            if (order.type === 'buy') {
+            if (order.side === 'buy') {
               buyOrders.push(order);
               buyOrdersQuote += order.coin2Amount;
-            } else if (order.type === 'sell') {
+            } else if (order.side === 'sell') {
               sellOrders.push(order);
               sellOrdersAmount += order.coin1Amount;
             }
           });
 
-          ordersByType[purpose] = {
+          ordersByPurpose[purpose] = {
             purposeName: orderPurposes[purpose],
             allOrders,
             buyOrders,
@@ -294,16 +322,16 @@ module.exports = {
             let sellOrdersAmount = 0;
 
             orders.forEach((order) => {
-              if (order.type === 'buy') {
+              if (order.side === 'buy') {
                 buyOrders.push(order);
                 buyOrdersQuote += order.coin2Amount;
-              } else if (order.type === 'sell') {
+              } else if (order.side === 'sell') {
                 sellOrders.push(order);
                 sellOrdersAmount += order.coin1Amount;
               }
             });
 
-            ordersByType[key] = {
+            ordersByPurpose[key] = {
               purposeName: orderPurposes[purpose],
               allOrders: orders,
               buyOrders,
@@ -316,7 +344,7 @@ module.exports = {
           // Add an empty entry for purposes with no orders
 
           if (!Object.keys(groupedOrders).length) {
-            ordersByType[purpose] = {
+            ordersByPurpose[purpose] = {
               purposeName: orderPurposes[purpose],
               allOrders: [],
               buyOrders: [],
@@ -330,7 +358,7 @@ module.exports = {
 
       // Ensure 'all' purpose is handled separately
 
-      ordersByType['all'] = {
+      ordersByPurpose['all'] = {
         purposeName: 'All Orders',
         allOrders: dbOrders || [],
         buyOrders: [],
@@ -340,27 +368,27 @@ module.exports = {
       };
 
       dbOrders.forEach((order) => {
-        if (order.type === 'buy') {
-          ordersByType['all'].buyOrders.push(order);
-          ordersByType['all'].buyOrdersQuote += order.coin2Amount;
-        } else if (order.type === 'sell') {
-          ordersByType['all'].sellOrders.push(order);
-          ordersByType['all'].sellOrdersAmount += order.coin1Amount;
+        if (order.side === 'buy') {
+          ordersByPurpose['all'].buyOrders.push(order);
+          ordersByPurpose['all'].buyOrdersQuote += order.coin2Amount;
+        } else if (order.side === 'sell') {
+          ordersByPurpose['all'].sellOrders.push(order);
+          ordersByPurpose['all'].sellOrdersAmount += order.coin1Amount;
         }
       });
     } catch (e) {
-      log.error(`Error in ordersByType(${pair}) of ${moduleName}: ${e}.`);
+      log.error(`Error in ordersByPurpose(${pair}) of ${moduleName}: ${e}.`);
     }
 
-    return ordersByType;
+    return ordersByPurpose;
   },
 
   /**
    * Filters order list by moduleIndex
    * Supports backward compatibility, when orders don't include moduleIndex
-   * @param {Array<Object>} orders List of orders
+   * @param {Object[]} orders List of orders
    * @param {number} moduleIndex When working with several module instances, e.g., ladder1 and ladder2. Indexing starts with 1.
-   * @return {Array<Object>} Filtered list of orders
+   * @return {Object[]} Filtered list of orders
    */
   ordersByModuleIndex(orders, moduleIndex) {
     return orders.filter((order) => {

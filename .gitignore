@@ -1,9 +1,12 @@
 node_modules/
 logs/
-.vscode/
+keys/
+.vscode/*
+!.vscode/settings.json
 tests.js
 config.*.jsonc
 config.jsonc
+config.dev.jsonc
 !config.default.jsonc
 .DS_Store
 .idea/
@@ -11,9 +14,11 @@ test_*.js
 errcase.py
 error.list
 balances.out
-trade/tests/debug_trader.js
+tests/debug_trader.js
 client.py
 test_encode.py
 coverage/
 trade/settings/*
 !trade/settings/tradeParams_Default.js
+CLAUDE.md
+.ai-tasks/

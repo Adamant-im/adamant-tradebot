@@ -8,7 +8,7 @@ module.exports = [
   google,
   {
     languageOptions: {
-      ecmaVersion: 2021,
+      ecmaVersion: 2023,
       sourceType: 'commonjs',
       globals: {
         ...globals.node,
@@ -16,7 +16,7 @@ module.exports = [
       parser: babelParser,
       parserOptions: {
         sourceType: 'script',
-        ecmaVersion: 2021,
+        ecmaVersion: 2023,
       },
     },
     rules: {
@@ -50,9 +50,12 @@ module.exports = [
       'new-cap': ['off'],
       camelcase: ['off'],
       eqeqeq: ['error', 'always'],
+      'no-redeclare': ['error', { builtinGlobals: false }],
+      'no-useless-assignment': 'off',
+      'no-unassigned-vars': 'off',
     },
   },
   {
-    ignores: ['trade/settings/', 'trade/tests/', 'trade/cs/test/', 'trade/cs/web_legacy/', '*.spec.js'],
+    ignores: ['trade/settings/', 'tests/', '*.spec.js', '.ai-tasks/'],
   },
 ];

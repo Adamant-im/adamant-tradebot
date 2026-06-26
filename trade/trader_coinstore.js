@@ -523,7 +523,7 @@ module.exports = (
       let errorMessage;
 
       try {
-        // eslint-disable-next-line max-len
+
         response = await coinstoreApiClient.addOrder(coinPair.pairPlain, coin1Amount, coin2Amount, price, side, orderType);
 
         errorMessage = response?.coinstoreErrorInfo;
@@ -695,7 +695,7 @@ module.exports = (
             amount: +crypto[1],
             price: +crypto[0],
             count: 1,
-            type: 'ask-sell-right',
+            side: 'sell',
           });
         });
         result.asks.sort((a, b) => {
@@ -707,7 +707,7 @@ module.exports = (
             amount: +crypto[1],
             price: +crypto[0],
             count: 1,
-            type: 'bid-buy-left',
+            side: 'buy',
           });
         });
         result.bids.sort((a, b) => {
@@ -748,7 +748,7 @@ module.exports = (
             price: +trade.price, // trade price
             coin2Amount: +trade.volume * +trade.price, // quote in coin2
             date: +trade.ts, // must be as utils.unixTimeStampMs(): 1641121688194 - 1 641 121 688 194
-            type: trade.takerSide?.toLowerCase(), // 'buy' or 'sell'
+            side: trade.takerSide?.toLowerCase(), // 'buy' or 'sell'
             tradeId: trade.tradeId?.toString(),
           });
         });
@@ -767,7 +767,7 @@ module.exports = (
 
     /**
      * Get trading fees for account
-     * @param coinOrPair e.g., 'ETH' or 'ETH/USDT'. If not set, get info for all trade pairs
+     * @param coinOrPair e.g., 'ETH' or 'ETH/USDT'. If not set, get info for all trade pairs.
      * @return {Promise<Array|undefined>}
      */
     async getFees(coinOrPair) {

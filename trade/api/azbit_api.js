@@ -1,5 +1,9 @@
-const crypto = require('crypto');
+const nodeCrypto = require('node:crypto');
+
+/** @type {import('axios').AxiosInstance} */
+// @ts-ignore: axios is a callable instance
 const axios = require('axios');
+
 const utils = require('../../helpers/utils');
 
 module.exports = function() {
@@ -26,23 +30,25 @@ module.exports = function() {
   ];
 
   /**
-   * Handles response from API
-   * @param {Object} responseOrError
-   * @param resolve
-   * @param reject
-   * @param {String} bodyString
-   * @param {String} queryString
-   * @param {String} url
+   * Handles response from API.
+   * @param {Object} responseOrError Response object or error from axios
+   * @param {Function} resolve Promise resolve function
+   * @param {Function} reject Promise reject function
+   * @param {string} bodyString Request body as string
+   * @param {string} queryString URL query parameters
+   * @param {string} url Request URL
    */
   const handleResponse = (responseOrError, resolve, reject, bodyString, queryString, url) => {
     const httpCode = responseOrError?.status || responseOrError?.response?.status;
     const httpMessage = responseOrError?.statusText || responseOrError?.response?.statusText;
 
     const azbitData = responseOrError?.data || responseOrError?.response?.data;
-    const azbitStatus = httpCode === 200 ? true : false; // Azbit doesn't return any special status on success
-    const azbitErrorCode = 'No error code'; // Azbit doesn't have error codes
+    // Azbit doesn't return any special status on success, only HTTP 200
+    const azbitStatus = httpCode === 200 ? true : false;
+    // Azbit doesn't have error codes in response
+    const azbitErrorCode = 'No error code';
 
-    // Azbit returns string in case of error, or { errors }
+    // Azbit returns string in case of error, or { errors } object
     let azbitErrorMessage;
     if (azbitData) {
       if (azbitData.errors) {
@@ -53,6 +59,7 @@ module.exports = function() {
         azbitErrorMessage = azbitData;
       }
 
+      // Special handling for order deals endpoint 404 errors
       if (azbitData.status === 404 && url.includes('/deals')) {
         azbitErrorMessage = 'Order not found';
       }
@@ -65,13 +72,15 @@ module.exports = function() {
 
     try {
       if (azbitStatus) {
-        resolve(azbitData || azbitStatus); // If cancel request is successful, azbitData is undefined :)
+        // For cancel requests, azbitData may be undefined
+        resolve(azbitData || azbitStatus);
       } else if (azbitErrorMessage) {
+        // Reject on critical HTTP errors, resolve on processable errors
         if (notValidStatuses.includes(httpCode)) {
           log.log(`Azbit request to ${url} with data ${reqParameters} failed: ${errorMessage}. Rejecting…`);
           reject({ azbitErrorInfo });
         } else {
-          log.log(`Azbit processed a request to ${url} with data ${reqParameters}, but with error: ${errorMessage}. Resolving…`);
+          log.log(`Azbit processed request to ${url} with data ${reqParameters}, but returned an error: ${errorMessage}. Resolving…`);
           resolve({ azbitErrorInfo });
         }
       } else {
@@ -85,9 +94,9 @@ module.exports = function() {
   };
 
   /**
-   * Creates an url params string as: key1=value1&key2=value2
+   * Creates a URL params string as: key1=value1&key2=value2.
    * @param {Object} data Request params
-   * @returns {String}
+   * @returns {string} URL-encoded query string
    */
   function getParamsString(data) {
     const params = [];
@@ -101,9 +110,10 @@ module.exports = function() {
   }
 
   /**
-   * Creates a full url with params as https://data.azbit.com/api/endpoint?key1=value1&key2=value2
+   * Creates a full URL with params as https://data.azbit.com/api/endpoint?key1=value1&key2=value2.
+   * @param {string} url Base URL
    * @param {Object} data Request params
-   * @returns {String}
+   * @returns {string} Full URL with query parameters
    */
   function getUrlWithParams(url, data) {
     const queryString = getParamsString(data);
@@ -116,10 +126,10 @@ module.exports = function() {
   }
 
   /**
-   * Makes a request to public endpoint
-   * @param {String} path Endpoint
+   * Makes a request to public endpoint.
+   * @param {string} path Endpoint path
    * @param {Object} data Request params
-   * @returns {*}
+   * @returns {Promise<*>} Promise resolving to API response
    */
   function publicRequest(path, data) {
     let url = `${WEB_BASE}${path}`;
@@ -142,11 +152,11 @@ module.exports = function() {
   }
 
   /**
-   * Makes a request to private (auth) endpoint
-   * @param {String} path Endpoint
+   * Makes a request to private (authenticated) endpoint.
+   * @param {string} path Endpoint path
    * @param {Object} data Request params
-   * @param {String} method Request type: get, post, delete
-   * @returns {*}
+   * @param {string} method Request type: get, post, delete
+   * @returns {Promise<*>} Promise resolving to API response
    */
   function protectedRequest(path, data, method) {
     let url = `${WEB_BASE}${path}`;
@@ -157,6 +167,7 @@ module.exports = function() {
     let queryString;
 
     try {
+      // For GET requests, use query params; for POST/DELETE, use body
       if (method === 'get') {
         bodyString = '';
         queryString = getParamsString(data);
@@ -165,6 +176,7 @@ module.exports = function() {
         bodyString = getBody(data);
       }
 
+      // Generate HMAC-SHA256 signature for authentication
       const signature = getSignature(url, bodyString);
 
       headers = {
@@ -197,10 +209,19 @@ module.exports = function() {
   };
 
   const getSignature = (url, payload) => {
-    return crypto.createHmac('sha256', config.secret_key).update(config.apiKey + url + payload).digest('hex');
+    return nodeCrypto.createHmac('sha256', config.secret_key).update(config.apiKey + url + payload).digest('hex');
   };
 
   const EXCHANGE_API = {
+    /**
+     * Sets API configuration.
+     * @param {string} apiServer API server base URL
+     * @param {string} apiKey API key
+     * @param {string} secretKey Secret key for signing
+     * @param {string} tradePwd Trading password (not used for Azbit)
+     * @param {Object} logger Logger instance
+     * @param {boolean} publicOnly Whether to configure only public endpoints
+     */
     setConfig(apiServer, apiKey, secretKey, tradePwd, logger, publicOnly = false) {
       if (apiServer) {
         WEB_BASE = apiServer + WEB_BASE_PREFIX;
@@ -219,9 +240,9 @@ module.exports = function() {
     },
 
     /**
-     * List of user balances for all currencies
-     * @return {Object} { balances, balancesBlockedInOrder, balancesInCurrencyOfferingsVesting?, withdrawalLimits, currencies }
-     * https://docs.azbit.com/docs/public-api/wallet#apiwalletsbalances
+     * Retrieves list of user balances for all currencies.
+     * @returns {Promise<Object>} Object containing balances, balancesBlockedInOrder, balancesInCurrencyOfferingsVesting, withdrawalLimits, currencies
+     * @see https://docs.azbit.com/docs/public-api/wallet#apiwalletsbalances
      */
     async getBalances() {
       const data = {};
@@ -229,12 +250,11 @@ module.exports = function() {
     },
 
     /**
-     * Query account orders
-     * @param {String} pair In Azbit format as ETH_USDT
-     * @param {String} status ["all", "active", "cancelled"]. Optional.
-     * @return {Object}
-     * https://docs.azbit.com/docs/public-api/orders#apiuserorders
-     *
+     * Queries account orders.
+     * @param {string} pair Trading pair in Azbit format as ETH_USDT
+     * @param {string} status Order status filter: "all", "active", or "cancelled" (optional)
+     * @returns {Promise<Object>} Array of orders
+     * @see https://docs.azbit.com/docs/public-api/orders#apiuserorders
      */
     getOrders(pair, status) {
       const data = {};
@@ -246,27 +266,23 @@ module.exports = function() {
     },
 
     /**
-     * Query order deals
-     * @param {String} orderId Exchange's orderId as '70192a8b-c34e-48ce-badf-889584670507'
-     * @return {Object} { deals[], id, isCanceled and other order details }
-     * https://docs.azbit.com/docs/public-api/orders#apiordersorderiddeals
-     * Order doesn't exist: 404, { status: 404 }
-     * Wrong orderId (not a GUID): 400, { status: 400, errors: { ... } }
-     * No deals: { deals: [], ... }
-     * Cancelled order: { deals: [...], isCanceled: true, ... }
+     * Queries order deals (fills).
+     * @param {string} orderId Exchange order ID as '70192a8b-c34e-48ce-badf-889584670507'
+     * @returns {Promise<Object>} Object containing deals array, id, isCanceled, and other order details. Returns 404 if order doesn't exist, 400 if orderId is invalid (not a GUID). No deals: { deals: [], ... }. Cancelled order: { deals: [...], isCanceled: true, ... }.
+     * @see https://docs.azbit.com/docs/spot/orders#apiordersorderiddeals
      */
     getOrderDeals(orderId) {
       return protectedRequest(`/orders/${orderId}/deals`, {}, 'get');
     },
 
     /**
-     * Places a order
-     * @param {string} market In Azbit format as ETH_USDT
-     * @param {string} amount Order amount in coin1
-     * @param {string} price Order price
-     * @param {string} side 'buy' or 'sell'
-     * @return {Object} Order GUID in case if success. Example: "e2cd407c-28c8-4768-bd73-cd7357fbccde".
-     * https://docs.azbit.com/docs/public-api/orders#post
+     * Places an order.
+     * @param {string} market Trading pair in Azbit format as ETH_USDT
+     * @param {string | number} amount Order amount in coin1
+     * @param {string | number} price Order price
+     * @param {string} side Order side: 'buy' or 'sell'
+     * @returns {Promise<string|Object>} Order GUID on success (e.g., "e2cd407c-28c8-4768-bd73-cd7357fbccde"); error object with `azbitErrorInfo` on failure
+     * @see https://docs.azbit.com/docs/public-api/orders#post
      */
     addOrder(market, amount, price, side) {
       const data = {
@@ -280,30 +296,30 @@ module.exports = function() {
     },
 
     /**
-     * Cancel an order
-     * @param {String} orderId Example: '70192a8b-c34e-48ce-badf-889584670507'
-     * @return {Object} Success response with no data
-     * https://docs.azbit.com/docs/public-api/orders#delete-1
+     * Cancels an order.
+     * @param {string} orderId Order ID (e.g., '70192a8b-c34e-48ce-badf-889584670507')
+     * @returns {Promise<Object>} Success response with no data
+     * @see https://docs.azbit.com/docs/public-api/orders#delete-1
      */
     cancelOrder(orderId) {
       return protectedRequest(`/orders/${orderId}`, {}, 'delete');
     },
 
     /**
-     * Cancel all orders for currency pair
-     * @param {String} pair In Azbit format as ETH_USDT
-     * @returns {Object} Success response with no data. Never mind, if no success, no data as well. Same 200 status.
-     * https://docs.azbit.com/docs/public-api/orders#delete
+     * Cancels all orders for a currency pair.
+     * @param {string} pair Trading pair in Azbit format as ETH_USDT
+     * @returns {Promise<Object>} Success response with no data (returns 200 status regardless of success)
+     * @see https://docs.azbit.com/docs/public-api/orders#delete
      */
     cancelAllOrders(pair) {
       return protectedRequest(`/orders?currencyPairCode=${pair}`, {}, 'delete');
     },
 
     /**
-     * Get trade details for a ticker (market rates)
-     * @param {String} pair In Azbit format as ETH_USDT
-     * @return {Object}
-     * https://docs.azbit.com/docs/public-api/tickers#apitickers
+     * Retrieves trade details for a ticker (market rates).
+     * @param {string} pair Trading pair in Azbit format as ETH_USDT
+     * @returns {Promise<Object>} Ticker data with price and volume information
+     * @see https://docs.azbit.com/docs/public-api/tickers#apitickers
      */
     ticker(pair) {
       const data = {
@@ -314,11 +330,10 @@ module.exports = function() {
     },
 
     /**
-     * Get market depth, 40 bids + 40 asks
-     * Note: returns [] for a wrong trade pair
-     * @param pair In Azbit format as ETH_USDT
-     * @return {Object}
-     * https://docs.azbit.com/docs/public-api/orders#apiorderbook
+     * Retrieves market depth (40 bids + 40 asks).
+     * @param {string} pair Trading pair in Azbit format as ETH_USDT
+     * @returns {Promise<Object>} Order book with bids and asks arrays (returns empty array for invalid pair)
+     * @see https://docs.azbit.com/docs/public-api/orders#apiorderbook
      */
     orderBook(pair) {
       const data = {
@@ -329,13 +344,12 @@ module.exports = function() {
     },
 
     /**
-     * Get trades history
-     * Note: returns [] for a wrong trade pair
-     * @param pair In Azbit format as ETH_USDT
-     * @param pageSize Number of trades to return. Max is 200.
-     * @param pageNumber Page number. Optional.
-     * @return {Object} Last trades
-     * https://docs.azbit.com/docs/public-api/deals#apideals
+     * Retrieves recent trades history.
+     * @param {string} pair Trading pair in Azbit format as ETH_USDT
+     * @param {number} pageSize Number of trades to return (max 200)
+     * @param {number} [pageNumber] Page number (optional)
+     * @returns {Promise<Object>} Array of recent trades (returns empty array for invalid pair)
+     * @see https://docs.azbit.com/docs/public-api/deals#apideals
      */
     getTradesHistory(pair, pageSize = 200, pageNumber) {
       const data = {
@@ -349,11 +363,10 @@ module.exports = function() {
     },
 
     /**
-     * Get all crypto currencies
-     * Note: v1 endpoint returns only coin tickers.
-     * v1 /wallets/balances and v2 https://api2.azbit.com/api/currencies offer much more, but never mind.
-     * @returns {Object}
-     * https://docs.azbit.com/docs/public-api/currency#apicurrencies
+     * Retrieves all available crypto currencies.
+     * Note: This v1 endpoint returns only coin tickers. The v1 /wallets/balances and v2 https://api2.azbit.com/api/currencies endpoints offer more detailed information.
+     * @returns {Promise<Object>} Array of currency codes
+     * @see https://docs.azbit.com/docs/public-api/currency#apicurrencies
      */
     getCurrencies() {
       const data = {};
@@ -361,28 +374,28 @@ module.exports = function() {
     },
 
     /**
-     * Get user deposit address
-     * @param coin As BTC
-     * @returns {Object}
-     * https://docs.azbit.com/docs/public-api/wallet#apideposit-addresscurrencycode
+     * Retrieves user deposit address for a cryptocurrency.
+     * @param {string} coin Currency code (e.g., BTC)
+     * @returns {Promise<Object>} Deposit address information
+     * @see https://docs.azbit.com/docs/public-api/wallet#apideposit-addresscurrencycode
      */
     getDepositAddress(coin) {
       return protectedRequest(`/deposit-address/${coin}`, {}, 'get');
     },
 
     /**
-     * Get trade fees
-     * @returns {Object}
-     * https://docs.azbit.com/docs/public-api/currency#apicurrenciesusercommissions
+     * Retrieves trade fees for the user.
+     * @returns {Promise<Object>} User's trading fee information
+     * @see https://docs.azbit.com/docs/public-api/currency#apicurrenciesusercommissions
      */
     getFees() {
       return protectedRequest('/currencies/user/commissions', {}, 'get');
     },
 
     /**
-     * Get info on all markets
-     * @returns {Object}
-     * https://docs.azbit.com/docs/public-api/currency#apicurrenciespairs
+     * Retrieves information on all available trading pairs.
+     * @returns {Promise<Object>} Array of market/trading pair information
+     * @see https://docs.azbit.com/docs/public-api/currency#apicurrenciespairs
      */
     async markets() {
       const data = {};

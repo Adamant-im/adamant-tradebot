@@ -1,3 +1,25 @@
+/**
+ * Connector to the NonKYC Spot REST API.
+ * Intended for use with `trader_nonkyc.js` only.
+ *
+ * @typedef {import('types/nonkyc/markets.d').NonkycMarket} NonkycMarket
+ * @typedef {import('types/nonkyc/markets.d').NonkycMarkets} NonkycMarkets
+ * @typedef {import('types/nonkyc/assets.d').NonkycAsset} NonkycAsset
+ * @typedef {import('types/nonkyc/assets.d').NonkycAssets} NonkycAssets
+ * @typedef {import('types/nonkyc/ticker.d').NonkycTicker} NonkycTicker
+ * @typedef {import('types/nonkyc/depth.d').NonkycDepth} NonkycDepth
+ * @typedef {import('types/nonkyc/trades.d').NonkycTrade} NonkycTrade
+ * @typedef {import('types/nonkyc/trades.d').NonkycTrades} NonkycTrades
+ * @typedef {import('types/nonkyc/balances.d').NonkycBalance} NonkycBalance
+ * @typedef {import('types/nonkyc/balances.d').NonkycBalances} NonkycBalances
+ * @typedef {import('types/nonkyc/orders.d').NonkycOrder} NonkycOrder
+ * @typedef {import('types/nonkyc/orders.d').NonkycOrders} NonkycOrders
+ * @typedef {import('types/nonkyc/order.d').NonkycOrderDetail} NonkycOrderDetail
+ * @typedef {import('types/nonkyc/create-order.d').NonkycCreateOrder} NonkycCreateOrder
+ * @typedef {import('types/nonkyc/cancel-order.d').NonkycCancelOrder} NonkycCancelOrder
+ * @typedef {import('types/nonkyc/cancel-all-orders.d').NonkycCancelAllOrders} NonkycCancelAllOrders
+ */
+
 const axios = require('axios');
 
 const {
@@ -6,11 +28,11 @@ const {
 } = require('../../helpers/utils');
 
 /**
- * Docs: https://nonkyc.io/api
+ * Docs: https://api.nonkyc.io
  */
 
 /**
- * Error codes: https://nonkyc.io/api
+ * Error codes: https://api.nonkyc.io
  * isTemporary means that we consider the request is temporary failed and we'll repeat it later with success possibility
  */
 const errorCodeDescriptions = {
@@ -137,16 +159,15 @@ module.exports = function() {
     secret_key: '',
     tradePwd: '',
   };
-  let log = {};
+  let log = /** @type {any} */ ({});
 
   /**
    * Handles response from API
-   * @param {Object} responseOrError
-   * @param resolve
-   * @param reject
-   * @param {String} bodyString
-   * @param {String} queryString
-   * @param {String} url
+   * @param {any} responseOrError
+   * @param {(value: any) => void} resolve
+   * @param {(reason?: any) => void} reject
+   * @param {string} queryString
+   * @param {string} url
    */
   const handleResponse = (responseOrError, resolve, reject, queryString, url) => {
     const httpCode = responseOrError?.status ?? responseOrError?.response?.status;
@@ -155,16 +176,16 @@ module.exports = function() {
     const data = responseOrError?.data ?? responseOrError?.response?.data;
 
     const nonkycError = data?.error;
-    const nonkycErrorInfo = errorCodeDescriptions[nonkycError?.code];
-    const httpCodeInfo = errorCodeDescriptions[httpCode];
+    const nonkycErrorInfo = /** @type {any} */ (errorCodeDescriptions)[nonkycError?.code];
+    const httpCodeInfo = /** @type {any} */ (errorCodeDescriptions)[httpCode];
 
     const success = httpCode === 200 && !nonkycError;
 
-    const error = {
+    const error = /** @type {any} */ ({
       code: nonkycError?.code ?? 'No error code',
       description: trimAny(nonkycError?.message ?? nonkycErrorInfo?.description ?? '', ' .'),
       details: trimAny(nonkycError?.description ?? nonkycErrorInfo?.details ?? '', ' .'),
-    };
+    });
 
     error.message = error.description + (error.details ? ` (${error.details})` : '');
 
@@ -224,9 +245,9 @@ module.exports = function() {
         params: type === 'get' ? data : undefined,
       };
 
-      axios(httpOptions)
-          .then((response) => handleResponse(response, resolve, reject, bodyString, url))
-          .catch((error) => handleResponse(error, resolve, reject, bodyString, url));
+      /** @type {any} */ (axios)(httpOptions)
+          .then((/** @type {any} */ response) => handleResponse(response, resolve, reject, bodyString, url))
+          .catch((/** @type {any} */ error) => handleResponse(error, resolve, reject, bodyString, url));
     });
   }
 
@@ -250,13 +271,21 @@ module.exports = function() {
         timeout: 10000,
       };
 
-      axios(httpOptions)
-          .then((response) => handleResponse(response, resolve, reject, queryString, url))
-          .catch((error) => handleResponse(error, resolve, reject, queryString, url));
+      /** @type {any} */ (axios)(httpOptions)
+          .then((/** @type {any} */ response) => handleResponse(response, resolve, reject, queryString, url))
+          .catch((/** @type {any} */ error) => handleResponse(error, resolve, reject, queryString, url));
     });
   }
 
   const EXCHANGE_API = {
+    /**
+     * @param {string} apiServer
+     * @param {string} apiKey
+     * @param {string} secretKey
+     * @param {string} tradePwd
+     * @param {any} logger
+     * @param {boolean} [publicOnly]
+     */
     setConfig(apiServer, apiKey, secretKey, tradePwd, logger, publicOnly = false) {
       if (apiServer) {
         WEB_BASE = apiServer;
@@ -277,8 +306,8 @@ module.exports = function() {
 
     /**
      * Get detailed account balance information
-     * https://nonkyc.io/api#/Account/get_balances
-     * @return {Promise<[]>}
+     * https://api.nonkyc.io/#/Account%20(Private)/get_balances
+     * @return {Promise<NonkycBalances>}
      */
     getBalances() {
       return protectedRequest('get', '/balances', {});
@@ -286,11 +315,11 @@ module.exports = function() {
 
     /**
      * Get a list of your 'active' spot market orders
-     * https://nonkyc.io/api#/Account/get_getorders
+     * https://api.nonkyc.io/#/Account%20(Private)/get-orders
      * @param {String} symbol In NonKYC format as BTC_USDT
      * @param {Number} [limit=500] Max: 500
      * @param {Number} [offset=0]
-     * @return {Promise<[]>}
+     * @return {Promise<NonkycOrders>}
      */
     getOrders(symbol, limit = 500, offset = 0) {
       const params = {
@@ -305,9 +334,9 @@ module.exports = function() {
 
     /**
      * Get an order by id
-     * https://nonkyc.io/api#/Account/get_getorder__orderId_
+     * https://api.nonkyc.io/#/Account%20(Private)/get-order
      * @param {String} orderId Example: '655f28a1f6849a420b2e913d'
-     * @returns {Promise<Object>}
+     * @returns {Promise<NonkycOrderDetail & { nonkycErrorInfo?: string }>}
      */
     async getOrder(orderId) {
       return protectedRequest('get', `/getorder/${orderId}`, {});
@@ -315,13 +344,13 @@ module.exports = function() {
 
     /**
      * Make a new spot market order
-     * https://nonkyc.io/api#/Account/post_createorder
+     * https://api.nonkyc.io/#/Account%20(Private)/post_createorder
      * @param {String} symbol In NonKYC format as BTC_USDT
      * @param {String} amount Base coin amount
      * @param {String} price Order price
      * @param {String} side buy or sell
      * @param {String} type market or limit
-     * @return {Promise<Object>}
+     * @return {Promise<NonkycCreateOrder & { nonkycErrorInfo?: string }>}
      */
     addOrder(symbol, amount, price, side, type) {
       const data = {
@@ -337,9 +366,9 @@ module.exports = function() {
 
     /**
      * Cancel an open spot trade order
-     * https://nonkyc.io/api#/Account/post_cancelorder
+     * https://api.nonkyc.io/#/Account%20(Private)/cancel-order
      * @param {String} orderId Example: '655f28a1f6849a420b2e913d'
-     * @return {Promise<Object>}
+     * @return {Promise<NonkycCancelOrder & { nonkycErrorInfo?: string }>}
      */
     cancelOrder(orderId) {
       const data = {
@@ -351,10 +380,10 @@ module.exports = function() {
 
     /**
      * Cancel a batch of open orders in a spot market
-     * https://nonkyc.io/api#/Account/post_cancelallorders
+     * https://api.nonkyc.io/#/Account%20(Private)/post_cancelallorders
      * @param {String} symbol In NonKYC format as BTC_USDT
      * @param {String} [side='all'] 'buy', 'sell' or 'all'
-     * @return {Promise<Object>}
+     * @return {Promise<NonkycCancelAllOrders & { nonkycErrorInfo?: string }>}
      */
     cancelAllOrders(symbol, side = 'all') {
       const data = {
@@ -367,9 +396,9 @@ module.exports = function() {
 
     /**
      * Market related statistics for single market for the last 24 hours
-     * https://nonkyc.io/api#/Aggregator%20Datafeed%20Format/get_ticker__symbol_
+     * https://api.nonkyc.io/#/Supplementary%20Endpoints/get_ticker__symbol_
      * @param {String} symbol In NonKYC format as BTC_USDT
-     * @return {Promise<Object>}
+     * @return {Promise<NonkycTicker>}
      */
     ticker(symbol) {
       return publicRequest('get', `/ticker/${symbol}`, {});
@@ -377,10 +406,10 @@ module.exports = function() {
 
     /**
      * Order book of any given market trading pair, split into two different arrays for bid and for ask orders
-     * https://nonkyc.io/api#/Aggregator%20Datafeed%20Format/get_orderbook
+     * https://api.nonkyc.io/#/Supplementary%20Endpoints/get_orderbook
      * @param {String} symbol In NonKYC format as BTC_USDT
      * @param {Number} [limit=400] Bids 1/2 and Asks 1/2. Default is 100.
-     * @return {Promise<Object>}
+     * @return {Promise<NonkycDepth>}
      */
     orderBook(symbol, limit = 400) {
       const params = {
@@ -393,10 +422,10 @@ module.exports = function() {
 
     /**
      * Historical market trade data for any given trading pair
-     * https://nonkyc.io/api#/Aggregator%20Datafeed%20Format/get_historical_trades
+     * https://api.nonkyc.io/#/Supplementary%20Endpoints/get_historical_trades
      * @param {String} symbol In NonKYC format as BTC_USDT
      * @param {Number} [limit=500]
-     * @return {Promise<[]>}
+     * @return {Promise<NonkycTrades>}
      */
     getTradesHistory(symbol, limit = 500) {
       const params = {
@@ -409,8 +438,8 @@ module.exports = function() {
 
     /**
      * Get list of markets
-     * https://nonkyc.io/api#/Public/get_market_getlist
-     * @return {Promise<[]>}
+     * https://api.nonkyc.io/#/Markets/get_market_getlist
+     * @return {Promise<NonkycMarkets>}
     */
     markets() {
       return publicRequest('get', '/market/getlist', {});
@@ -418,8 +447,8 @@ module.exports = function() {
 
     /**
      * Get a list of assets
-     * https://nonkyc.io/api#/Public/get_asset_getlist
-     * @return {Promise<[]>}
+     * https://api.nonkyc.io/#/Assets/asset-getlist
+     * @return {Promise<NonkycAssets>}
     */
     currencies() {
       return publicRequest('get', '/asset/getlist', {});
@@ -427,7 +456,7 @@ module.exports = function() {
 
     /**
      * Get your deposit address
-     * https://nonkyc.io/api#/Account/get_getdepositaddress__ticker_
+     * https://api.nonkyc.io/#/Account%20(Private)/get_getdepositaddress__ticker_
      * @param {String} ticker As ETH-ERC20, ADM
      * @return {Promise<Object>}
      */
@@ -437,7 +466,7 @@ module.exports = function() {
 
     /**
      * Make a new withdrawal request
-     * https://nonkyc.io/api#/Account/post_createwithdrawal
+     * https://api.nonkyc.io/#/Account%20(Private)/create-withdrawal
      * @param {String} ticker As ETH-ERC20, ADM
      * @param {Number} quantity
      * @param {String} cryptoAddress Crypto address to withdraw funds to
@@ -455,11 +484,11 @@ module.exports = function() {
 
     /**
      * Get a list of your account withdrawals
-     * https://nonkyc.io/api#/Account/get_getwithdrawals
+     * https://api.nonkyc.io/#/Account%20(Private)/get-withdrawals
      * @param {String} coin As BTC
      * @param {Number} [limit=500] Min: 1. Max: 500.
      * @param {Number} [offset=0]
-     * @return {Promise<[]>}
+     * @return {Promise<any[]>}
      */
     getWithdrawalHistory(coin, limit = 500, offset = 0) {
       const params = {
@@ -473,11 +502,11 @@ module.exports = function() {
 
     /**
      * Get a list of your account deposits
-     * https://nonkyc.io/api#/Account/get_getdeposits
+     * https://api.nonkyc.io/#/Account%20(Private)/get-deposits
      * @param {String} ticker As BTC
      * @param {Number} [limit=500] Min: 1. Max: 500.
      * @param {Number} [offset=0]
-     * @return {Promise<[]>}
+     * @return {Promise<any[]>}
      */
     getDepositHistory(ticker, limit = 500, offset = 0) {
       const params = {

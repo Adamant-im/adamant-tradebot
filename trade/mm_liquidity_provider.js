@@ -1,15 +1,54 @@
 /**
- * Places orders in ±mm_liquiditySpreadPercent with mm_liquiditySellAmount and mm_liquidityBuyQuoteAmount
- * So it also maintains mm_liquiditySpreadPercent spread
+ * Places liquidity orders within ±mm_liquiditySpreadPercent.
+ * Also maintains the mm_liquiditySpreadPercent orderbook spread.
  *
- * Liq is enabled if mm_isActive && mm_isLiquidityActive && mm_Policy is not 'wash'
+ * Liquidity (liq) is enabled when:
+ *   mm_isActive && mm_isLiquidityActive && mm_Policy !== 'wash'
  *
  * Examples:
- * - '/enable liq 2% 1000 ADM 100 USDT middle': Place liq-orders in 0–2% deviation
+ * - '/enable liq 2% 1000 ADM 100 USDT middle':
+ *      Place liq-orders in the 0–2% deviation range.
  *
- * mm_liquidityTrend determines where the midpoint of spread is — how to fill the bid–ask of the gap: middle, downtrend, or uptrend.
- * mm_liquidityTrend can move a price up or down if there are no third-party orders.
-*/
+ * - '/enable liq 2% 1000 ADM 100 USDT middle ss':
+ *      Same as above, but with spread support (mm_liquiditySpreadSupport).
+ *      The "ss" option places additional small-support orders within ±LIQUIDITY_SS_MAX_SPREAD_PERCENT.
+ *
+ *      “Additional” means:
+ *        – Their count and total volume are in addition to regular liq-orders.
+ *      “Small” means:
+ *        – Each order size is between getMinOrderAmount() and +100% of it
+ *          (typically ~5–10 USDT depending on the trading pair/exchange).
+ *
+ *      Support-order count is determined by getMaxOrderNumberOneSide(side),
+ *      and limited within MIN_SS_ORDERS_ONE_SIDE … MAX_SS_ORDERS_ONE_SIDE.
+ *
+ *      Optional module: trade/mm_liquidity_ss.js.
+ *
+ * - '/enable liq 1.5-2% 1000 ADM 100 USDT middle':
+ *      Place liq-orders in the 1.5–2% deviation range (further from the midpoint).
+ *
+ * - '/enable liq 1.5-2% 1000 ADM 100 USDT middle ss':
+ *      Same as above, plus spread support.
+ *
+ * mm_liquidityTrend controls the midpoint of the spread — how to fill the
+ * bid–ask gap: “middle”, “downtrend”, or “uptrend”.
+ * It may shift price upward or downward when no third-party orders exist.
+ *
+ * Safe Liquidity — built-in protection:
+ *   - Never buy higher than your sell prices; never sell lower than your buys.
+ *     VWAP is calculated separately for bids and asks.
+ *   - Flowing liquidity: when you sell, the same amount is placed back on the
+ *     buy side at a lower price.
+ *   - Details: [2024-03 MM bot / Safe liquidity]
+ *   - Optional module: trade/mm_liquidity_safe.js
+ */
+
+/**
+ * @module trade/mm_liquidity_provider
+ * @typedef {import('types/bot/parsedMarket.d').ParsedMarket} ParsedMarket
+ * @typedef {import('types/bot/liquidity.d').LiqLimits} LiqLimits
+ * @typedef {import('types/bot/ordersDb.d.js').BotOrderDbRecord} BotOrderDbRecord
+ */
 
 const utils = require('../helpers/utils');
 const constants = require('../helpers/const');
@@ -17,7 +56,6 @@ const config = require('../modules/configReader');
 const log = require('../helpers/log');
 const notify = require('../helpers/notify');
 const tradeParams = require('./settings/tradeParams_' + config.exchange);
-const Store = require('../modules/Store');
 
 const traderapi = require('./trader_' + config.exchange)(
     config.apikey,
@@ -37,6 +75,10 @@ const orderUtils = require('./orderUtils');
 const exchangerUtils = require('../helpers/cryptos/exchanger');
 const orderCollector = require('./orderCollector');
 
+// Optional sub-modules (loaded via softRequire so the bot works even without them)
+const safeLiq = utils.softRequire('../trade/mm_liquidity_safe'); // Safe Liquidity: liqLimits, VWAP bounds
+const ss = utils.softRequire('../trade/mm_liquidity_ss'); // Spread-support (SS) liq-orders
+
 let lastNotifyBalancesTimestamp = 0;
 let lastNotifyPriceTimestamp = 0;
 
@@ -44,30 +86,49 @@ const INTERVAL_MIN = 10 * 1000;
 const INTERVAL_MAX = 20 * 1000;
 const LIFETIME_MIN = 1000 * 60 * 7; // 7 minutes
 const LIFETIME_MAX = constants.HOUR * 7; // 7 hours
-const DEFAULT_MAX_ORDERS_ONE_SIDE = 9;
 
-const minMaxAmounts = {}; // Stores min-max amounts for different order types (buy, sell) and subPurposes (depth, ss)
+const DEFAULT_MAX_ORDERS_ONE_SIDE = 5;
 
-// For safe liquidity, we calculate actual limits from mm_liquidityBuyQuoteAmount and mm_liquiditySellAmount
-// These limits consider balance between how much actually bought and sold
-let liqLimits = {};
+const minMaxAmounts = {}; // Stores min-max amounts for depth liq-orders (buy, sell)
+
+// Local cache of Safe Liquidity limits; synced from mm_liquidity_safe after each updateLiqLimits() call.
+// Falls back to raw tradeParams amounts when mm_liquidity_safe is absent.
+/** @type {LiqLimits} */
+let liqLimits = createDefaultLiqLimits();
 
 let isPreviousIterationFinished = true;
 
+const formattedPair = /** @type {ParsedMarket} */ (orderUtils.parseMarket(config.defaultPair));
+const { pair, coin1, coin2, coin1Decimals, coin2Decimals, coin2DecimalsForStable } = formattedPair;
+const exchange = config.exchange;
+
+const moduleId = /** @type {NodeJS.Module} */ (module).id;
+const moduleName = utils.getModuleName(moduleId);
+const readableModuleName = 'Liquidity';
+
+log.log(`Module ${moduleName} is loaded.`);
+
 module.exports = {
-  readableModuleName: 'Liquidity',
+  readableModuleName,
 
   run() {
     this.iteration();
   },
 
+  /**
+   * Executes the Liquidity provider instance loop at a time interval,
+   * as long as it is enabled.
+   */
   async iteration() {
     const interval = setPause();
     if (
       interval &&
       tradeParams.mm_isActive &&
       tradeParams.mm_isLiquidityActive &&
-      constants.MM_POLICIES_REGULAR.includes(tradeParams.mm_Policy) &&
+      (
+        !tradeParams.mm_isTraderActive ||
+        constants.MM_POLICIES_REGULAR.includes(tradeParams.mm_Policy)
+      ) &&
       !isPerpetual
     ) {
       if (isPreviousIterationFinished) {
@@ -75,7 +136,7 @@ module.exports = {
         await this.updateLiquidity();
         isPreviousIterationFinished = true;
       } else {
-        log.log(`Liquidity: Postponing iteration of the liquidity provider for ${interval} ms. Previous iteration is in progress yet.`);
+        log.log(`${readableModuleName}: Postponing iteration of the liquidity provider for ${interval} ms. Previous iteration is in progress yet.`);
       }
       setTimeout(() => {
         this.iteration();
@@ -88,39 +149,64 @@ module.exports = {
   },
 
   /**
-   * The main part of Liquidity provider
-   * Updates (closes) current liq-orders, places spread support liq-orders, and then depth (regular) liq-orders, logs stats
+   * Top-level logic of the Liquidity Provider.
+   * Updates existing liq-orders, places spread-support orders, then depth (regular) liq-orders,
+   * and logs the module statistics.
    */
   async updateLiquidity() {
     try {
-      const coin1Decimals = orderUtils.parseMarket(config.pair).coin1Decimals;
-      const coin2Decimals = orderUtils.parseMarket(config.pair).coin2Decimals;
-
       const { ordersDb } = db;
+      /** @type {BotOrderDbRecord[]} */
       let liquidityOrders = await ordersDb.find({
         isProcessed: false,
         purpose: 'liq', // liq: liquidity order
-        pair: config.pair,
-        exchange: config.exchange,
+        pair,
+        exchange,
       });
 
-      const orderBook = await orderUtils.getOrderBookCached(config.pair, utils.getModuleName(module.id));
-      const orderBookInfo = utils.getOrderBookInfo(orderBook, tradeParams.mm_liquiditySpreadPercent);
+      const orderBook = await orderUtils.getOrderBookCached(pair, moduleName);
+      let orderBookInfo = utils.getOrderBookInfo(orderBook, tradeParams.mm_liquiditySpreadPercent);
 
       if (!orderBookInfo) {
-        log.warn(`Liquidity: Order books are empty for ${config.pair}, or temporary API error. Unable to get spread info while placing liq-orders.`);
+        log.warn(`${readableModuleName}: Order books are empty for ${pair}, or the exchange returned a temporary API error. Unable to retrieve spread information while placing liquidity orders.`);
         return;
       }
 
       if (!setMinMaxAmounts(orderBookInfo.highestBid)) {
-        log.warn('Liquidity: Unable to calculate min-max amounts while placing liq-orders.');
+        log.warn(`${readableModuleName}: Unable to calculate min-max amounts while placing liq-orders.`);
         return;
       }
 
-      liquidityOrders = await orderUtils.updateOrders(liquidityOrders, config.pair, utils.getModuleName(module.id) + ':liq-'); // update orders which partially filled or not found
-      liquidityOrders = await this.closeLiquidityOrders(liquidityOrders, orderBookInfo); // close orders which expired or out of spread or out pf Pw's range
+      liquidityOrders = await orderUtils.updateOrders(liquidityOrders, pair, moduleName + ':liq-'); // Update orders that were partially filled or not found
+      liquidityOrders = await this.closeLiquidityOrders(liquidityOrders, orderBookInfo); // Close orders which expired or not met conditions
+      await this.updateLiqLimits();
+      if (ss) await ss.updateSsVwap();
 
-      let liqInfoString; let liqSsInfoString = '';
+      let liqInfoString; let liqSsInfoString;
+
+      // 1. Place spread support liq-orders
+
+      if (ss && tradeParams.mm_liquiditySpreadSupport) {
+        const ssResult = await ss.updateSsLiquidity(liquidityOrders, orderBookInfo);
+        liqSsInfoString = ssResult.liqSsInfoString;
+
+        // Reload liq-orders from DB to include newly placed SS orders
+        liquidityOrders = await ordersDb.find({
+          isProcessed: false,
+          purpose: 'liq', // liq: liquidity order
+          pair,
+          exchange,
+        });
+
+        // Refresh order book (no cache) before placing depth orders
+        const freshObAfterSs = await orderUtils.getOrderBookCached(pair, moduleName, true);
+        if (freshObAfterSs) {
+          const freshObInfoAfterSs = utils.getOrderBookInfo(freshObAfterSs, tradeParams.mm_liquiditySpreadPercent);
+          if (freshObInfoAfterSs) orderBookInfo = freshObInfoAfterSs;
+        }
+      } else {
+        liqSsInfoString = ' Spread-support orders are not enabled.';
+      }
 
       // 2. Place regular (depth) liq-orders
 
@@ -130,7 +216,7 @@ module.exports = {
       let amountPlaced;
 
       do {
-        amountPlaced = await this.placeLiquidityOrder(liquidityDepthStats.bidsTotalQuoteAmount, liquidityDepthStats.bidsCount, 'buy', orderBookInfo, 'depth');
+        amountPlaced = await this.placeLiquidityOrder(liquidityDepthStats.bidsTotalQuoteAmount, liquidityDepthStats.bidsCount, 'buy', orderBookInfo);
         if (amountPlaced) {
           liquidityDepthStats.bidsTotalQuoteAmount += amountPlaced;
           liquidityDepthStats.bidsCount += 1;
@@ -138,39 +224,43 @@ module.exports = {
       } while (amountPlaced);
 
       do {
-        amountPlaced = await this.placeLiquidityOrder(liquidityDepthStats.asksTotalAmount, liquidityDepthStats.asksCount, 'sell', orderBookInfo, 'depth');
+        amountPlaced = await this.placeLiquidityOrder(liquidityDepthStats.asksTotalAmount, liquidityDepthStats.asksCount, 'sell', orderBookInfo);
         if (amountPlaced) {
           liquidityDepthStats.asksTotalAmount += amountPlaced;
           liquidityDepthStats.asksCount += 1;
         }
       } while (amountPlaced);
 
-      liqInfoString = `Liquidity: Opened ${liquidityDepthStats.bidsCount} bids-buy depth orders for ${liquidityDepthStats.bidsTotalQuoteAmount.toFixed(coin2Decimals)} ${config.coin2} out of ${tradeParams.mm_liquidityBuyQuoteAmount} (safe: ${liqLimits.bidLimit.toFixed(coin2Decimals)} ${config.coin2}, ${liqLimits.bidLimitPercent.toFixed(2)}%)`;
-      liqInfoString += ` and ${liquidityDepthStats.asksCount} asks-sell depth orders with ${liquidityDepthStats.asksTotalAmount.toFixed(coin1Decimals)} ${config.coin1} out of ${tradeParams.mm_liquiditySellAmount} (safe: ${liqLimits.askLimit.toFixed(coin1Decimals)} ${config.coin1}, ${liqLimits.askLimitPercent.toFixed(2)}%) ${config.coin1}.`;
+      liqInfoString = `Liquidity: Opened ${liquidityDepthStats.bidsCount} bid-buy depth orders for ${liquidityDepthStats.bidsTotalQuoteAmount.toFixed(coin2DecimalsForStable)} of ${tradeParams.mm_liquidityBuyQuoteAmount} ${coin2} (safe: ${liqLimits.bidLimit.toFixed(coin2DecimalsForStable)} ${coin2}, ${liqLimits.bidLimitPercent.toFixed(2)}%)`;
+      liqInfoString += ` and ${liquidityDepthStats.asksCount} ask-sell depth orders with ${liquidityDepthStats.asksTotalAmount.toFixed(coin1Decimals)} of ${tradeParams.mm_liquiditySellAmount} ${coin1} (safe: ${liqLimits.askLimit.toFixed(coin1Decimals)} ${coin1}, ${liqLimits.askLimitPercent.toFixed(2)}%) ${coin1}.`;
       liqInfoString += liqSsInfoString;
 
       log.log(liqInfoString);
     } catch (e) {
-      log.error(`Error in updateLiquidity() of ${utils.getModuleName(module.id)} module: ${e}`);
+      log.error(`Error in updateLiquidity() of ${moduleName} module: ${e}`);
     }
   },
 
   /**
-   * Sets liquidity trend to fill a gap in the order book after a price change
-   * Runs extraordinary iteration of updateLiquidity(), which will close out-of-spread and out-of-pw orders
-   * Other modules as Spread maintainer call this function
-   * @param {string} orderType Placed order type, 'buy' or 'sell'
-   * @param {string} callerName Module name for logging
+   * Sets liquidity trend to fill the spread gap after a price movement.
+   * Triggers an extraordinary updateLiquidity() iteration, which also closes
+   * out-of-spread and out-of-Pw orders.
+   *
+   * Note: This method is not called directly by the Liquidity provider.
+   *       It is invoked by the Spread maintainer when needed.
+   *
+   * @param {string} orderSide The side of the triggering order: 'buy' or 'sell'
+   * @param {string} callerName Name of the calling module for logging purposes
    */
-  async updateLiquidityAfterPriceChange(orderType, callerName) {
-    log.log(`${callerName}: Updating ${orderType} liq-orders after a price change.`);
+  async updateLiquidityAfterPriceChange(orderSide, callerName) {
+    log.log(`${readableModuleName}/${callerName}: Updating ${orderSide} liq-orders after a price movement.`);
 
     if (isPreviousIterationFinished) {
       const previousLiquidityTrend = tradeParams.mm_liquidityTrend;
-      tradeParams.mm_liquidityTrend = orderType === 'buy' ? 'uptrend' : 'downtrend';
+      tradeParams.mm_liquidityTrend = orderSide === 'buy' ? 'uptrend' : 'downtrend';
 
       // utils.saveConfig(false, 'Liquidity-UpdateTrend'); // Don't save, it's a one-time operation
-      log.log(`${callerName}: After a price change with a ${orderType}-order, one-time liquidity trend set to '${tradeParams.mm_liquidityTrend}' from '${previousLiquidityTrend}'.`);
+      log.log(`${readableModuleName}/${callerName}: After a price move triggered by a ${orderSide}-order, a one-time liquidity trend was set to '${tradeParams.mm_liquidityTrend}' from '${previousLiquidityTrend}'.`);
 
       isPreviousIterationFinished = false;
       await this.updateLiquidity();
@@ -178,24 +268,26 @@ module.exports = {
 
       tradeParams.mm_liquidityTrend = previousLiquidityTrend;
     } else {
-      log.log(`${callerName}: Skipping liq-orders update as previous iteration is in progress.`);
+      log.log(`${readableModuleName}/${callerName}: Skipping liq-orders update as previous iteration is in progress.`);
     }
   },
 
   /**
-   * Closes opened liq-orders:
-   * - Expired by time
-   * - Out of Pw's range
-   * - Out of TWAP range
-   * - Out of Spread, except orders placed out of spread intentionally because of Pw or TWAP correction
-   * @param {Array<Object>} liquidityOrders Orders of type liq, received from internal DB
-   * @param {Object} orderBookInfo Object of utils.getOrderBookInfo() to check if an order is out of spread
-   * @returns {Array<Object>} Updated order list
+   * Closes active liq-orders when any of the following conditions are met:
+   * - Order lifetime has expired
+   * - The order is outside the Price Watcher range
+   * - The order is outside the VWAP range
+   * - The order is outside the current spread
+   *   (except when it was intentionally placed out of spread due to Price Watcher or VWAP correction)
+   *
+   * @param {BotOrderDbRecord[]} liqOrders List of liq-purpose orders fetched from the internal DB
+   * @param {Object} orderBookInfo Result of utils.getOrderBookInfo(), used to verify if an order is outside the spread
+   * @return {Promise<BotOrderDbRecord[]>} Updated list of orders with removed ones excluded
    */
-  async closeLiquidityOrders(liquidityOrders, orderBookInfo) {
+  async closeLiquidityOrders(liqOrders, orderBookInfo) {
     const updatedLiquidityOrders = [];
 
-    for (const order of liquidityOrders) {
+    for (const order of liqOrders) {
       try {
         let reasonToClose = ''; const reasonObject = {};
 
@@ -206,25 +298,32 @@ module.exports = {
           const pw = require('./mm_price_watcher');
           reasonToClose = `It's out of ${pw.getPwRangeString()}`;
           reasonObject.isOutOfPwRange = true;
+        } else if (
+          order.subPurpose === 'ss' && ss ?
+              utils.isOrderOutOfPriceRange(order, ss.getCachedSsVwap().soldVwap, ss.getCachedSsVwap().boughtVwap) :
+              utils.isOrderOutOfPriceRange(order, liqLimits?.boughtVwap, liqLimits?.soldVwap)
+        ) {
+          // SS orders: lowPrice=soldVwap (sell floor), highPrice=boughtVwap (buy ceiling) — matches getSsPrice placement logic
+          // Depth orders: lowPrice=boughtVwap (sell floor), highPrice=soldVwap (buy ceiling)
+          const rangeString = (order.subPurpose === 'ss' && ss) ? ss.getSsVwapRangeString() : this.getVwapRangeString();
+          reasonToClose = `It's out of ${rangeString}`;
+          reasonObject.isOutOfVwapRange = true;
         } else {
           const outOfSpreadInfo = utils.isOrderOutOfSpread(order, orderBookInfo);
 
           if (outOfSpreadInfo?.isOrderOutOfSpread) {
-            const pairObj = orderUtils.parseMarket(order.pair);
-            const coin2Decimals = pairObj.coin2Decimals;
-
             let outOfSpreadString;
 
             if (outOfSpreadInfo.isOrderOutOfMinMaxSpread) {
-              outOfSpreadString = `Its price ${outOfSpreadInfo.orderPrice.toFixed(coin2Decimals)} ${pairObj.coin2} out of ±${outOfSpreadInfo.spreadPercent}% spread: [${outOfSpreadInfo.minPrice.toFixed(coin2Decimals)}, ${outOfSpreadInfo.maxPrice.toFixed(coin2Decimals)}].`;
+              outOfSpreadString = `Its price ${outOfSpreadInfo.orderPrice.toFixed(coin2Decimals)} ${coin2} out of ±${outOfSpreadInfo.spreadPercent}% spread: [${outOfSpreadInfo.minPrice.toFixed(coin2Decimals)}, ${outOfSpreadInfo.maxPrice.toFixed(coin2Decimals)}].`;
             } else {
-              outOfSpreadString = `Its price ${outOfSpreadInfo.orderPrice.toFixed(coin2Decimals)} ${pairObj.coin2} in the ±${outOfSpreadInfo.spreadPercentMin}% disallowed inner spread: [${outOfSpreadInfo.innerLowPrice.toFixed(coin2Decimals)}, ${outOfSpreadInfo.innerHighPrice.toFixed(coin2Decimals)}].`;
+              outOfSpreadString = `Its price ${outOfSpreadInfo.orderPrice.toFixed(coin2Decimals)} ${coin2} in the ±${outOfSpreadInfo.spreadPercentMin}% disallowed inner spread: [${outOfSpreadInfo.innerLowPrice.toFixed(coin2Decimals)}, ${outOfSpreadInfo.innerHighPrice.toFixed(coin2Decimals)}].`;
             }
 
             reasonObject.isOutOfSpread = true;
 
             if (order.priceCorrected) {
-              log.log(`Liquidity: While the ${order.type} liq-order${order.subPurposeString} with id=${order._id} is placed out of spread, we did it intentionally because of Pw or TWAP correction. Details: ${outOfSpreadString}`);
+              log.debug(`${readableModuleName}: Although the ${order.side} liq-order${order.subTypeString || order.subPurposeString} with id=${order._id} is placed out of spread, this is intentional due to Pw or VWAP correction. Details: ${outOfSpreadString}`);
             } else {
               reasonToClose = outOfSpreadString;
             }
@@ -233,7 +332,7 @@ module.exports = {
 
         if (reasonToClose) {
           const cancellation = await orderCollector.clearOrderById(
-              order, order.pair, order.type, this.readableModuleName, reasonToClose, reasonObject, traderapi);
+              order, order.pair, order.side, this.readableModuleName, reasonToClose, reasonObject, traderapi);
 
           if (!cancellation.isCancelRequestProcessed) {
             updatedLiquidityOrders.push(order);
@@ -242,7 +341,7 @@ module.exports = {
           updatedLiquidityOrders.push(order);
         }
       } catch (e) {
-        log.error(`Error in closeLiquidityOrders() of ${utils.getModuleName(module.id)} module: ${e}`);
+        log.error(`Error in closeLiquidityOrders() of ${moduleName} module: ${e}`);
       }
     }
 
@@ -250,30 +349,35 @@ module.exports = {
   },
 
   /**
-   * Places a new Liquidity order (liq type)
-   * Sets an order price. Spread support orders are closer to the middle of the spread.
-   * Sets an order amount. Spread support orders are of small amounts.
-   * Checks for balances. If not enough balances, notify/log, and return false.
-   * Don't exceed liquidity amount/quote for depth liq-orders, and order number for spread support liq-orders
-   * @param {number} totalQtyPlaced Amount for buy-orders and Quote for sell-orders already placed for liq-orders in total
-   * @param {number} totalOrdersPlaced Liq-order number in total (one side)
-   * @param {string} orderType Type of an order, 'buy' or 'sell'
-   * @param {Object} orderBookInfo Order book info to calculate an order price
-   * @param {string} subPurpose 'depth' for regular depth liq-orders, 'ss' for spread support liq-orders
-   * @return {Object} Result and reason in case of fault
+   * Places a new depth Liquidity order (purpose: 'liq', subPurpose: 'depth').
+   *
+   * - Sets the order price within ±mm_liquiditySpreadPercent of the spread midpoint.
+   * - Sets the order amount within the depth min–max range.
+   * - Checks balances: if insufficient, logs/notifies and returns false.
+   * - Ensures limits: does not exceed the Safe Liquidity bid/ask limit.
+   *
+   * @param {number} totalQtyPlaced Total amount already placed for depth liq-orders:
+   *   quote amount for buy-orders, base amount for sell-orders.
+   * @param {number} totalOrdersPlaced Total number of depth liq-orders already placed on one side
+   * @param {string} orderSide Order side: 'buy' or 'sell'
+   * @param {Object} orderBookInfo Order book metrics used to calculate the order price
+   * @return {Promise<number|false|undefined>}
+   *   Quote amount (buy) or base amount (sell) placed; false if limit reached; undefined on error
    */
-  async placeLiquidityOrder(totalQtyPlaced, totalOrdersPlaced, orderType, orderBookInfo, subPurpose) {
+  async placeLiquidityOrder(totalQtyPlaced, totalOrdersPlaced, orderSide, orderBookInfo) {
     try {
-      const liqPair = orderUtils.parseMarket(config.pair);
+      const side = orderSide;
+      const subPurpose = 'depth';
+      const subPurposeString = ' (depth)';
 
-      const type = orderType;
-      const subPurposeString = subPurpose === 'ss' ? ' (spread support)' : ' (depth)';
-
-      const isOverLiquidityOrder = type === 'sell' ? // Because of the safe liquidity feature, the bot can move liquidity between asks and bids; Actual liquidity can be larger than initial.
+      // Due to the Safe Liquidity mechanism, the bot may shift liquidity between bids and asks.
+      // As a result, the actual available liquidity can exceed the initially configured limits.
+      const isOverLiquidityOrder = side === 'sell' ?
           totalQtyPlaced > tradeParams.mm_liquiditySellAmount :
           totalQtyPlaced > tradeParams.mm_liquidityBuyQuoteAmount;
 
-      const priceReq = await setPrice(type, orderBookInfo, subPurpose, subPurposeString, isOverLiquidityOrder);
+      // Set a price for the depth liq-order
+      const priceReq = await setPrice(side, orderBookInfo, subPurposeString, isOverLiquidityOrder);
       const price = priceReq.price;
       if (!price) {
         if (priceReq.message) {
@@ -281,67 +385,63 @@ module.exports = {
             notify(priceReq.message, 'warn');
             lastNotifyPriceTimestamp = Date.now();
           } else {
-            log.log(`Liquidity: ${priceReq.message}`);
+            log.log(`${readableModuleName}: ${priceReq.message}`);
           }
         }
         return;
       }
 
-      const coin1Amount = setAmount(type, subPurpose);
+      const coin1Amount = setAmount(side);
       const coin2Amount = coin1Amount * price;
       const lifeTime = setLifeTime();
 
       let output = '';
       let orderParamsString = '';
 
-      orderParamsString = `type=${type}, pair=${liqPair.pair}, price=${price}, coin1Amount=${coin1Amount}, coin2Amount=${coin2Amount}`;
-      if (!type || !price || !coin1Amount || !coin2Amount) {
-        log.warn(`Liquidity: Unable to run liq-order${subPurposeString} with params: ${orderParamsString}.`);
+      orderParamsString = `side=${side}, pair=${pair}, price=${price}, coin1Amount=${coin1Amount}, coin2Amount=${coin2Amount}`;
+      if (!side || !price || !coin1Amount || !coin2Amount) {
+        log.warn(`${readableModuleName}: Unable to run liq-order${subPurposeString} with params: ${orderParamsString}.`);
         return;
       }
 
-      if (subPurpose === 'ss') {
-        // Don't exceed order number for spread support liq-orders
-        if (totalOrdersPlaced >= minMaxAmounts.ss[type].orders) {
+      // Don't exceed Safe Liquidity bid/ask limit for depth liq-orders
+      if (side === 'sell') {
+        if (coin1Amount + totalQtyPlaced > liqLimits.askLimit) {
           return false;
         }
       } else {
-        // Don't exceed liquidity amount/quote for depth liq-orders
-        if (type === 'sell') {
-          if (coin1Amount + totalQtyPlaced > liqLimits.askLimit) {
-            return false;
-          }
-        } else {
-          if (coin2Amount + totalQtyPlaced > liqLimits.bidLimit) {
-            return false;
-          }
+        if (coin2Amount + totalQtyPlaced > liqLimits.bidLimit) {
+          return false;
         }
       }
 
       if (priceReq.message) {
-        log.log(`Liquidity: ${priceReq.message}`);
+        log.log(`${readableModuleName}: ${priceReq.message}`);
       }
 
       // Check balances
-      const balances = await orderUtils.isEnoughCoins(type, liqPair, coin1Amount, coin2Amount, 'liq', '', this.readableModuleName);
-
+      const additionalInfo = ` (depth)`;
+      const balances = await orderUtils.isEnoughCoins(side, formattedPair, coin1Amount, coin2Amount, 'liq', additionalInfo, this.readableModuleName);
       if (!balances.result) {
         if (balances.message) {
           if (Date.now()-lastNotifyBalancesTimestamp > constants.HOUR) {
             notify(`${config.notifyName}: ${balances.message}`, 'warn', config.silent_mode);
             lastNotifyBalancesTimestamp = Date.now();
           } else {
-            log.log(`Liquidity: ${balances.message}`);
+            log.log(`${readableModuleName}: ${balances.message}`);
           }
         }
         return;
       }
 
-      const orderReq = await traderapi.placeOrder(type, liqPair.pair, price, coin1Amount, 1, null);
+      // Place liq-order
+
+      const orderReq = await traderapi.placeOrder(side, pair, price, coin1Amount, 1, null);
 
       if (orderReq?.orderId) {
         const { ordersDb } = db;
 
+        /** @type {BotOrderDbRecord} */
         const order = new ordersDb({
           _id: orderReq.orderId,
           date: utils.unixTimeStampMs(),
@@ -349,14 +449,14 @@ module.exports = {
           purpose: 'liq', // liq: liquidity & spread
           subPurpose,
           subPurposeString,
-          type,
-          // targetType: type,
-          exchange: config.exchange,
-          pair: liqPair.pair,
-          coin1: liqPair.coin1,
-          coin2: liqPair.coin2,
+          side,
+          // targetSide: side,
+          exchange,
+          pair,
+          coin1,
+          coin2,
           price,
-          priceCorrected: priceReq.isCorrected, // If the price is corrected by Pw or TWAP range intentionally, closeLiquidityOrders() will not close the order in case of out of ±% spread
+          priceCorrected: priceReq.isCorrected, // If the price is corrected by Pw or VWAP range intentionally, closeLiquidityOrders() will not close the order in case of out of ±% spread
           coin1Amount,
           coin2Amount,
           coin1AmountFilled: undefined,
@@ -372,107 +472,130 @@ module.exports = {
 
         await order.save();
 
-        output = `${type} ${coin1Amount.toFixed(liqPair.coin1Decimals)} ${liqPair.coin1} for ${coin2Amount.toFixed(liqPair.coin2Decimals)} ${liqPair.coin2} at ${price.toFixed(liqPair.coin2Decimals)} ${liqPair.coin2}`;
-        log.info(`Liquidity: Successfully placed liq-order${subPurposeString} to ${output}.`);
+        output = `${side} ${coin1Amount.toFixed(coin1Decimals)} ${coin1} for ${coin2Amount.toFixed(coin2Decimals)} ${coin2} at ${price.toFixed(coin2Decimals)} ${coin2}`;
+        log.info(`${readableModuleName}: Successfully placed liq-order${subPurposeString} to ${output}.`);
 
-        return type === 'sell' ? coin1Amount : coin2Amount;
+        return side === 'sell' ? coin1Amount : coin2Amount;
       } else {
-        log.warn(`Liquidity: Unable to execute liq-order${subPurposeString} with params: ${orderParamsString}. No order id returned.`);
+        log.warn(`${readableModuleName}: Unable to execute liq-order${subPurposeString} with params: ${orderParamsString}. No order id returned.`);
         return false;
       }
     } catch (e) {
-      log.error(`Error in placeLiquidityOrder() of ${utils.getModuleName(module.id)} module: ${e}`);
+      log.error(`Error in placeLiquidityOrder() of ${moduleName} module: ${e}`);
     }
   },
 
   /**
-   * Loads ask and bid liq-order limits from systemsDb
-   * If it's not stored yet, use the initial values
+   * Delegates to mm_liquidity_safe.updateLiqLimits() and syncs the local liqLimits cache.
+   * When mm_liquidity_safe is absent, resets to raw tradeParams amounts (no flowing liquidity).
+   */
+  async updateLiqLimits() {
+    if (safeLiq) {
+      await safeLiq.updateLiqLimits();
+      liqLimits = safeLiq.getLiqLimits();
+    } else {
+      // Fallback: use raw parameters without Safe Liquidity
+      liqLimits = createDefaultLiqLimits();
+    }
+  },
+
+  /**
+   * Delegates to mm_liquidity_safe.loadLiqLimits() and syncs the local liqLimits cache.
+   * When mm_liquidity_safe is absent, initializes liqLimits with raw tradeParams defaults.
    */
   async loadLiqLimits() {
-    liqLimits = await Store.getSystemDbField('liqLimits');
-
-    if (utils.isObjectNotEmpty(liqLimits)) {
-      log.log(`Liquidity: Limits for liq-orders are loaded for the database: ${JSON.stringify(liqLimits)}.`);
+    if (safeLiq) {
+      await safeLiq.loadLiqLimits();
+      liqLimits = safeLiq.getLiqLimits();
     } else {
-      log.log('Liquidity: Limits for liq-orders are not stored in the database yet. Applying initial limits.');
-      await this.resetLiqLimits('all', `${this.readableModuleName}/InitLimits`);
+      // Fallback: initialize with defaults (Safe Liquidity not available)
+      liqLimits = createDefaultLiqLimits();
+      log.debug(`${readableModuleName}: mm_liquidity_safe is not loaded. Using raw liquidity limits without Safe Liquidity.`);
     }
   },
 
   /**
-   * Loads ask and bid liq-order limits from systemsDb
-   * If it's not stored yet, use the initial values
-   * @param {string} callerName Who did store, for logging
+   * Delegates to mm_liquidity_safe.storeLiqLimits().
+   * @param {string} callerName The module and function performing the save (for logging)
    */
   async storeLiqLimits(callerName) {
-    if (utils.isObjectNotEmpty(liqLimits)) {
-      await Store.updateSystemDbField('liqLimits', liqLimits);
-      log.log(`Liquidity: Limits for liq-orders are stored by ${callerName} in the database: ${JSON.stringify(liqLimits)}.`);
+    if (safeLiq) {
+      await safeLiq.storeLiqLimits(callerName);
     } else {
-      log.log(`Liquidity: Limits are empty: ${JSON.stringify(liqLimits)}. Skipping storing in the database.`);
+      log.debug(`${readableModuleName}: mm_liquidity_safe is not loaded, skipping limit storage called by ${callerName}.`);
     }
   },
 
   /**
-   * Restores ask and bid liq-order limits in full to mm_liquidityBuyQuoteAmount and mm_liquiditySellAmount
-   * @param {string} type Type of an order, 'buy' or 'sell'
-   * @param {string} callerName Who did reset, for logging
+   * Delegates to mm_liquidity_safe.resetLiqLimits() and syncs the local liqLimits cache.
+   * When mm_liquidity_safe is absent, resets local liqLimits to raw tradeParams defaults.
+   * @param {string} side Side of an order: 'buy', 'sell', or 'both sides'
+   * @param {string} callerName The module and function performing the reset (for logging)
    */
-  async resetLiqLimits(type, callerName) {
-    liqLimits = {
-      bidLimit: tradeParams.mm_liquidityBuyQuoteAmount,
-      askLimit: tradeParams.mm_liquiditySellAmount,
-      bidLimitPercent: 100,
-      askLimitPercent: 100,
-      totalBidFilledAmount: 0,
-      totalAskFilledAmount: 0,
-      totalBidFilledQuote: 0,
-      totalAskFilledQuote: 0,
-      soldTwap: 0,
-      boughtTwap: 0,
-    };
+  async resetLiqLimits(side, callerName) {
+    if (safeLiq) {
+      await safeLiq.resetLiqLimits(side, callerName);
+      liqLimits = safeLiq.getLiqLimits();
+    } else {
+      liqLimits = createDefaultLiqLimits();
+      log.debug(`${readableModuleName}: Limits for ${side} liq-orders are reset by ${callerName} to initial values (Safe Liquidity not available) – ${JSON.stringify(liqLimits)}.`);
+    }
 
-    await this.storeLiqLimits(`${this.readableModuleName}/ResetLiqLimits`);
-
-    log.log(`Liquidity: Limits for ${type} liq-orders are reset by ${callerName} to initial values: ${JSON.stringify(liqLimits)}.`);
+    if (ss) await ss.resetSsVwap();
   },
 
   /**
-   * Returns actual liq-order limits
-   * Used in other modules instead of mm_liquidityBuyQuoteAmount and mm_liquiditySellAmount
+   * Returns actual liq-order limits.
+   * Used in other modules (mm_trader.js) instead of mm_liquidityBuyQuoteAmount and mm_liquiditySellAmount.
+   * @returns {LiqLimits}
    */
   getLiqLimits() {
-    return liqLimits;
+    return safeLiq ? safeLiq.getLiqLimits() : liqLimits;
   },
 
   /**
-   * Creates a log string with TWAP range
+   * Creates a log string with VWAP range.
+   * Delegates to mm_liquidity_safe when available.
    * @returns {string} Log string
    */
-  getTwapRangeString() {
-    const coin2Decimals = orderUtils.parseMarket(config.pair).coin2Decimals;
+  getVwapRangeString() {
+    if (safeLiq) return safeLiq.getVwapRangeString();
 
-    const lowerBound = liqLimits?.boughtTwap?.toFixed(coin2Decimals) || 'NaN';
-    const upperBound = liqLimits?.soldTwap?.toFixed(coin2Decimals) || 'NaN';
+    // Fallback using local liqLimits
+    const lowerBound = liqLimits?.boughtVwap?.toFixed(coin2Decimals) || 'NaN';
+    const upperBound = liqLimits?.soldVwap?.toFixed(coin2Decimals) || 'NaN';
 
-    return `TWAP range – buying below ${upperBound} ${config.coin2} and selling above ${lowerBound} ${config.coin2}.`;
+    return `VWAP range – buying below ${upperBound} ${coin2} and selling above ${lowerBound} ${coin2}.`;
+  },
+
+  /**
+   * Returns the maximum number of depth liq-orders for one side.
+   * Wraps the private getMaxOrderNumberOneSide() for external usage, e.g., in display functions.
+   * @param {string} side Order side: 'buy' or 'sell'
+   * @param {Object} minOrderAmount Min order amounts from `orderUtils.getMinOrderAmount()`
+   * @returns {number} Maximum allowed number of depth liq-orders for the side
+   */
+  getMaxDepthOrdersOneSide(side, minOrderAmount) {
+    return getMaxOrderNumberOneSide(side, minOrderAmount);
   },
 };
 
 /**
- * Calculates an order price for a specific order type and subPurpose
- * The price is relative to the middle of the spread, which depends on mm_liquidityTrend
- * Spread support liq-orders are closer to the middle of the spread
- * Price watcher and current TWAP range may correct a price
- * @param {string} type Type of an order, 'buy' or 'sell'
- * @param {Object} orderBookInfo Includes average prices for different mm_liquidityTrend
- * @param {string} subPurpose 'depth' for regular depth liq-orders, 'ss' for spread support liq-orders
- * @param {string} subPurposeString For informative logging
- * @param {boolean} isOverLiquidityOrder If an order is over the initial liquidity, the bot places it closer to the spread independent from mm_liquiditySpreadPercentMin
- * @return {Object<price, message>} Message is an error message to notify
+ * Calculates an order price for a depth liq-order.
+ *
+ * - The price is set relative to the midpoint of the spread, which depends on mm_liquidityTrend
+ * - Price Watcher and the current VWAP range may adjust the final price
+ *
+ * @param {string} side Order side: 'buy' or 'sell'
+ * @param {Object} orderBookInfo Order book info, including average prices for different mm_liquidityTrend values
+ * @param {string} subPurposeString Human-readable suffix for logging (always ' (depth)' for this function)
+ * @param {boolean} isOverLiquidityOrder When true, indicates an order placed over the initial liquidity limit.
+ *   Such orders are moved closer to the spread, regardless of mm_liquiditySpreadPercentMin.
+ * @return {Promise<{ price: number, message?: string, isCorrected?: boolean }>}
+ *   'price' is the calculated order price; 'message' is a human-readable error message or a note;
+ *   'isCorrected' is whether the Pw or VWAP adjusted the price
  */
-async function setPrice(type, orderBookInfo, subPurpose, subPurposeString, isOverLiquidityOrder) {
+async function setPrice(side, orderBookInfo, subPurposeString, isOverLiquidityOrder) {
   try {
     let high; let low;
     let targetPrice;
@@ -499,41 +622,34 @@ async function setPrice(type, orderBookInfo, subPurpose, subPurposeString, isOve
         break;
     }
 
-    const pairObj = orderUtils.parseMarket(config.pair);
-    const coin2Decimals = pairObj.coin2Decimals;
     const precision = utils.getPrecision(coin2Decimals);
 
-    // Set coefficients to calculate price bounds
+    // Set coefficients to calculate price bounds (depth orders only)
 
     let liqKoefMin; let liqKoefMax;
-    if (subPurpose === 'ss') {
+    if (isOverLiquidityOrder) {
+      // Place orders over the initial liquidity closer to the spread
+      message = `As this ${side} liq-order${subPurposeString} is over the initial liquidity, placing this order closer to the spread:`;
+      message += ` the price range changed from ${tradeParams.mm_liquiditySpreadPercentMin || 0}–${tradeParams.mm_liquiditySpreadPercent}% to 0–${constants.OVER_LIQUIDITY_SPREAD_PERCENT}%.`;
       liqKoefMin = 0;
-      liqKoefMax = constants.LIQUIDITY_SS_MAX_SPREAD_PERCENT/100;
-    } else { // 'depth' liq-order
-      if (isOverLiquidityOrder) {
-        // Place orders over the initial liquidity closer to the spread
-        message = `As this ${type} liq-order${subPurposeString} is over the initial liquidity, placing this order closer to the spread:`;
-        message += ` the price range changed from ${tradeParams.mm_liquiditySpreadPercentMin || 0}–${tradeParams.mm_liquiditySpreadPercent}% to 0–${constants.OVER_LIQUIDITY_SPREAD_PERCENT}%.`;
-        liqKoefMin = 0;
-        liqKoefMax = constants.OVER_LIQUIDITY_SPREAD_PERCENT/100;
-      } else {
-        liqKoefMin = tradeParams.mm_liquiditySpreadPercentMin/100 || 0;
-        liqKoefMax = tradeParams.mm_liquiditySpreadPercent/100;
-      }
+      liqKoefMax = constants.OVER_LIQUIDITY_SPREAD_PERCENT/100;
+    } else {
+      liqKoefMin = tradeParams.mm_liquiditySpreadPercentMin/100 || 0;
+      liqKoefMax = tradeParams.mm_liquiditySpreadPercent/100;
     }
 
-    // Set Pw's and TWAP's ranges
+    // Set Pw's and VWAP's ranges
 
-    let price; let pwLowPrice; let pwHighPrice;
-    let priceBeforePwCorrection; let priceBeforeTwapCorrection;
+    let price; let pwLowPrice; let pwHighPrice; let vwapLowPrice; let vwapHighPrice;
+    let priceBeforePwCorrection; let priceBeforeVwapCorrection;
 
     const pw = require('./mm_price_watcher');
 
     if (pw.getIsPriceWatcherEnabled()) {
-      const orderInfo = `${type} liq-order${subPurposeString}`;
+      const orderInfo = `${side} liq-order${subPurposeString}`;
 
       if (pw.getIsPriceAnomaly()) {
-        log.log(`Liquidity: Skipped placing ${orderInfo}. Price watcher reported a price anomaly.`);
+        log.log(`${readableModuleName}: Skipped placing ${orderInfo}. Price watcher reported a price anomaly.`);
 
         return {
           price: undefined,
@@ -543,9 +659,9 @@ async function setPrice(type, orderBookInfo, subPurpose, subPurposeString, isOve
         pwHighPrice = pw.getHighPrice();
       } else {
         if (pw.getIgnorePriceNotActual()) {
-          log.log(`Liquidity: While placing ${orderInfo}, the Price watcher reported the price range is not actual. According to settings, ignore and treat this like the Pw is disabled.`);
+          log.log(`${readableModuleName}: While placing ${orderInfo}, the Price Watcher reported that the price range is not actual. According to settings, ignoring this and treating it as if the Pw is disabled.`);
         } else {
-          log.log(`Liquidity: Skipped placing ${orderInfo}. Price watcher reported the price range is not actual.`);
+          log.log(`${readableModuleName}: Skipped placing ${orderInfo}. The Price Watcher reported that the price range is not actual.`);
 
           return {
             price: undefined,
@@ -554,12 +670,19 @@ async function setPrice(type, orderBookInfo, subPurpose, subPurposeString, isOve
       }
     }
 
-    // Keep spread enough for in-spread trading
-    const delta = constants.MM_POLICIES_IN_SPREAD_TRADING.includes(tradeParams.mm_Policy) ? precision * 3 : precision;
+    if (utils.isObjectNotEmpty(liqLimits)) {
+      vwapLowPrice = liqLimits.boughtVwap;
+      vwapHighPrice = liqLimits.soldVwap;
+    }
 
-    // Calculate a liq-order price and adjust it according to Pw's range
+    // Keep the spread wide enough for in-spread trading
+    const delta = tradeParams.mm_isTraderActive && constants.MM_POLICIES_IN_SPREAD_TRADING.includes(tradeParams.mm_Policy) ?
+        precision * 3 :
+        precision;
 
-    if (type === 'sell') {
+    // Calculate a liq-order price and adjust it according to the Pw's range
+
+    if (side === 'sell') {
       low = targetPrice * (1 + liqKoefMin);
       high = targetPrice * (1 + liqKoefMax);
       price = utils.randomValue(low, high);
@@ -568,6 +691,12 @@ async function setPrice(type, orderBookInfo, subPurpose, subPurposeString, isOve
         priceBeforePwCorrection = price;
         price = utils.randomValue(pwLowPrice, pwLowPrice * (1 + liqKoefMax));
       }
+
+      if (vwapLowPrice && price < vwapLowPrice) {
+        priceBeforeVwapCorrection = price;
+        price = utils.randomValue(vwapLowPrice, vwapLowPrice * (1 + liqKoefMax));
+      }
+
       if (price - delta < orderBookInfo.highestBid) {
         price = orderBookInfo.highestBid + delta;
       }
@@ -581,19 +710,24 @@ async function setPrice(type, orderBookInfo, subPurpose, subPurposeString, isOve
         price = utils.randomValue(pwHighPrice * (1 - liqKoefMax), pwHighPrice);
       }
 
+      if (vwapHighPrice && price > vwapHighPrice) {
+        priceBeforeVwapCorrection = price;
+        price = utils.randomValue(vwapHighPrice * (1 - liqKoefMax), vwapHighPrice);
+      }
+
       if (price + delta > orderBookInfo.lowestAsk) {
         price = orderBookInfo.lowestAsk - delta;
       }
     }
 
     if (priceBeforePwCorrection) {
-      message += ` Price watcher corrected the price from ${priceBeforePwCorrection.toFixed(coin2Decimals)} ${config.coin2} to ${price.toFixed(coin2Decimals)} ${config.coin2} while placing ${type} liq-order${subPurposeString}. ${pw.getPwRangeString()}`;
+      message += ` Price watcher corrected the price from ${priceBeforePwCorrection.toFixed(coin2Decimals)} ${coin2} to ${price.toFixed(coin2Decimals)} ${coin2} while placing ${side} liq-order${subPurposeString}. ${pw.getPwRangeString()}`;
     }
 
-    if (priceBeforeTwapCorrection) {
-      const twapMessage = ` TWAP corrected the price from ${priceBeforeTwapCorrection.toFixed(coin2Decimals)} ${config.coin2} to ${price.toFixed(coin2Decimals)} ${config.coin2} while placing ${type} liq-order${subPurposeString}. ${module.exports.getTwapRangeString()}`;
+    if (priceBeforeVwapCorrection) {
+      const vwapMessage = ` VWAP corrected the price from ${priceBeforeVwapCorrection.toFixed(coin2Decimals)} ${coin2} to ${price.toFixed(coin2Decimals)} ${coin2} while placing ${side} liq-order${subPurposeString}. ${module.exports.getVwapRangeString()}`;
 
-      message += message ? ` Additionally,${twapMessage}` : twapMessage;
+      message += message ? ` Additionally,${vwapMessage}` : vwapMessage;
     }
 
     return {
@@ -602,7 +736,8 @@ async function setPrice(type, orderBookInfo, subPurpose, subPurposeString, isOve
       isCorrected: !!message,
     };
   } catch (e) {
-    log.error(`Error in setPrice() of ${utils.getModuleName(module.id)} module: ${e}`);
+    log.error(`Error in setPrice() of ${moduleName} module: ${e}`);
+
     return {
       price: undefined,
     };
@@ -610,131 +745,138 @@ async function setPrice(type, orderBookInfo, subPurpose, subPurposeString, isOve
 }
 
 /**
- * Returns random amount to place a liq-order for a specific order type and subPurpose
- * Min-max intervals are stored in global minMaxAmounts
- * @param {string} type Type of an order, 'buy' or 'sell'
- * @param {string} subPurpose 'depth' for regular depth liq-orders, 'ss' for spread support liq-orders
- * @return {number|undefined} Amount to place an order with
+ * Returns a random amount for placing a depth liq-order.
+ * Min–max intervals are stored in the global `minMaxAmounts.depth`.
+ * @param {string} side Side of the order: 'buy' or 'sell'
+ * @return {number|undefined} Amount to place the order with
  */
-function setAmount(type, subPurpose) {
+function setAmount(side) {
   try {
-    return utils.randomValue(minMaxAmounts[subPurpose][type].min, minMaxAmounts[subPurpose][type].max);
+    return utils.randomValue(minMaxAmounts.depth[side].min, minMaxAmounts.depth[side].max);
   } catch (e) {
-    log.error(`Error in setAmount() of ${utils.getModuleName(module.id)} module: ${e}`);
+    log.error(`Error in setAmount() of ${moduleName} module: ${e}`);
   }
 }
 
 /**
- * Calculates min-max amounts for different order types (buy, sell) and subPurposes (depth, ss)
- * And stores them in the global minMaxAmounts object
- * @param {Object} price For conversion from quote to amount
- * @return {boolean} True if successfully calculated and saved
+ * Calculates min–max amounts for depth liq-orders on both sides and stores them in `minMaxAmounts.depth`.
+ * @param {number} price Price used to convert quote amounts into base amounts
+ * @return {boolean} True if values were successfully calculated and saved
  */
 function setMinMaxAmounts(price) {
   try {
-    const pairObj = orderUtils.parseMarket(config.pair);
-    const coin1Decimals = pairObj.coin1Decimals;
-
-    if (!tradeParams || !tradeParams.mm_liquiditySellAmount || !tradeParams.mm_liquidityBuyQuoteAmount) {
-      log.warn(`Liquidity: Params mm_liquiditySellAmount or mm_liquidityBuyQuoteAmount are not set. Check ${config.exchangeName} config.`);
-      return false;
-    }
-
-    let minMaxAmountsString;
-
     minMaxAmounts.depth = {
       buy: {},
       sell: {},
     };
 
-    minMaxAmounts.depth.sell.orders = getMaxOrderNumberOneSide('sell', 'depth');
-    minMaxAmounts.depth.sell.max = liqLimits.askLimit / minMaxAmounts.depth.sell.orders;
-    minMaxAmounts.depth.sell.min = minMaxAmounts.depth.sell.max / 2;
+    const minOrderAmount = orderUtils.getMinOrderAmount(price);
 
-    minMaxAmounts.depth.buy.orders = getMaxOrderNumberOneSide('buy', 'depth');
-    minMaxAmounts.depth.buy.max = liqLimits.bidLimit / price / minMaxAmounts.depth.buy.orders;
-    minMaxAmounts.depth.buy.min = minMaxAmounts.depth.buy.max / 2;
+    // Calculate min–max amounts for depth orders
 
-    minMaxAmountsString = `Liquidity: Setting maximum number of depth liq-orders to ${minMaxAmounts.depth.buy.orders} buys and ${minMaxAmounts.depth.sell.orders} sells.`;
-    minMaxAmountsString += ` Order amounts are ${minMaxAmounts.depth.buy.min.toFixed(coin1Decimals)}–${minMaxAmounts.depth.buy.max.toFixed(coin1Decimals)} ${pairObj.coin1} buys`;
-    minMaxAmountsString += ` and ${minMaxAmounts.depth.sell.min.toFixed(coin1Decimals)}–${minMaxAmounts.depth.sell.max.toFixed(coin1Decimals)} ${pairObj.coin1} sells.`;
-    log.log(minMaxAmountsString);
+    function calcSide(side, limit, price = 1) {
+      const orders = getMaxOrderNumberOneSide(side, minOrderAmount);
 
-    if (tradeParams.mm_liquiditySpreadSupport) {
-      minMaxAmounts.ss = {
-        buy: {},
-        sell: {},
-      };
+      const mid = limit / price / orders;
+      let max = mid * 1.8;
+      let min = mid / 2;
 
-      const minOrderAmount = orderUtils.getMinOrderAmount();
+      if (min < minOrderAmount.minReliable) {
+        max = minOrderAmount.upperBound;
+        min = minOrderAmount.minReliable;
+      }
 
-      minMaxAmounts.ss.sell.orders = getMaxOrderNumberOneSide('sell', 'ss');
-      minMaxAmounts.ss.sell.min = minOrderAmount.min;
-      minMaxAmounts.ss.sell.max = minOrderAmount.upperBound;
-
-      minMaxAmounts.ss.buy.orders = getMaxOrderNumberOneSide('buy', 'ss');
-      minMaxAmounts.ss.buy.min = minOrderAmount.min;
-      minMaxAmounts.ss.buy.max = minOrderAmount.upperBound;
-
-      minMaxAmountsString = `Liquidity: Setting maximum number of spread support liq-orders to ${minMaxAmounts.ss.buy.orders} buys and ${minMaxAmounts.ss.sell.orders} sells.`;
-      minMaxAmountsString += ` Order amounts are ${minMaxAmounts.ss.buy.min.toFixed(coin1Decimals)}–${minMaxAmounts.ss.buy.max.toFixed(coin1Decimals)} ${pairObj.coin1} for both buys and sells.`;
-      log.log(minMaxAmountsString);
+      return { orders, max, min };
     }
+
+    minMaxAmounts.depth.sell = calcSide('sell', liqLimits.askLimit);
+    minMaxAmounts.depth.buy = calcSide('buy', liqLimits.bidLimit, price);
+
+    let minMaxAmountsString = `Liquidity: Setting maximum number of depth liq-orders to ${minMaxAmounts.depth.buy.orders} buys and ${minMaxAmounts.depth.sell.orders} sells.`;
+    minMaxAmountsString += ` Order amounts are ${minMaxAmounts.depth.buy.min.toFixed(coin1Decimals)}–${minMaxAmounts.depth.buy.max.toFixed(coin1Decimals)} ${coin1} buys`;
+    minMaxAmountsString += ` and ${minMaxAmounts.depth.sell.min.toFixed(coin1Decimals)}–${minMaxAmounts.depth.sell.max.toFixed(coin1Decimals)} ${coin1} sells.`;
+    log.log(minMaxAmountsString);
 
     return true;
   } catch (e) {
-    log.error(`Error in setMinMaxAmounts() of ${utils.getModuleName(module.id)} module: ${e}`);
+    log.error(`Error in setMinMaxAmounts() of ${moduleName} module: ${e}`);
   }
 }
 
 /**
- * Calculates maximum liq-order number for a specific order type and subPurpose
- * Depth order number depends on total liquidity value,
- * Additionally, spread support order number is limited by constants
- * @param {string} type Type of the order, 'buy' or 'sell'
- * @param {string} subPurpose 'depth' for regular depth liq-orders, 'ss' for spread support liq-orders
- * @return {number} Order number
+ * Calculates the maximum number of depth liq-orders for one side.
+ * Order count depends on the total Safe Liquidity value converted to USD.
+ *
+ * @param {string} side Side of the order: 'buy' or 'sell'
+ * @param {Object} minOrderAmount Min order amounts from `orderUtils.getMinOrderAmount()`
+ * @return {number} Maximum allowed number of depth orders
  */
-function getMaxOrderNumberOneSide(type, subPurpose) {
+function getMaxOrderNumberOneSide(side, minOrderAmount) {
   try {
     let liqCoin; let liqValue;
 
-    if (type === 'sell') {
-      liqCoin = config.coin1;
+    if (side === 'sell') {
+      liqCoin = coin1;
       liqValue = liqLimits.askLimit;
     } else {
-      liqCoin = config.coin2;
+      liqCoin = coin2;
       liqValue = liqLimits.bidLimit;
     }
 
+    const minOrderUsd = minOrderAmount.minCoin2Reliable;
     const valueInUSD = exchangerUtils.convertCryptos(liqCoin, 'USD', liqValue).outAmount;
 
-    const usdThresholds = [
-      { limit: 1, value: 1 },
-      { limit: 10, value: 2 },
-      { limit: 50, value: 4 },
-      { limit: 100, value: 6 },
-      { limit: 500, value: 8 },
-      { limit: 1000, value: 9 },
-    ];
-
-    let n = usdThresholds.find((threshold) => valueInUSD <= threshold.limit)?.value ||
-        Math.ceil(Math.sqrt(Math.sqrt(valueInUSD))) ||
-        DEFAULT_MAX_ORDERS_ONE_SIDE;
+    // Calculate perfect order number
+    let n = calcOrderCount(valueInUSD, minOrderUsd) || DEFAULT_MAX_ORDERS_ONE_SIDE;
 
     // Additionally, reduce the number of orders if an exchange's API applies limits
-    const apiOrderNumberLimit = traderapi.features(config.pair).orderNumberLimit;
-    if (apiOrderNumberLimit <= 200) {
-      n = Math.ceil(n / 1.4);
-    } else if (apiOrderNumberLimit <= 100) {
+    const apiOrderNumberLimit = traderapi.features(pair).orderNumberLimit;
+    if (apiOrderNumberLimit <= 100) {
       n = Math.ceil(n / 1.8);
+    } else if (apiOrderNumberLimit <= 200) {
+      n = Math.ceil(n / 1.4);
     }
 
     return n;
   } catch (e) {
-    log.error(`Error in getMaxOrderNumber() of ${utils.getModuleName(module.id)} module: ${e}`);
+    log.error(`Error in getMaxOrderNumberOneSide() of ${moduleName} module: ${e}`);
     return DEFAULT_MAX_ORDERS_ONE_SIDE;
   }
+}
+
+/**
+ * Calculates the number of liquidity orders to place based on total liquidity size.
+ * The function grows non-linearly (using sqrt(sqrt(value))) to avoid placing too many orders
+ * while still scaling with available liquidity.
+ *
+ * Rules:
+ * - Minimum result is always 1 order
+ * - The count is capped by how many minimum-size orders can fit into valueInUSD
+ * - The nonlinear root function controls smooth, slow growth (ideal 4–8 orders for mid-sized liquidity)
+ *
+ * Examples:
+ *   valueInUSD = 50,     minOrderUsd = 5   →   n = 3
+ *   valueInUSD = 100,    minOrderUsd = 5   →   n = 4
+ *   valueInUSD = 100000, minOrderUsd = 5   →   n ≈ 18
+ *
+ * @param {number} valueInUSD Total liquidity available in USD
+ * @param {number} [minOrderUsd=5] Minimum order size in USD
+ * @return {number} Calculated number of orders (n ≥ 1)
+ */
+function calcOrderCount(valueInUSD, minOrderUsd = 5) {
+  if (!utils.isPositiveOrZeroNumber(valueInUSD)) return;
+
+  // If liquidity is too small to place more than one order
+  if (valueInUSD <= minOrderUsd) return 1;
+
+  // Nonlinear growth: sqrt(sqrt(value)) gives smooth, controlled scaling
+  const base = Math.sqrt(Math.sqrt(valueInUSD));
+
+  // Upper bound: how many minimal orders can physically fit
+  const maxByMin = Math.floor(valueInUSD / minOrderUsd);
+
+  // Final result: at least 1, and not exceeding practical maxByMin
+  return Math.max(1, Math.min(maxByMin, Math.ceil(base)));
 }
 
 /**
@@ -753,4 +895,26 @@ function setPause() {
   return utils.randomValue(INTERVAL_MIN, INTERVAL_MAX, true);
 }
 
-module.exports.loadLiqLimits();
+/**
+ * Creates a LiqLimits object with default values from current tradeParams.
+ * Initial epoch state: full bid/ask limits, no fills, no VWAP.
+ * @returns {LiqLimits}
+ */
+function createDefaultLiqLimits() {
+  return {
+    bidLimit: tradeParams.mm_liquidityBuyQuoteAmount,
+    askLimit: tradeParams.mm_liquiditySellAmount,
+    bidLimitPercent: 100,
+    askLimitPercent: 100,
+    totalBidFilledAmount: 0,
+    totalAskFilledAmount: 0,
+    totalBidFilledQuote: 0,
+    totalAskFilledQuote: 0,
+    soldVwap: 0,
+    boughtVwap: 0,
+  };
+}
+
+// mm_liquidity_safe auto-initializes itself (module.exports.loadLiqLimits() at its bottom).
+// Only call loadLiqLimits() here when running without mm_liquidity_safe (plain tradeParams fallback).
+if (!safeLiq) module.exports.loadLiqLimits();

@@ -1,175 +1,447 @@
 {
   /**
-    States if this config file is for development (not a production bot).
-    Config files 'config.dev.jsonc' and 'config.test.jsonc' considered as dev independent of this option.
-    You can also add 'dev' or 'test' command argument, or set env DEV=true.
-  **/
+   * Indicates whether this configuration file is for development use.
+   * Files named `config.dev.jsonc` and `config.test.jsonc` are always treated as dev configs regardless of this flag.
+   * You can also switch to dev mode by:
+   *   – adding CLI argument `dev` or `test`
+   *   – setting environment variable DEV=true
+   */
   "dev": false,
+
+  /**
+   * Enables the bot's internal CLI to manage the bot.
+   * In CLI mode, ADM account and parameters are not required.
+   * To use:
+   *   1. Run bot normally (e.g., via pm2)
+   *   2. Start CLI with `npm run cli`
+   *   (Optional) run `npm link` for global `tradebot-cli` command
+   */
+  "cli": false,
+
+  /**
+   * If the bot was offline beyond this time threshold,
+   * It will launch in a paused state to avoid unexpected behavior.
+   * Review current market conditions before resuming with /start.
+   * Examples: 10m, 5d, 1mon.
+   */
+  "pauseAfterInactivity": "6h",
   
   /**
-    The bot's secret passphrase. Create a separate ADM account for the bot.
-    Bot's ADM address will correspond to this passPhrase.
-  **/
+   * The bot’s 12-word ADAMANT passphrase.
+   * Create a separate ADM account specifically for the bot.
+   * The bot’s ADM address is derived from this passphrase.
+   */
   "passPhrase": "distance expect praise frequent..",
 
   /**
-    List of nodes to fetch transactions.
-    If one becomes unavailable, the bot will choose a live one.
-  **/
+   * Telegram bot token for management commands (optional). You can create a bot and obtain a token using @BotFather https://core.telegram.org/bots/tutorial#obtain-your-bot-token.
+   * Example: "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11".
+   * Use this bot as an alternative control channel instead of CLI or ADAMANT Messenger.
+   */
+  "manageTelegramBotToken": "",
+
+  /**
+   * List of ADAMANT nodes for fetching transactions.
+   * The bot chooses a working node automatically if one becomes unavailable.
+   */
   "node_ADM": [
     "https://bid.adamant.im",
     "http://localhost:36666",
     "https://endless.adamant.im",
     "https://clown.adamant.im",
-    "https://unusual.adamant.im",
     "https://debate.adamant.im",
-    "http://23.226.231.225:36666",
-    "http://78.47.205.206:36666",
     "https://lake.adamant.im",
     "https://sunshine.adamant.im"
   ],
 
-  /** Socket connection is recommended for better user experience **/
+  /** Enables ADAMANT WebSocket connection for faster command reception */
   "socket": true,
 
-  /** Choose socket connection protocol, "ws" or "wss" depending on your server **/
+  /** ADAMANT WebSocket protocol to use: "ws" or "wss" */
   "ws_type": "ws",
 
-  /** List of ADAMANT InfoServices for catching exchange rates **/
-  "infoservice": [
-    "https://info.adamant.im"
+  /** InfoService endpoints for fetching exchange rates */
+  "infoservice": ["https://info.adamant.im"],
+
+  /** Whitelist of ADAMANT accounts allowed to manage the bot */
+  "admin_accounts": ["U123.."],
+
+  /**
+   * Telegram chat IDs or usernames allowed to manage the bot.
+   * Use @ShowJsonBot to determine numeric chat IDs.
+   */
+  "admin_telegram": [
+    // 1744022467,
+    // "@username"
   ],
 
-  /** ADAMANT accounts to accept commands from. Commands from other accounts will not be executed. **/
-  "admin_accounts": [
-    "U123.."
-  ],
-
-  /** Notify non-admins that they are not admins. If false, the bot will be silent. **/
+  /** If true, bot notifies unknown Telegram users that they’re not admins */
   "notify_non_admins": false,
 
-  /** List of supported exchanges **/
+  /** List of supported exchanges */
   "exchanges": [
-    "P2PB2B",
-    "Azbit",
-    "StakeCube",
-    "Coinstore",
-    "FameEX",
-    "NonKYC",
-    "XeggeX"
+    "P2PB2B", "Azbit", "StakeCube", "Coinstore", "FameEXnet", "NonKYC"
   ],
 
-  /** Exchange to work with. Case insensitive. **/
+  /** Exchange to work with (case insensitive) */
   "exchange": "Azbit",
 
-  /** Pair to trade **/
+  /** Enables demo (paper) trading account on supported exchanges */
+  "isDemoAccount": false,
+
+  /** Spot trading pair for the bot */
   "pair": "ADM/USDT",
 
   /**
-    If an exchange doesn't publicly expose API for the pair, the bot can use private API.
-    Specific to exchange API implementation.
-  **/
-  "pair_hidden": false,
+   * Perpetual contracts pair. Must match the spot pair.
+   * If defined, overrides `pair` for market-making and live trading.
+   */
+  "perpetual": "",
 
   /**
-    Interval in minutes to clear all of the Unknown (which are not placed by the bot) opened orders.
-    Some exchanges have API issues with closing or matching orders.
-    Because of this, your account can accumulate open orders and lead to frozen balances.
-    In such a case, you can run the "/clear unk" command manually or set this parameter for automatic clearing.
-    Note: this command cancels all Unknown orders for the pair, including ones you placed on an exchange's website.
-    0 means disabled.
-  **/
-  "clearAllOrdersInterval": 0,
+   * When true, the bot will use private API for hidden (non-public) pairs.
+   * Depends on exchange features.
+   */
+  "pair_hidden": false,
 
-  /** Exchange's custom restrictions to override `traderapi.features()`, if you have a special account **/
-  "exchange_restrictions": {
-    /** Max number of open orders. Set 'false' to skip **/
-    "orderNumberLimit": false,
-    /** If an exchange doesn't provide a minimum order amount value, the bot uses the DEFAULT_MIN_ORDER_AMOUNT_USD const. You can override it with any positive value. **/
-    "minOrderAmountUSD": false,
-    /** Same for the upper bound of the min order amount **/
-    "minOrderAmountUpperBoundUSD": false
+  /** Configuration for the Balance Watcher (bw) module */
+  "balance_watcher": {
+    /**
+     * Allowed decrease of the coin2 balance in percent.
+     * In most cases, a coin2 balance decrease indicates selling pressure,
+     * when the bot buys a significant amount of coin1 using the quote coin, even at a fair market price.
+     */
+    "coin2BalanceThresholdPercent": 25,
+
+    /**
+     * Allowed decrease of the total trading (coin1 + coin2) value in percent.
+     * This is the primary metric that shows how the reference balance has increased or decreased, normalized by the token price.
+     */
+    "expectedValueThresholdPercent": 10,
+
+    /**
+     * Allowed decrease of the total trading (coin1 + coin2) value, expressed in coin2.
+     * If set to 0, absolute value changes are not checked.
+     */
+    "expectedValueThresholdCOIN2": 0
   },
 
   /**
-    A short name which helps you to understand which exchange account you use.
-    Letters and digits only.
-  **/
+   * Sniper Bot Watcher (sbw) configuration for mitigating third-party bot activity in the Trader module:
+   * - Scenario 1: After a maker order is placed in the spread, a third-party bot quickly takes it
+   * - Scenario 2: After a maker order is placed, a third-party bot quickly places another order just ahead of it
+   * Only in-spread t-orders are counted. executeInOrderBook outcomes are logged separately and do not increment SBW counters.
+   */
+  "sniper_bot_watcher": {
+    /** Whether to enable Sniper Bot Watcher */
+    "sbwEnabled": false,
+
+    /** Sniper bot activity counter threshold to enter Safe Mode */
+    "safeModeThreshold": 3,
+
+    /** Reset sniper bot activity counter every `resetThreshold` checks */
+    "resetThreshold": 10
+  },
+
+  /**
+   * Nice Chart configuration for Trader.
+   * Nice Chart must refresh candles and recent trades before every decision. While
+   * refresh/decision failures are below this threshold, Trader skips t-orders; once
+   * the threshold is reached, Trader falls back to its local non-Nice-Chart logic.
+   */
+  "nice_chart": {
+    /** Whether to enable Nice Chart if the optional module exists; ignored when the module is absent */
+    "enabled": false,
+
+    /** Consecutive failed Nice Chart requests before falling back to local Trader logic */
+    "failedRequestsBeforeFallback": 3,
+
+    /** Trader-specific order-book execution settings used by Nice Chart */
+    "executeInOrderBook": {
+      /** Maximum allowed order-book price change for one Trader order in percent */
+      "maxPriceChangePercent": 0.15,
+
+      /** Under optimal trader policy, probability (0–100) to choose executeInOrderBook when Nice Chart allows it; remaining trades use executeInSpread */
+      "executeInOrderBookPercent": 80,
+
+      /** Pre-third-party caps applied to the requested executeInOrderBook amount */
+      "amountManaging": {
+        /** Cap by visible custom-spread liquidity (orderBookInfo.liquidity.percentCustom amountBids/amountAsks) */
+        "limitByLiquidity": false,
+
+        /** Cap as percent of the requested amount; can be overridden per session via tradeParams.mm_traderObLimitPercent (ob=50% in /enable t and /amount) */
+        "limitPercent": 80,
+
+        /** Cap in USD value */
+        "limitValueUsd": 100,
+
+        /** Skip limitPercent, limitValueUsd, and limitByLiquidity when the external slice improves VWAP spread */
+        "keepFullWhenImprovesVwapSpread": true
+      },
+
+      /** Controls when Trader may intentionally match third-party order-book liquidity */
+      "matchingThirdPartyOrders": {
+        /** Enables Nice Chart gating for third-party order-book matches */
+        "enabled": true,
+
+        /** If true, ignore VWAP checks completely and always allow third-party matching */
+        "ignoreVwap": false,
+
+        /** Allow matching while the current Trader side still has no VWAP history */
+        "whenVwapZeroYet": true,
+
+        /** Allow matching when the projected trade improves the side VWAP */
+        "whenImprovesVwap": true,
+
+        /** Allow matching when the projected post-trade VWAP spread remains non-negative */
+        "whenVwapSpreadAllows": true,
+
+        /** Allow projected VWAP spread to go negative up to this percent of the reference price (0 = disabled) */
+        "vwapSpreadAllowThresholdPercent": 0.6,
+
+        /** Allow matching while projected MTM PnL stays above -threshold in USD (0 = disabled) */
+        "vwapSpreadAllowThresholdUsd": 0,
+
+        /** If matching is restricted and the target side starts with third-party orders: `tradeMinAmount` or `cancelTrade` */
+        "ifTradeRestricted": "cancelTrade"
+      }
+    }
+  },
+
+  /** Configuration for fund-supplier module */
+  "fund_supplier": {
+    "enabled": false,
+    "secondary_notifications": false,
+    "coins": [
+      {
+        "coin": "ETH",
+        "min_balance_total": 10,
+        "min_balance_free": 5,
+        "max_balance_total": 15,
+        "top_up_amount": 1,
+        "sources": ["ETH/USDT", "ETH/BTC"]
+      },
+      {
+        "coin": "BTC",
+        "min_balance_total": 1,
+        "top_up_amount": 0.1,
+        "sources": ["BTC/USDT", "ETH/BTC"]
+      },
+      {
+        "coin": "USDT",
+        "max_balance_total": 50000,
+        "min_balance_free": 20000,
+        "top_up_amount": 1000,
+        "sources": ["BTC/USDT", "ETH/USDT"]
+      }
+    ]
+  },
+
+  /**
+   * Interval (minutes) to automatically clear "Unknown" orders.
+   * Unknown = orders not placed by the bot.
+   * Some exchanges fail to match or close orders and accumulate zombie orders.
+   * Set 0 to disable.
+   */
+  "clearAllOrdersInterval": 0,
+
+  /** Exchange-specific overrides */
+  "exchange_restrictions": {
+    /** Max number of simultaneously open orders; set false to disable */
+    "orderNumberLimit": false,
+
+    /** Override minimum order USD value (if exchange does not provide) */
+    "minOrderAmountUSD": false,
+
+    /** Override upper bound for minimum order USD value */
+    "minOrderAmountUpperBoundUSD": false
+  },
+
+  /** Short label for exchange account used in notifications */
   "account": "acc1",
 
-  /** Exchange's account API key for connection **/
+  /** Primary exchange API key */
   "apikey": "YOUR-KEY..",
 
-  /** Exchange's account API secret for connection **/
+  /** Primary exchange API secret */
   "apisecret": "YOUR-SECRET..",
 
-  /** Exchange's account trade password or memo (if required by exchange) **/
+  /** Exchange trading password / memo (if required) */
   "apipassword": "YOUR-TRADE-PASS",
 
-  /** Override project name for notifications. Letters, digits, - and ~ only. By default, it's derived from a repository name, TradeBot-me. **/
+  /**
+   * Some exchanges require separate API keys for perpetual contracts.
+   * If so, fill both spot and perpetual fields.
+   */
+  "perpetual_apikey": "",
+  "perpetual_apisecret": "",
+  "perpetual_apipassword": "",
+
+  /** Second account for dual-key market making */
+  "account2": "acc2",
+  "apikey2": "",
+  "apisecret2": "",
+  "apipassword2": "",
+
+  /** Override project name in notifications (default is derived from repository name) */
   "project_name": "",
 
-  /** Bot's name for notifications. Keep it empty if you want the default format ADM/USDT@Coinstore-acc1 TradeBot **/
+  /** Bot's display name in notifications (can be blank to use default format) */
   "bot_name": "",
 
-  /** How to reply to user in-chat if the first unknown command is received. **/
-  "welcome_string": "Hi! 😊 I'm the {bot_name} trade and market-making bot. ℹ️ Learn more on https://marketmaking.app or type **/help**.",
+  /** Message shown when first unknown command is received */
+  "welcome_string": "Hi! 😊 I'm the {bot_name} trading and market-making bot. ℹ️ Learn more on https://marketmaking.app or type **/help**.",
 
-  /** ADAMANT addresses for notifications and monitoring. Optional. **/
+  /** ADAMANT addresses for notifications */
   "adamant_notify": [""],
 
-  /** ADAMANT addresses for priority notifications **/
+  /** ADAMANT addresses for priority notifications */
   "adamant_notify_priority": [],
 
-  /** Slack keys for notifications and monitoring. Optional. **/
+  /** Slack webhook URLs for notifications */
   "slack": ["https://hooks.slack.com/services/.."],
 
-  /** Slack keys for priority notifications **/
+  /** Slack webhooks for priority notifications */
   "slack_priority": [],
 
-  /** Discord keys for notifications and monitoring. Optional. **/
+  /**
+   * Telegram bot token used for notifications. This is different from `manageTelegramBotToken`.
+   * The bot can be created and the token obtained also via @BotFather: https://core.telegram.org/bots/tutorial#obtain-your-bot-token.
+   */
+  "telegramBotToken": "",
+
+  /**
+   * Chat IDs/usernames for sending notifications.
+   * For channels/groups: bot must have “Post messages” permission.
+   */
+  "telegram": [
+    // 1744022467,
+    // -758545812,
+    // "@channel_username"
+  ],
+
+  /** Telegram priority recipients */
+  "telegram_priority": [],
+
+  /** Email recipients */
+  "email_notify": [],
+
+  /** Priority email recipients */
+  "email_priority": [],
+
+  /**
+   * Notification aggregation time (minutes) for email.
+   * Set false to disable aggregation.
+   * Priority notifications are always sent immediately.
+   */
+  "email_notify_aggregate_min": 10,
+
+  /**
+   * SMTP configuration for email delivery.
+   * For Gmail:
+   *   – enable 2FA
+   *   – generate app password
+   *   – ensure sender is whitelisted
+   */
+  "email_smtp": {
+    "hostname": "smtp.gmail.com",
+    "port": 465,
+    "auth": {
+      "username": "",
+      "password": ""
+    }
+  },
+
+  /** Discord webhook URLs for notifications */
   "discord_notify": ["https://discord.com/api/webhooks/..."],
 
-  /** Discord keys for priority notifications. Optional. **/
+  /** Discord webhooks for priority notifications */
   "discord_notify_priority": [],
 
-  /** If you don't want to receive "not enough balance" notifications, set this to "true" **/
+  /** Disable “not enough balance” notifications */
   "silent_mode": false,
 
   /**
-    The software will use verbosity according to log_level.
-    It can be none < error < warn < info < log.
-  **/
+   * Logging verbosity:
+   *   none < error < warn < info < log
+   */
   "log_level": "log",
 
+  /**
+   * Shared HMAC secret for private WebUI (scenario A) JWT verification.
+   *
+   * Must be at least 32 characters and must not be a known placeholder.
+   * Required before enabling `private_webui`.
+   */
+  "private_webui_secret_key": "some-random-string",
+
+  /**
+   * **Inbound API listen port on this bot** (private WebUI, scenario A).
+   *
+   * Positive integer (e.g. `3001`) starts Fastify + Socket.IO. `false` disables inbound API.
+   * One private WebUI manages many bots: store each bot URL in the WebUI app
+   * (`http://bot-host:3001`, …). HTTPS terminates on the WebUI reverse proxy.
+   *
+   * REST: `http://<bot-host>:{private_webui}/api/v1/*`
+   * WebSocket: `ws://<bot-host>:{private_webui}/api/v1/ws`
+   */
+  "private_webui": false,
+
+  /**
+   * Bind address for `private_webui` HTTP and Socket.IO.
+   *
+   * `127.0.0.1` (default) — local WebUI or reverse proxy on the same host only.
+   * `0.0.0.0` — accept connections from a remote private WebUI fleet (one WebUI VPS, many bot VPS).
+   * Accompany `0.0.0.0` with `private_webui_allowed_ips` and a strong `private_webui_secret_key`.
+   */
+  "private_webui_bind_host": "127.0.0.1",
+
+  /**
+   * Optional client IP allowlist for `private_webui`.
+   *
+   * Empty array — no IP filter (any client that can reach the bind address).
+   * Example: `["1.2.3.4"]` — only the private WebUI VPS may connect.
+   */
+  "private_webui_allowed_ips": [],
+
+  /**
+   * Public WebUI relay WebSocket URL (scenario B).
+   *
+   * Example: `wss://mmweb.example.com/relay`. Together with `public_webui_license_token` this
+   * auto-enables `relayWs` transport. Set `private_webui`: false — browsers never hit the bot directly.
+   *
+   * License validation runs on the **relay** via adamant-payment; the bot does not need a pay API URL.
+   */
+  "public_webui": "",
+
+  /**
+   * License token from adamant-payment (pair+exchange scope) for Public WebUI (scenario B).
+   *
+   * Authenticates this bot to the public relay. Not related to `private_webui_secret_key`.
+   */
+  "public_webui_license_token": "",
+
+  /** Local API server configuration */
   "api": {
-    /** Port to listen on. Set 'false' to disable **/
     "port": false,
 
-    /**
-      Enables health API
-      Allows to check if a bot is running with http://ip:port/ping
-    **/
+    /** Health endpoint: http://ip:port/ping */
     "health": false,
 
-    /**
-      Enables debug API
-      Do not set for live bots, use only for debugging.
-      Allows to get DB records like http://ip:port/db?tb=incomingTxsDb
-    **/
+    /** Debug endpoint (not for production) */
     "debug": false
   },
 
   /**
-    Storage connection options for MongoDB.
-    https://mongodb.github.io/node-mongodb-native/6.5/interfaces/MongoClientOptions.html
-  **/
+   * MongoDB connection settings.
+   * https://mongodb.github.io/node-mongodb-native/6.5/interfaces/MongoClientOptions.html
+   */
   "db": {
     "name": "tradebotdb",
     "url": "mongodb://127.0.0.1:27017/",
     "options": {
       "serverSelectionTimeoutMS": 3000,
-      "serverApi": { // https://mongodb.github.io/node-mongodb-native/6.5/interfaces/ServerApi.html
+      "serverApi": {
         "deprecationErrors": true,
         "strict": true,
         "version": "1"
@@ -177,6 +449,47 @@
     }
   },
 
-  /** Minimal amount of USDT to confirm buy/sell/fill commands **/
-  "amount_to_confirm_usd": 1000
+  /**
+   * Inter-bot communication server (ComServer) URL.
+   *
+   * Set `false` to disable. Example: `http://com.example.com:3000`
+   * The bot connects outbound (Socket.IO + HTTP); no inbound port is opened here.
+   *
+   * Prefer `https://` so traffic uses TLS. Plain `http://` sends payloads without
+   * transport encryption — only the AES layer in `com_server_secret_key` protects content.
+   * Requires a strong `com_server_secret_key` (same value on ComServer and every bot).
+   */
+  "com_server": false,
+
+  /**
+   * Shared AES secret for ComServer inter-bot encryption.
+   *
+   * Must be at least 32 characters and must not be empty when `com_server` is enabled.
+   * Use the same value on ComServer and on every connected bot.
+   */
+  "com_server_secret_key": "",
+
+  /** Minimum USD amount to require confirmation of buy/sell/fill commands */
+  "amount_to_confirm_usd": 300,
+
+  /** Volume thresholds in USD for different emoji levels */
+  "volumes_thresholds_usd": {
+    "🦐": 10,
+    "🍤": 50,
+    "🐟": 100,
+    "🐬": 300,
+    "🦈": 1000,
+    "🐳": 5000,
+    "🐳🐳": 10000,
+    "🐳🐳🐳": 50000
+  },
+
+  /** Enable exchange WebSocket stream */
+  "exchange_socket": false,
+
+  /**
+   * Enable socket-pull requests in addition to socket-subscribe.
+   * Requires exchange_socket=true.
+   */
+  "exchange_socket_pull": false
 }
