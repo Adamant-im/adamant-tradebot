@@ -11,9 +11,15 @@ ADAMANT Market-Making Software runs on your own server, uses your own exchange a
 > No third-party API key access.  
 > Full control over configuration, monitoring, and execution.
 
-![Trading chart](./assets/Making-chart.png)
+![Market-making & Order book building](./assets/OrderBook-Builder.gif)
 
-![Market Making & OrderBook Building](./assets/OrderBook-Builder.gif)
+![Example of healthier market activity with ADAMANT Market-Making Software 1](./assets/marketmaking-app-demo1.png)
+
+![Example of healthier market activity with ADAMANT Market-Making Software 2](./assets/marketmaking-app-demo2.png)
+
+![Example of healthier market activity with ADAMANT Market-Making Software 3](./assets/marketmaking-app-demo3.png)
+
+![Example of healthier market activity with ADAMANT Market-Making Software 4](./assets/marketmaking-app-demo4.png)
 
 ## Why token projects use it
 
