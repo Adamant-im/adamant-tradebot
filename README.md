@@ -1,132 +1,186 @@
-ADAMANT Market-making bot is self-hosted software that runs trades on crypto exchanges, generates trading volume, maintains spread and liquidity, sets price ranges, and builds live-like dynamic order books.
+# ADAMANT Market-Making Software
 
-This is the free version — suitable for small crypto projects with low liquidity, traded on centralized exchanges from the open list.
+**Free self-hosted market-making toolkit for token issuers.**
 
-For premium features, see [https://marketmaking.app/cex-mm/mm-features](https://marketmaking.app/cex-mm/mm-features/).
+Improve your token’s CEX market quality without sending your tokens, funds, or API keys to a third-party market maker.
 
-Market-making helps:
+ADAMANT Market-Making Software runs on your own server, uses your own exchange account, and helps maintain order book depth, tighter spreads, price ranges, and live-like market activity on supported centralized exchanges.
 
-* Cryptocurrency projects (token issuers)
-* Cryptocurrency exchanges
+> No token custody.  
+> No fund transfer.  
+> No third-party API key access.  
+> Full control over configuration, monitoring, and execution.
 
-![Trading chart](./assets/Making-chart.png)
+![Market-making & Order book building](./assets/OrderBook-Builder.gif)
 
-![Market Making & OrderBook Building](./assets/OrderBook-Builder.gif)
+![Example of healthier market activity with ADAMANT Market-Making Software 1](./assets/marketmaking-app-demo1.png)
 
-# Features (Basic MM bot)
+![Example of healthier market activity with ADAMANT Market-Making Software 2](./assets/marketmaking-app-demo2.png)
 
-* Self-hosted — never share your exchange API keys
-* Easy to install and configure
-* Initial order book filling
-* Dynamic order book building (basic)
-* Watch order books and eliminate gaps
-* Place buy and sell limit or market orders
-* Trading volume with four policies: spread, orderbook, optimal, and depth
-* Spread and liquidity/depth maintenance (basic)
-* Price range settings
-* Arbitrage token price across trade pairs or exchanges
-* Account info: fees and daily volume
-* Command aliases
-* Managed via ADAMANT Messenger, Telegram, or WebUI
+![Example of healthier market activity with ADAMANT Market-Making Software 3](./assets/marketmaking-app-demo3.png)
 
-# Supported exchanges (Basic MM bot)
+![Example of healthier market activity with ADAMANT Market-Making Software 4](./assets/marketmaking-app-demo4.png)
 
-* [Azbit](https://azbit.com)
-* [P2PB2B](https://p2pb2b.com)
-* [StakeCube](https://stakecube.net)
-* [Coinstore](https://coinstore.com)
-* [FameEX](https://www.fameex.com)
-* [NonKYC](https://nonkyc.io)
+## Why token projects use it
 
-# Premium features and exchange support
+A CEX listing is not enough.
 
-For premium features and using the MM bot on any CEX, see [MM Bot Features](https://marketmaking.app/cex-mm/mm-features/).
+If your order book is thin, the spread is wide, or even small trades move the price too much, new traders may see risk before they see your project.
 
-# Usage and installation
+ADAMANT Market-Making Software helps token issuers operate their own liquidity setup instead of handing control to an external black-box market maker.
 
-After installation, you control the bot in a secure ADAMANT Messenger chat. The bot is self-hosted.
+It is designed for projects that want to:
 
-For additional bot management options, including Telegram, CLI and Web UI access, request a manager account at https://marketmaking.app.
+- Improve order book depth
+- Maintain tighter spreads
+- Reduce empty-book and gap effects
+- Keep price activity within configured ranges
+- Monitor liquidity operations transparently
+- Stay in control of their own exchange accounts
+- Avoid sending tokens or funds to an outside market maker
 
-* [Installation and usage guide](https://marketmaking.app/cex-mm/installation/)
-* [Command reference](https://marketmaking.app/cex-mm/command-reference/)
+## Trusted by design
 
-## Requirements
+ADAMANT Market-Making Software is not a black-box market-making service.
 
-* Ubuntu 20+ or CentOS 8+ (other Linux distros may work but are not tested)
-* Node.js v22.2+
-* npm v9+
-* MongoDB ([installation instructions](https://www.mongodb.com/docs/manual/administration/install-community/)
+It is open-source software backed by ADAMANT — a 10-year open-source crypto project with public repositories, long-term community history, and production infrastructure.
 
-## Setup
+You can inspect the code, run the software yourself, monitor its behavior, and keep your exchange access under your own control.
 
-```bash
-su - adamant
-git clone https://github.com/Adamant-im/adamant-tradebot
-cd adamant-tradebot
-npm i
-```
+## Who it is for
 
-## Pre-launch tuning
+ADAMANT Market-Making Software is built for:
 
-The bot uses `config.jsonc` if present, otherwise `config.default.jsonc`.
-For named configs, use `config.<name>.jsonc` and pass `<name>` as a launch argument.
+- Token issuers after CEX listing
+- Crypto projects with thin order books or wide spreads
+- Teams that want to improve market quality without transferring tokens or funds to a third party
+- Projects that prefer open-source, self-hosted, transparent market operations
+- Small and early-stage token projects that need a free basic market-making toolkit to start
+- Mid-size and large crypto projects that need advanced market-making features, custom exchange support, setup assistance, and ongoing technical support through the premium version
+- Teams that cannot afford, do not want, or do not fully trust a traditional full-service market maker
 
-```bash
-cp config.default.jsonc config.jsonc
-nano config.jsonc
-```
+ADAMANT Market-Making Software helps token issuers improve CEX market quality without handing control to a third-party market maker.
 
-Parameter descriptions are in comments inside `config.jsonc` (Use only parameters for modules included in the basic MM bot).
+It is designed to address the most common problems after listing:
 
-## Launching
+| Situation | Pain |
+|---|---|
+| Token is already listed | But the order book looks empty or weak |
+| Spread is too wide | Traders see risk and avoid entering |
+| Liquidity is thin | Even small orders move the price |
+| Full-service market making is too expensive | Retainers, token loans, opaque terms |
+| Team does not trust third parties | Fear of token dumping, API misuse, or hidden execution |
+| Project wants transparency | The software runs on their own server, under their own monitoring |
 
-You can start the bot with `node app.js`, but a process manager is recommended.
+## What it does
 
-### NPM scripts
+The free basic version helps operate essential market-making activity on supported centralized exchanges.
 
-```bash
-npm start                               # config.default.jsonc or config.jsonc
-npm run start:config -- <name>          # config.<name>.jsonc
-npm run start:dev                       # config.dev.jsonc
-npm run clear                           # clear DB for default config
-npm run clear:config -- <name> clear_db # clear DB for config.<name>.jsonc
-```
+### Basic features
 
-### PM2
+- Self-hosted deployment
+- No third-party access to your exchange API keys
+- No token or fund transfer to an external market maker
+- Initial order book filling
+- Dynamic order book building
+- Buy and sell limit orders
+- Buy and sell market orders
+- Spread maintenance
+- Basic liquidity and depth support
+- Price range settings
+- Trading activity with configurable policies:
+  - Spread
+  - Order book
+  - Optimal
+  - Depth
+- Reference price / arbitrage logic across trading pairs or exchanges
+- Account information:
+  - Exchange fees
+  - Daily volume
+  - Balances
+  - Orders
+  - Bot statistics
+- Command aliases
+- Management via ADAMANT Messenger—secure command-based control without exposing a public admin panel
 
-```bash
-pm2 start app.js --name tradebot
-```
+## Supported exchanges
 
-With a named config:
+The free basic version supports selected centralized exchanges:
 
-```bash
-pm2 start app.js --name tradebot-p2b -- p2b_mmtest
-```
+- [Azbit](https://azbit.com)
+- [P2PB2B](https://p2pb2b.com)
+- [StakeCube](https://stakecube.net)
+- [Coinstore](https://coinstore.com)
+- [FameEX](https://www.fameex.com)
+- [NonKYC](https://nonkyc.io)
 
-Add the process to `pm2 startup` or cron so it restarts on reboot.
+Need another exchange?
 
-## Updating
+Premium and custom exchange support is available for other CEXs.
 
-```bash
-su - adamant
-cd adamant-tradebot
-pm2 stop tradebot
-git pull
-npm i
-```
+## Limited onboarding offer
 
-If `config.default.jsonc` changed, merge new fields into your `config.jsonc`.
+Your exchange is not supported yet? We may add a connector to your exchange for free or with a special discount as part of the onboarding campaign.
 
-Then:
+Offer valid until **September 1, 2026**—contact us.
 
-```bash
-pm2 restart tradebot
-```
+## Premium features and support
 
-## Tests
+The free basic version is suitable for getting started with self-hosted liquidity operations on supported exchanges.
 
-See [CONTRIBUTING.md — Tests](CONTRIBUTING.md#tests) for Jest suites, interactive simulators, and live exchange scripts.
+Premium modules and services are available for projects that need advanced market quality, safer liquidity management, additional exchange support, custom setup, or ongoing technical support.
 
-**Do not run `npm test` without arguments** — use scoped scripts (`npm run test:general`, `test:features`, `test:api-webui`, `test:trader`) or pass an explicit file path.
+Premium options may include:
+
+- Advanced liquidity and depth control
+- Safer liquidity strategies
+- Better spread maintenance
+- In-spread orders
+- No-gap order book logic
+- Smoother chart behavior
+- DEX price watcher
+- Anti-cheat and cleaner logic
+- Additional exchange connectors
+- WebUI access
+- Setup assistance
+- Configuration tuning
+- Ongoing support
+
+See premium features:
+
+[https://marketmaking.app/cex-mm/mm-features/](https://marketmaking.app/cex-mm/mm-features/)
+
+## Usage and installation
+
+After installation, you control the software from your own environment.
+
+The software is self-hosted. You keep control of the exchange account, API keys, funds, tokens, configuration, and execution.
+
+For additional management options, including Telegram, CLI, and WebUI access, request a manager.
+
+### Documentation
+
+- [Installation and usage guide](https://marketmaking.app/cex-mm/installation/)
+- [Command reference](https://marketmaking.app/cex-mm/command-reference/)
+
+## Contact
+
+Want to try it for your token project or request exchange support?
+
+Email:
+
+[mm@adamant.im](mailto:mm@adamant.im)
+
+ADAMANT Messenger:
+
+[ADAMANT Business](https://adm.im/?address=U8879792970017145825&label=ADAMANT+Market+Making)
+
+Telegram:
+
+[@adamant_business](https://t.me/adamant_business)
+
+## Important note
+
+Market making and liquidity operations must comply with exchange rules and applicable laws.
+
+ADAMANT Market-Making Software is self-hosted software. You configure it, run it, and remain responsible for how it is used.
