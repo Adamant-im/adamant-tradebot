@@ -97,24 +97,25 @@ case "$CMD" in
     fi
     ;;
   on)
-    echo ""
-    set +e
     if can_run_host_mm; then
-      env MM_PREFLIGHT=1 MM_HOST_CLI=1 MM_WORKDIR="$SCRIPT_DIR" node "$SCRIPT_DIR/bin/mm.js" doctor
+      run_with_padding run_host_mm on "$@"
     else
+      "${COMPOSE[@]}" up -d mongo
+      echo ""
+      set +e
       "${COMPOSE[@]}" run --rm -e MM_HOST_CLI=1 -e MM_PREFLIGHT=1 "${MM_DEV_MOUNTS[@]}" mm-app "${MM_CLI[@]}" doctor
-    fi
-    code=$?
-    if [ "$code" -eq 1 ] || [ "$code" -eq 3 ]; then
+      code=$?
+      if [ "$code" -eq 1 ] || [ "$code" -eq 3 ]; then
+        set -e
+        echo ""
+        exit "$code"
+      fi
+      "${COMPOSE[@]}" up -d "$@"
+      code=$?
       set -e
       echo ""
-      exit "$code"
+      exit $code
     fi
-    "${COMPOSE[@]}" up -d "$@"
-    code=$?
-    set -e
-    echo ""
-    exit $code
     ;;
   off)
     if [ "${1:-}" = "--all" ]; then

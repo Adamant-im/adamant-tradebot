@@ -19,6 +19,54 @@ const logsCmd = require('./logs');
 const terminal = require('../terminal');
 const { printBotVerificationHint } = require('../hints');
 const { doctorCodeToHealth, printConfigSection } = require('../health-summary');
+const { parseDbConfig, probeMongo, usesDockerMongoHost } = require('../mongo-probe');
+
+const DOCKER_MONGO_SERVICE = 'mongo';
+const MONGO_READY_TIMEOUT_MS = 30000;
+const MONGO_READY_POLL_MS = 500;
+
+/**
+ * Starts Compose dependency services before preflight checks (e.g. mongo after `./mm off --all`).
+ *
+ * @param {MmContext} ctx Runtime context
+ * @returns {Promise<void>}
+ */
+async function ensureDockerStackDependencies(ctx) {
+  if (ctx.mode !== 'docker' || !docker.canUseHostCompose(ctx)) {
+    return;
+  }
+
+  const userConfig = configUtil.loadUserConfig(ctx.configPath);
+  if (!userConfig) {
+    return;
+  }
+
+  const { url } = parseDbConfig(userConfig);
+  if (!usesDockerMongoHost(url)) {
+    return;
+  }
+
+  if (await docker.isServiceRunning(ctx, DOCKER_MONGO_SERVICE)) {
+    return;
+  }
+
+  const result = await docker.compose(ctx, ['up', '-d', DOCKER_MONGO_SERVICE]);
+  if (result.code !== 0) {
+    throw new Error(result.stderr || result.stdout || `Failed to start ${DOCKER_MONGO_SERVICE} service`);
+  }
+
+  const deadline = Date.now() + MONGO_READY_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    try {
+      await probeMongo(ctx, userConfig);
+      return;
+    } catch {
+      await new Promise((resolve) => setTimeout(resolve, MONGO_READY_POLL_MS));
+    }
+  }
+
+  throw new Error('MongoDB did not become ready in time');
+}
 
 /**
  * Starts the bot after preflight checks; no-op when already running.
@@ -64,6 +112,18 @@ async function runOn(ctx) {
     console.log('');
 
     return 1;
+  }
+
+  if (ctx.mode === 'docker') {
+    try {
+      await ensureDockerStackDependencies(ctx);
+    } catch (error) {
+      console.error(terminal.red(`Failed to prepare Docker stack: ${error instanceof Error ? error.message : error}`));
+
+      console.log('');
+
+      return 1;
+    }
   }
 
   const doctorCode = await runDoctor(ctx, { preflight: true });
@@ -123,4 +183,4 @@ async function on(args) {
   return runOn(ctx);
 }
 
-module.exports = { on, runOn };
+module.exports = { on, runOn, ensureDockerStackDependencies };
