@@ -62,7 +62,7 @@
     "making price"
   ],
   "author": "ADAMANT community developers <devs@adamant.im>, ADAMANT Foundation <devs@adamant.im> (https://adamant.im)",
-  "private": true,
+  "private": false,
   "license": "UNLICENSED",
   "dependencies": {
     "@fastify/cors": "^11.2.0",
