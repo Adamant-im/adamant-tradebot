@@ -158,10 +158,134 @@ The software is self-hosted. You keep control of the exchange account, API keys,
 
 For additional management options, including Telegram, CLI, and WebUI access, request a manager.
 
-### Documentation
+## Requirements
+
+- Ubuntu 20+ or CentOS 8+ (other Linux distros may work but are not tested)
+- Node.js v22.2+
+- npm v9+
+- MongoDB ([installation instructions](https://www.mongodb.com/docs/manual/administration/install-community/)
+
+## Setup
+
+```bash
+su - adamant
+git clone https://github.com/Adamant-im/adamant-tradebot
+cd adamant-tradebot
+npm i
+```
+
+## Pre-launch tuning
+
+The bot uses `config.jsonc` if present, otherwise `config.default.jsonc`.
+For named configs, use `config.<name>.jsonc` and pass `<name>` as a launch argument.
+
+```bash
+cp config.default.jsonc config.jsonc
+nano config.jsonc
+```
+
+Parameter descriptions are in comments inside `config.jsonc`.
+
+## Launching
+
+You can start the bot with `node app.js`, but a process manager is recommended.
+
+### NPM scripts
+
+```bash
+npm start                               # config.default.jsonc or config.jsonc
+npm run start:config -- <name>          # config.<name>.jsonc
+npm run start:dev                       # config.dev.jsonc
+npm run clear                           # clear DB for default config
+npm run clear:config -- <name> clear_db # clear DB for config.<name>.jsonc
+```
+
+### PM2
+
+```bash
+pm2 start app.js --name tradebot
+```
+
+With a named config:
+
+```bash
+pm2 start app.js --name tradebot-p2b -- p2b_mmtest
+```
+
+Add the process to `pm2 startup` or cron so it restarts on reboot.
+
+## Updating
+
+```bash
+su - adamant
+cd adamant-tradebot
+pm2 stop tradebot
+git pull
+npm i
+```
+
+If `config.default.jsonc` changed, merge new fields into your `config.jsonc`.
+
+Then:
+
+```bash
+pm2 restart tradebot
+```
+
+## Quick start with `mm` CLI
+
+The `mm` command simplifies install, configuration, and day-to-day operation. It works in **npm/local** mode and **Docker Compose** mode.
+
+### Install via npm
+
+```bash
+npm install -g adamant-tradebot
+mkdir my-bot && cd my-bot
+mm init
+mm doctor
+mm on
+mm status
+```
+
+Both `mm` and `adamant-tradebot` are available as CLI aliases.
+
+### Install via Docker Compose
+
+```bash
+git clone https://github.com/Adamant-im/adamant-tradebot
+cd adamant-tradebot
+./mm init
+./mm doctor
+./mm on
+./mm status
+```
+
+The stack runs `mm-app` and MongoDB (`mongo:8`). User data is stored in `./docker/config`, `./docker/trade-config`, and `./docker/logs` (gitignored).
+
+### Command reference
+
+| Command | Description |
+| --- | --- |
+| `mm init` | Interactive first-time setup wizard |
+| `mm on` | Start the bot (preflight `doctor`, no duplicate instance) |
+| `mm off` | Stop the bot (`--all` also stops MongoDB in Docker) |
+| `mm restart` | Restart the bot |
+| `mm status` | Installation, process, and health summary (`--json`, `--short`) |
+| `mm config` | View or change config parameters (`--edit`, `--restart`) |
+| `mm doctor` | Diagnose config, MongoDB, exchange API, and runtime |
+| `mm logs` | Show logs (`-f`, `--tail`, `--since`, `--level`, `--grep`) |
+| `mm update` | Update the app without touching user config (`--check`) |
+
+Use `--mode npm` or `--mode docker` when auto-detection is ambiguous.
+
+## Documentation
 
 - [Installation and usage guide](https://marketmaking.app/cex-mm/installation/)
 - [Command reference](https://marketmaking.app/cex-mm/command-reference/)
+
+## Tests & Developer tools
+
+See [CONTRIBUTING.md — Tests](CONTRIBUTING.md#tests) for Jest suites, interactive simulators, and live exchange scripts.
 
 ## Contact
 

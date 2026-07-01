@@ -306,14 +306,19 @@ try {
 
   const doClearDB = process.argv.includes('clear_db');
   // First argv token that is not a path and not `clear_db` selects `config.<name>.jsonc`
-  const configCustom = process.argv.find((arg) => !arg.includes('/') && arg !== 'clear_db');
+  const configCustom = process.env.MM_CLI === '1' ?
+    undefined :
+    process.argv.find((arg) => !arg.includes('/') && arg !== 'clear_db' && !arg.startsWith('-'));
 
   let configFile;
 
   const configFileDefault = '../config.default.jsonc';
   const configFileMain = '../config.jsonc';
 
-  if (configCustom) {
+  if (process.env.MM_CONFIG_PATH) {
+    // Set by `mm on` (PM2) or `mm` CLI when config lives outside legacy paths
+    configFile = path.relative(path.join(__dirname, '..'), path.resolve(process.env.MM_CONFIG_PATH));
+  } else if (configCustom) {
     configFile = `../config.${configCustom}.jsonc`;
   } else {
     const configExists = fs.existsSync(path.join(__dirname, configFileMain));
@@ -321,10 +326,16 @@ try {
     configFile = configExists ? configFileMain : configFileDefault;
   }
 
-  console.log(`Config reader: Reading config file '${configFile}'${dev ? ' (dev)' : ''}…`);
+  if (process.env.MM_CLI !== '1') {
+    console.log(`Config reader: Reading config file '${configFile}'${dev ? ' (dev)' : ''}…`);
+  }
 
-  // __dirname = ./modules
-  config = JSON.parse(jsonminify(fs.readFileSync(path.join(__dirname, configFile), 'utf-8')));
+  // __dirname = ./modules; MM_CONFIG_PATH is always read as an absolute path
+  const configSourcePath = process.env.MM_CONFIG_PATH ?
+    path.resolve(process.env.MM_CONFIG_PATH) :
+    path.join(__dirname, configFile);
+
+  config = JSON.parse(jsonminify(fs.readFileSync(configSourcePath, 'utf-8')));
 
   config.dev = dev || config.dev;
   config.doClearDB = doClearDB;
@@ -512,18 +523,24 @@ try {
     }
   }
 
-  console.info(`Config reader: ${config.notifyName} successfully loaded '${configFile}'${config.dev ? ' (dev)' : ''}.`);
+  if (process.env.MM_CLI !== '1') {
+    console.info(`Config reader: ${config.notifyName} successfully loaded '${configFile}'${config.dev ? ' (dev)' : ''}.`);
+  }
 
   // Create tradeParams for exchange (sync — utils/context require the file during module load)
   const exchangeTradeParams = path.join(__dirname, '../trade/settings', config.file);
   const defaultTradeParams = path.join(__dirname, '../trade/settings/tradeParams_Default.js');
 
   if (fs.existsSync(exchangeTradeParams)) {
-    console.log(`Config reader: Trade params file '${config.file}' already exists.`);
+    if (process.env.MM_CLI !== '1') {
+      console.log(`Config reader: Trade params file '${config.file}' already exists.`);
+    }
   } else {
     try {
       fs.copyFileSync(defaultTradeParams, exchangeTradeParams);
-      console.info(`Config reader: Trade params file '${config.file}' was created from the default template.`);
+      if (process.env.MM_CLI !== '1') {
+        console.info(`Config reader: Trade params file '${config.file}' was created from the default template.`);
+      }
     } catch (error) {
       exit(`Failed to create trade params file '${config.file}'. ${error}`);
     }
