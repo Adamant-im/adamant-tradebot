@@ -4212,4 +4212,6 @@ module.exports = {
   },
 };
 
-module.exports.watchConfig();
+if (process.env.MM_CLI !== '1') {
+  module.exports.watchConfig();
+}

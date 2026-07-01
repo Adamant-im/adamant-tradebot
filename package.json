@@ -1,8 +1,29 @@
 {
   "name": "adamant-tradebot",
-  "version": "8.0.0",
+  "version": "9.0.0",
   "description": "ADAMANT's self-hosted market-making bot for crypto projects & token issuers. Volume, spread, liquidity, price ranges, and dynamic order books.",
   "main": "app.js",
+  "bin": {
+    "mm": "bin/mm.js",
+    "adamant-tradebot": "bin/mm.js"
+  },
+  "files": [
+    "app.js",
+    "bin/",
+    "config.default.jsonc",
+    "docker/docker-compose.yml",
+    "Dockerfile",
+    "mm",
+    "modules/",
+    "types/",
+    "helpers/",
+    "trade/",
+    "api/",
+    "routes/",
+    "telegramBot/",
+    "assets/",
+    "docker-entrypoint.sh"
+  ],
   "scripts": {
     "lint": "npx eslint -f visualstudio .",
     "lint:fix": "npx eslint -f visualstudio --fix",
@@ -40,7 +61,7 @@
     "price watching",
     "making price"
   ],
-  "author": "ADAMANT community developers <devs@adamant.im>",
+  "author": "ADAMANT community developers <devs@adamant.im>, ADAMANT Foundation <devs@adamant.im> (https://adamant.im)",
   "private": true,
   "license": "UNLICENSED",
   "dependencies": {
@@ -55,7 +76,13 @@
     "fastify": "^5.8.5",
     "json-parse-bigint": "^1.0.4",
     "jsonminify": "^0.4.2",
+    "marked": "^15.0.12",
+    "marked-terminal": "^7.3.0",
     "mongodb": "^7.3.0",
+    "pm2": "^6.0.14",
+    "socket.io": "^4.8.3",
+    "socket.io-client": "^4.8.3",
+    "ws": "^8.21.0",
     "zod": "^4.4.3"
   },
   "devDependencies": {

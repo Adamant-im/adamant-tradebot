@@ -1,0 +1,48 @@
+name: Publish Docker image
+
+# Runs when a GitHub Release is published (not on every push).
+# The job is skipped unless the release tag points to a commit on master.
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout release tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name }}
+          fetch-depth: 0
+
+      - name: Verify release tag is on master
+        run: |
+          git fetch origin master
+          git merge-base --is-ancestor HEAD origin/master
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract version tag
+        id: meta
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          echo "version=${TAG}" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: |
+            ghcr.io/adamant-im/adamant-tradebot:latest
+            ghcr.io/adamant-im/adamant-tradebot:${{ steps.meta.outputs.version }}
