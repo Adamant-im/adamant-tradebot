@@ -79,7 +79,7 @@
     "marked": "^15.0.12",
     "marked-terminal": "^7.3.0",
     "mongodb": "^7.3.0",
-    "pm2": "^6.0.14",
+    "pm2": "^7.0.0",
     "socket.io": "^4.8.3",
     "socket.io-client": "^4.8.3",
     "ws": "^8.21.0",
