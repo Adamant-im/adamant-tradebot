@@ -1,5 +1,9 @@
 node_modules/
 logs/
+# Docker user data (./mm init)
+docker/config/
+docker/trade-config/
+docker/logs/
 keys/
 .vscode/*
 !.vscode/settings.json
@@ -22,3 +26,4 @@ trade/settings/*
 !trade/settings/tradeParams_Default.js
 CLAUDE.md
 .ai-tasks/
+.ai-ignored/

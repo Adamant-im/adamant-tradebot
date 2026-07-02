@@ -1,0 +1,4 @@
+# User data created by `./mm init` — never commit
+config/
+trade-config/
+logs/
