@@ -117,7 +117,8 @@
     "socket.io-parser": "^4.2.6"
   },
   "publishConfig": {
-    "access": "public"
+    "access": "public",
+    "provenance": true
   },
   "repository": {
     "type": "git",
