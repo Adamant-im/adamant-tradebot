@@ -24,6 +24,11 @@ test_encode.py
 coverage/
 trade/settings/*
 !trade/settings/tradeParams_Default.js
+
+# ai
 CLAUDE.md
 .ai-tasks/
 .ai-ignored/
+.cursor/
+.claude/
+
