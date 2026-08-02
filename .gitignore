@@ -31,4 +31,4 @@ CLAUDE.md
 .ai-ignored/
 .cursor/
 .claude/
-
+.playwright-mcp/
