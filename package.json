@@ -114,7 +114,7 @@
     "path-to-regexp": "^8.4.2",
     "picomatch": "^4.0.4",
     "js-yaml": "^4.1.0",
-    "socket.io-parser": "^4.2.6"
+    "socket.io-parser": "^4.2.7"
   },
   "publishConfig": {
     "access": "public"
