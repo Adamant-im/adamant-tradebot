@@ -113,6 +113,7 @@ The free basic version supports selected centralized exchanges:
 - [Coinstore](https://coinstore.com)
 - [FameEX](https://www.fameex.com)
 - [NonKYC](https://nonkyc.io)
+- [Qutrade](https://qutrade.io)
 
 Need another exchange?
 

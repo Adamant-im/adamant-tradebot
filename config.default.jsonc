@@ -80,7 +80,7 @@
 
   /** List of supported exchanges */
   "exchanges": [
-    "P2PB2B", "Azbit", "StakeCube", "Coinstore", "FameEXnet", "NonKYC"
+    "P2PB2B", "Azbit", "StakeCube", "Coinstore", "FameEXnet", "NonKYC", "Qutrade"
   ],
 
   /** Exchange to work with (case insensitive) */
