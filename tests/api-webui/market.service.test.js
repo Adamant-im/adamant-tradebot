@@ -21,10 +21,17 @@ const mockConnector = {
   getCandlesHistory: jest.fn(),
 };
 
+const mockOrderUtils = {
+  getRatesCached: jest.fn(),
+  getOrderBookCached: jest.fn(),
+};
+
 jest.mock('../../api/traderConnector', () => ({
   getTraderConnector: () => mockConnector,
   resetTraderConnector: jest.fn(),
 }));
+
+jest.mock('../../trade/orderUtils', () => mockOrderUtils);
 
 const marketService = require('../../api/services/market');
 
@@ -45,8 +52,8 @@ describe('market service', () => {
     expect(() => marketService.resolvePair('INVALID')).toThrow(BadRequestError);
   });
 
-  test('getTicker returns normalized payload', async () => {
-    mockConnector.getRates.mockResolvedValue({
+  test('getTicker returns normalized payload via orderUtils cache', async () => {
+    mockOrderUtils.getRatesCached.mockResolvedValue({
       ask: 101,
       bid: 99,
       last: 100,
@@ -58,11 +65,17 @@ describe('market service', () => {
       pair: 'ETH/USDT',
       ticker: { ask: 101, bid: 99, last: 100 },
     });
-    expect(mockConnector.getRates).toHaveBeenCalledWith('ETH/USDT');
+    expect(mockOrderUtils.getRatesCached).toHaveBeenCalledWith('ETH/USDT', 'webui-api', false);
+  });
+
+  test('getTicker passes noCache to orderUtils', async () => {
+    mockOrderUtils.getRatesCached.mockResolvedValue({ last: 1 });
+    await marketService.getTicker(undefined, { noCache: true });
+    expect(mockOrderUtils.getRatesCached).toHaveBeenCalledWith('ETH/USDT', 'webui-api', true);
   });
 
   test('getTicker throws when connector returns empty data', async () => {
-    mockConnector.getRates.mockResolvedValue(null);
+    mockOrderUtils.getRatesCached.mockResolvedValue(null);
     await expect(marketService.getTicker()).rejects.toThrow(NotFoundError);
   });
 

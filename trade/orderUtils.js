@@ -19,7 +19,7 @@ const utils = require('../helpers/utils');
 const config = require('../modules/configReader');
 const log = require('../helpers/log');
 const notify = require('../helpers/notify');
-const traderapi = require('./trader_' + config.exchange)(
+const traderapi = require('./trader/trader_' + config.exchange)(
     config.apikey,
     config.apisecret,
     config.apipassword,
@@ -51,6 +51,9 @@ let orderBookCached = [];
 const orderBookCachedValidMs = constants.REST_DATA_CACHE_MS;
 let balancesCached = { timestamp: 0, data: [] };
 const balancesCachedValidMs = constants.REST_DATA_CACHE_MS;
+/** @type {Record<string, { timestamp: number, data: object }>} */
+let ratesCached = {};
+const ratesCachedValidMs = constants.REST_DATA_CACHE_MS;
 
 // Conditions for a falsely empty order list
 const SUSPICIOUS_PRICE_DELTA_PERCENT = 20;
@@ -66,6 +69,66 @@ const moduleName = utils.getModuleName(moduleId);
 
 module.exports = {
   readableModuleName: 'orderUtils',
+
+  /**
+   * Clears in-memory REST caches (rates, open orders, order book, balances).
+   * Intended for tests; MM modules rarely need this.
+   */
+  clearRestDataCache() {
+    openOrdersCached = [];
+    orderBookCached = [];
+    balancesCached = { timestamp: 0, data: [] };
+    ratesCached = {};
+  },
+
+  /**
+   * Snapshot of in-memory REST caches for one pair. Does not call the exchange.
+   * Missing fields mean the cache has not been filled, or the entry is older
+   * than `maxAgeMs` (stale leftovers after a failed refresh must not look like
+   * a new observation).
+   *
+   * @param {string} pair BTC/USDT for spot
+   * @param {number} [maxAgeMs] Max age in ms; default is REST cache TTL
+   * @returns {{
+   *   orders?: object[],
+   *   rates?: object,
+   *   balances?: object[],
+   *   ordersTs?: number,
+   *   ratesTs?: number,
+   *   balancesTs?: number,
+   * }}
+   */
+  peekCachedMarket(pair, maxAgeMs) {
+    const now = Date.now();
+    const ageLimit = typeof maxAgeMs === 'number' && Number.isFinite(maxAgeMs) && maxAgeMs >= 0 ?
+      maxAgeMs :
+      ratesCachedValidMs;
+    const ordersEntry = openOrdersCached[pair];
+    const ratesEntry = ratesCached[pair];
+    const ordersFresh = ordersEntry && typeof ordersEntry.timestamp === 'number' &&
+      (now - ordersEntry.timestamp) < ageLimit;
+    const ratesFresh = ratesEntry && typeof ratesEntry.timestamp === 'number' &&
+      (now - ratesEntry.timestamp) < ageLimit;
+    const balancesFresh = typeof balancesCached.timestamp === 'number' &&
+      balancesCached.timestamp > 0 &&
+      (now - balancesCached.timestamp) < ageLimit;
+    const orders = ordersFresh && Array.isArray(ordersEntry.data) ? ordersEntry.data : undefined;
+    const rates = ratesFresh && ratesEntry.data && typeof ratesEntry.data === 'object' ?
+      ratesEntry.data :
+      undefined;
+    const balances = balancesFresh && Array.isArray(balancesCached.data) ?
+      balancesCached.data :
+      undefined;
+
+    return {
+      orders,
+      rates,
+      balances,
+      ordersTs: orders ? ordersEntry.timestamp : undefined,
+      ratesTs: rates ? ratesEntry.timestamp : undefined,
+      balancesTs: balances ? balancesCached.timestamp : undefined,
+    };
+  },
 
   /**
    * Returns cross-side order direction
@@ -313,7 +376,7 @@ module.exports = {
    * @param {string} pair String to parse a market/contract, e.g., 'ETH/USDT' ot 'ETHUSDT'
    * @param {string} [exchange] Exchange to request market/contract info. Optional, default to config.exchange.
    * @param {boolean} [noWarn=false] Don't warn if we didn't receive market info. It may be because the getMarkets() is not yet finished.
-   * @return { ParsedMarket | boolean} False if errored (pair/contract is not parsed)
+   * @return {ParsedMarket | false} False if errored (pair/contract is not parsed)
    */
   parseMarket(pair, exchange, noWarn = false) {
     const exchangeLc = exchange?.toLowerCase();
@@ -358,7 +421,7 @@ module.exports = {
             return false;
           }
         } else {
-          exchangeApi = require(`./trader_${exchangeLc}`)(
+          exchangeApi = require(`./trader/trader_${exchangeLc}`)(
               null, // API credentials
               null,
               null,
@@ -839,7 +902,10 @@ module.exports = {
           let details = `The ${config.exchangeName} API returned a suspicious empty order list. To prevent unexpected behavior, the bot has been stopped as a safety measure. `;
           details += `It may happen due to an unhandled exchange API failure, or if you cancelled orders manually via the exchange UI, or if the bot was inactive for a long time and market conditions changed significantly`;
 
-          commandTxs.commands.emergencyStop('orderUtils', details);
+          commandTxs.commands.emergencyStop('orderUtils', details, {
+            source: 'emptyOrderList',
+            reason: `The ${config.exchangeName} API returned a suspicious empty order list`,
+          });
 
           return dbOrders;
         } else {
@@ -1094,6 +1160,70 @@ module.exports = {
     }
 
     return updatedOrders;
+  },
+
+  /**
+   * Refers to `traderapi.getRates`, but caches request results for the spot pair.
+   * Skips cache when public WS ticker is available, on perpetual, or when `noCache` is set.
+   *
+   * @param {string} pair BTC/USDT for spot
+   * @param {string} moduleName Caller name for logs
+   * @param {boolean} [noCache=false] Always fetch fresh data when true
+   * @returns {Promise<import('types/rates.d.js').RatesResult | undefined>} Ticker object (cloned) or undefined
+   */
+  async getRatesCached(pair, moduleName, noCache = false) {
+    let result;
+
+    try {
+      const cached = ratesCached[pair];
+      const socketDataAvailable = traderapi.features().socketEnabled &&
+        typeof traderapi.isPublicWsEnabled === 'function' &&
+        traderapi.isPublicWsEnabled('ticker');
+      const isPerpetual = utils.isPerpetual(pair);
+
+      if (isPerpetual && !perpetualApi) {
+        log.warn(`orderUtils: Unable to get ${pair} rates. Perpetual contract trading on ${config.exchangeName} is not enabled in the config.`);
+        return undefined;
+      }
+
+      const cacheTerm = Date.now() - cached?.timestamp;
+      const isCacheValid = cacheTerm < ratesCachedValidMs;
+
+      if (
+        !socketDataAvailable &&
+        !noCache &&
+        cached?.timestamp &&
+        isCacheValid &&
+        !isPerpetual
+      ) {
+        result = utils.cloneObject(cached.data);
+        log.log(`orderUtils: Returning cached ${pair} rates for ${moduleName}, term: ${cacheTerm} ms.`);
+      } else {
+        // Spot only: perpetual connectors are not covered by this REST cache.
+        if (isPerpetual) {
+          log.warn(`orderUtils: getRatesCached() does not support perpetual pair ${pair}.`);
+          return undefined;
+        }
+
+        const rates = await traderapi.getRates(pair);
+
+        if (rates) {
+          ratesCached[pair] = {
+            data: rates,
+            timestamp: Date.now(),
+          };
+          result = utils.cloneObject(rates);
+          log.log(`orderUtils: Getting fresh ${pair} rates for ${moduleName}…`);
+        } else {
+          log.warn(`orderUtils: Unable to get ${pair} rates.`);
+          return undefined;
+        }
+      }
+    } catch (e) {
+      log.error(`Error in getRatesCached() of ${moduleName} module: ${e}`);
+    }
+
+    return result;
   },
 
   /**
@@ -1357,7 +1487,7 @@ module.exports = {
 
           // Balance Watcher && Guard
 
-          const bw = utils.softRequire('../trade/mm_balance_watcher');
+          const bw = utils.softRequire('./features/mm_balance_watcher');
           await bw?.guardBalances(accountNo, walletType, `${moduleName}|getBalancesCached`);
         } else {
           const message = `Unable to get${walletTypeString} balances${onWhichAccount}: ${errorMessage || '{ No details }'}`;

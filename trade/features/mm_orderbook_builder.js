@@ -7,24 +7,30 @@
  */
 
 /**
- * @module trade/mm_orderbook_builder
+ * @module trade/features/mm_orderbook_builder
  * @typedef {import('types/bot/parsedMarket.d').ParsedMarket} ParsedMarket
  * @typedef {import('types/bot/ordersDb.d.js').BotOrderDbRecord} BotOrderDbRecord
  * @typedef {import('types/depth.d').DepthItem} DepthItem
  */
 
-const constants = require('../helpers/const');
-const utils = require('../helpers/utils');
-const config = require('../modules/configReader');
-const log = require('../helpers/log');
-const notify = require('../helpers/notify');
+const constants = require('../../helpers/const');
+const utils = require('../../helpers/utils');
+const config = require('../../modules/configReader');
+const log = require('../../helpers/log');
+const {
+  IDLE_INTERVAL_MS,
+  createIterationLock,
+  runExclusiveIteration,
+  rescheduleIteration,
+} = require('../../helpers/moduleIteration');
+const notify = require('../../helpers/notify');
 
-const tradeParams = require('./settings/tradeParams_' + config.exchange);
+const tradeParams = require('../settings/tradeParams_' + config.exchange);
 
-const TraderApi = require('./trader_' + config.exchange);
+const TraderApi = require('../trader/trader_' + config.exchange);
 const isPerpetual = Boolean(config.perpetual);
 
-const perpetualApiFactory = isPerpetual ? utils.softRequire('../modules/perpetualApi', __filename) : undefined;
+const perpetualApiFactory = isPerpetual ? utils.softRequire('../../modules/perpetualApi', __filename) : undefined;
 
 if (isPerpetual && !perpetualApiFactory) {
   throw new Error('mm_orderbook_builder: config.perpetual is set but modules/perpetualApi.js is missing from this build.');
@@ -43,9 +49,9 @@ const traderapi = isPerpetual ?
         config.exchange_socket_pull,
     );
 
-const db = require('../modules/DB');
-const orderUtils = require('./orderUtils');
-const orderCollector = require('./orderCollector');
+const db = require('../../modules/DB');
+const orderUtils = require('../orderUtils');
+const orderCollector = require('../orderCollector');
 
 let lastNotifyBalancesTimestamp = 0;
 let lastNotifyPriceTimestamp = 0;
@@ -58,7 +64,7 @@ const LIFETIME_MAX_KOEF = 0.5; // LIFETIME_MAX ~ 30 sec; Calculated as `mm_order
 
 const MAX_ORDERS_PER_ITERATION = 5; // Place up to 5 orders every iteration
 
-let isPreviousIterationFinished = true;
+const iterationLock = createIterationLock();
 
 const formattedPair = /** @type {ParsedMarket} */ (orderUtils.parseMarket(config.defaultPair));
 const { pair, coin1, coin2, coin1Decimals, coin2Decimals } = formattedPair;
@@ -81,30 +87,33 @@ module.exports = {
    * as long as it is enabled.
    */
   async iteration() {
-    const interval = setPause();
-    if (
-      interval &&
-      tradeParams.mm_isActive &&
-      tradeParams.mm_isOrderBookActive &&
-      (
-        !tradeParams.mm_isTraderActive ||
-        constants.MM_POLICIES_REGULAR.includes(tradeParams.mm_Policy)
-      )
-    ) {
-      if (isPreviousIterationFinished) {
-        isPreviousIterationFinished = false;
-        await this.buildOrderBook();
-        isPreviousIterationFinished = true;
-      } else {
-        log.log(`Orderbook builder: Postponing iteration of the order book builder for ${interval} ms. Previous iteration is in progress yet.`);
+    let delay = IDLE_INTERVAL_MS;
+
+    try {
+      const interval = setPause();
+      if (
+        interval &&
+        tradeParams.mm_isActive &&
+        tradeParams.mm_isOrderBookActive &&
+        (
+          !tradeParams.mm_isTraderActive ||
+          constants.MM_POLICIES_REGULAR.includes(tradeParams.mm_Policy)
+        )
+      ) {
+        delay = interval;
+        await runExclusiveIteration({
+          moduleName,
+          lock: iterationLock,
+          work: () => this.buildOrderBook(),
+          onBusy: () => {
+            log.log(`Orderbook builder: Postponing iteration of the order book builder for ${interval} ms. Previous iteration is in progress yet.`);
+          },
+        });
       }
-      setTimeout(() => {
-        this.iteration();
-      }, interval);
-    } else {
-      setTimeout(() => {
-        this.iteration();
-      }, 3000); // Check for config.mm_isActive every 3 seconds
+    } catch (error) {
+      log.error(`Error in ${moduleName} iteration: ${error}`);
+    } finally {
+      rescheduleIteration(() => this.iteration(), delay);
     }
   },
 

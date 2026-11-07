@@ -2,7 +2,7 @@
  * Connector to the FameEx.net API.
  * Intended for use by other bot modules.
  *
- * @module trade/trader_bybit.js
+ * @module trade/trader/trader_bybit.js
  * @typedef {import('types/accounts-bybit.d').AccountsResult} AccountsResult
  * @typedef {import('types/address.d').Result} AddressResult
  * @typedef {import('types/assets.d').Result} AssetsResult
@@ -42,9 +42,9 @@
  * @typedef {import('types/fameexnet/trade-history.d').default} TradeHistory
  */
 
-const FameexApi = require('./api/fameexnet_api');
-const utils = require('../helpers/utils');
-const config = require('../modules/configReader');
+const FameexApi = require('../api/fameexnet_api');
+const utils = require('../../helpers/utils');
+const config = require('../../modules/configReader');
 
 const apiServer = 'https://openapi.fameex.net';
 const exchangeName = 'FameEX';
@@ -693,8 +693,9 @@ module.exports = (
             high: Number(response.high),
             last: Number(response.last),
             low: Number(response.low),
-            volume: Number(response.amount),
-            volumeInCoin2: Number(response.vol),
+            // FameEX names these fields unusually: `vol` is base volume and `amount` is quote turnover.
+            volume: Number(response.vol),
+            volumeInCoin2: Number(response.amount),
           };
         }
 

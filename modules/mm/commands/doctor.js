@@ -239,6 +239,9 @@ async function checkConfig(ctx) {
 }
 
 /**
+ * Checks that MongoDB from `db.url` is reachable and writable.
+ * Messages show `db.url` with its password hidden, since `mm doctor --json` and support logs may be shared.
+ *
  * @param {MmContext} ctx
  * @param {Record<string, unknown>} userConfig
  * @returns {Promise<DoctorSection>}
@@ -266,12 +269,12 @@ async function checkMongo(ctx, userConfig) {
     }
 
     const viaDocker = result.viaDockerExec ? ' via Docker' : '';
-    messages.push(`Connected to ${result.url}, database ${result.name}${viaDocker}${sizeText}`);
+    messages.push(`Connected to ${configUtil.redactUrlCredentials(result.url)}, database ${result.name}${viaDocker}${sizeText}`);
     return { status: 'OK', messages, fixes: [] };
   } catch (error) {
     const { url, name } = parseDbConfig(userConfig);
-    messages.push(`Could not connect to ${url}`);
-    messages.push(String(error instanceof Error ? error.message : error));
+    messages.push(`Could not connect to ${configUtil.redactUrlCredentials(url)}`);
+    messages.push(configUtil.redactUrlCredentials(String(error instanceof Error ? error.message : error)));
     messages.push('');
     messages.push('Possible reasons:');
     messages.push('- MongoDB is not running');
@@ -371,7 +374,7 @@ async function checkExchangeApi(ctx, userConfig) {
     trace() {},
   };
 
-  const traderPath = path.join(ctx.packageRoot, 'trade', `trader_${exchange}`);
+  const traderPath = path.join(ctx.packageRoot, 'trade', 'trader', `trader_${exchange}`);
   clearCachedModule(traderPath);
   clearCachedModule(path.join(ctx.packageRoot, 'modules/configReader'));
 
@@ -581,4 +584,4 @@ async function doctor(args) {
   return /** @type {number} */ (result);
 }
 
-module.exports = { doctor, runDoctor };
+module.exports = { doctor, runDoctor, checkMongo };

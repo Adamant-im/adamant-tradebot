@@ -81,6 +81,32 @@ function isNonEmptyConfigValue(value) {
 }
 
 /**
+ * Default-config examples such as `https://discord.com/api/webhooks/...`
+ * and `https://hooks.slack.com/services/..` — not real destinations.
+ *
+ * @param {unknown} value
+ * @returns {boolean}
+ */
+function isExamplePlaceholder(value) {
+  return typeof value === 'string' && /\.{2,}\/?$/.test(value.trim());
+}
+
+/**
+ * Webhook URL that is long enough to attempt a POST. Empty, example, and
+ * truncated values are skipped without logging.
+ *
+ * @param {unknown} value
+ * @param {number} minLength
+ * @returns {string | null}
+ */
+function usableWebhookUrl(value, minLength) {
+  if (typeof value !== 'string') return null;
+  const url = value.trim();
+  if (!url || isExamplePlaceholder(url) || url.length <= minLength) return null;
+  return url;
+}
+
+/**
  * Sends a notification to configured channels and always logs the message locally.
  *
  * @type {NotifyFunction}
@@ -94,6 +120,13 @@ module.exports = (messageText, type, silent_mode = false, isPriority = false) =>
 
     if (!silent_mode || isPriority) {
       log[type](`/Logging notify message/ ${removeMarkdown(message)}`);
+
+      const webTerminal = utils.softRequire('../api/services/messages', __filename);
+      if (webTerminal && typeof webTerminal.appendNotifyMessage === 'function') {
+        webTerminal.appendNotifyMessage(type, message).catch((error) => {
+          log.warn(`Notifier: Failed to append WebUI terminal message. ${error}`);
+        });
+      }
 
       const slackKeys = isPriority ?
         [...slack, ...slack_priority] :
@@ -110,16 +143,13 @@ module.exports = (messageText, type, silent_mode = false, isPriority = false) =>
         };
 
         slackKeys.forEach((slackApp) => {
-          if (!isNonEmptyConfigValue(slackApp)) return;
+          const slackUrl = usableWebhookUrl(slackApp, 34);
+          if (!slackUrl) return;
 
-          if (typeof slackApp === 'string' && slackApp.length > 34) {
-            axios.post(slackApp, params)
-                .catch((error) => {
-                  log.warn(`Notifier: Slack request failed for message '${removeMarkdown(message)}'. ${error}`);
-                });
-          } else {
-            log.debug('Notifier: Skipped invalid Slack webhook URL (too short or empty).');
-          }
+          axios.post(slackUrl, params)
+              .catch((error) => {
+                log.warn(`Notifier: Slack request failed for message '${removeMarkdown(message)}'. ${error}`);
+              });
         });
       }
 
@@ -129,21 +159,18 @@ module.exports = (messageText, type, silent_mode = false, isPriority = false) =>
 
       if (adamantAddresses.length) {
         adamantAddresses.forEach((admAddress) => {
-          if (!isNonEmptyConfigValue(admAddress)) return;
+          if (!isNonEmptyConfigValue(admAddress) || !utils.isAdmAddress(admAddress)) return;
+          if (!config.hasAdmPassphrase) return;
 
-          if (utils.isAdmAddress(admAddress) && config.hasAdmPassphrase) {
-            const mdMessage = makeBoldForMarkdown(message);
+          const mdMessage = makeBoldForMarkdown(message);
 
-            const api = adamantApi();
-            api.sendMessage(config.passPhrase, admAddress, `${type}| ${mdMessage}`).then((response) => {
-              if (!response.success) {
-                const detail = 'errorMessage' in response ? ` ${response.errorMessage}` : '';
-                log.warn(`Notifier: Failed to send ADAMANT message to ${admAddress}.${detail}`);
-              }
-            });
-          } else if (!utils.isAdmAddress(admAddress)) {
-            log.debug(`Notifier: Skipped invalid ADAMANT address '${admAddress}'.`);
-          }
+          const api = adamantApi();
+          api.sendMessage(config.passPhrase, admAddress, `${type}| ${mdMessage}`).then((response) => {
+            if (!response.success) {
+              const detail = 'errorMessage' in response ? ` ${response.errorMessage}` : '';
+              log.warn(`Notifier: Failed to send ADAMANT message to ${admAddress}.${detail}`);
+            }
+          });
         });
       }
 
@@ -183,16 +210,13 @@ module.exports = (messageText, type, silent_mode = false, isPriority = false) =>
         };
 
         discordKeys.forEach((discordKey) => {
-          if (!isNonEmptyConfigValue(discordKey)) return;
+          const discordUrl = usableWebhookUrl(discordKey, 36);
+          if (!discordUrl) return;
 
-          if (typeof discordKey === 'string' && discordKey.length > 36) {
-            axios.post(discordKey, params)
-                .catch((error) => {
-                  log.warn(`Notifier: Discord request failed for message '${removeMarkdown(message)}'. ${error}`);
-                });
-          } else {
-            log.debug('Notifier: Skipped invalid Discord webhook URL (too short or empty).');
-          }
+          axios.post(discordUrl, params)
+              .catch((error) => {
+                log.warn(`Notifier: Discord request failed for message '${removeMarkdown(message)}'. ${error}`);
+              });
         });
       }
     } else {
@@ -221,27 +245,24 @@ function sendTelegramMessages(type, telegramChatIds, message) {
 
   telegramChatIds.forEach((telegramChatId) => {
     if (!isNonEmptyConfigValue(telegramChatId)) return;
+    if (!(utils.isInteger(telegramChatId) || typeof telegramChatId === 'string')) return;
 
-    if (utils.isInteger(telegramChatId) || typeof telegramChatId === 'string') {
-      params.chat_id = normalizeTelegramChatId(telegramChatId);
+    params.chat_id = normalizeTelegramChatId(telegramChatId);
 
-      telegramBot
-          .sendMessage(params)
-          .catch((error) => {
-            if (error.response) {
-              const {
-                description,
-                error_code,
-              } = error.response.data;
+    telegramBot
+        .sendMessage(params)
+        .catch((error) => {
+          if (error.response) {
+            const {
+              description,
+              error_code,
+            } = error.response.data;
 
-              log.warn(`Notifier: Failed to send Telegram message to ${telegramChatId} (code ${error_code}). ${description}`);
-            } else {
-              log.warn(`Notifier: Failed to send Telegram message to ${telegramChatId}. ${error}`);
-            }
-          });
-    } else {
-      log.debug(`Notifier: Skipped invalid Telegram chat id '${telegramChatId}'.`);
-    }
+            log.warn(`Notifier: Failed to send Telegram message to ${telegramChatId} (code ${error_code}). ${description}`);
+          } else {
+            log.warn(`Notifier: Failed to send Telegram message to ${telegramChatId}. ${error}`);
+          }
+        });
   });
 }
 

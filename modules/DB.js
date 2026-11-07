@@ -9,9 +9,13 @@ const log = require('../helpers/log');
 const { MongoClient } = require('mongodb');
 const model = require('../helpers/dbModel');
 const { runMigrations } = require('./dbMigrations');
+const { redactUrlCredentials } = require('./mm/config-util');
 
 const { name, url, options } = config.db;
 const mongoClient = new MongoClient(url, options);
+
+// The log is readable through `GET /api/v1/logs`, so it never gets the MongoDB password
+const urlForLog = redactUrlCredentials(url);
 
 /** @type {Partial<DbCollections>} */
 const collections = {};
@@ -27,7 +31,7 @@ const ready = mongoClient.connect()
       const db = client.db(name);
 
       // Run all DB migrations before exposing collections
-      log.log(`DB: Connected to MongoDB at '${url}', database '${name}'. Running migrations…`);
+      log.log(`DB: Connected to MongoDB at '${urlForLog}', database '${name}'. Running migrations…`);
       await runMigrations(db);
 
       collections.db = db;
@@ -142,7 +146,7 @@ const ready = mongoClient.connect()
       return /** @type {DbCollections} */ (collections);
     })
     .catch((error) => {
-      log.error(`DB: Unable to connect to MongoDB at '${url}': ${error}`);
+      log.error(`DB: Unable to connect to MongoDB at '${urlForLog}': ${redactUrlCredentials(String(error))}`);
       process.exit(-1);
     });
 

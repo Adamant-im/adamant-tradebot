@@ -51,6 +51,57 @@ const { createRequire } = require('module');
 const path = require('path');
 const { fileURLToPath } = require('url');
 
+/** Active `fs.watch()` handle for the trade config file. Only the bot process starts it. @type {import('fs').FSWatcher | undefined} */
+let tradeConfigWatcher;
+
+/** Pause before watching the trade config file again while it is missing */
+const TRADE_CONFIG_WATCH_RETRY_MS = 5000;
+
+/**
+ * Starts watching the trade config file.
+ *
+ * `fs.watch()` follows the inode. An editor that saves atomically replaces the file, so a `rename`
+ * event means this watcher sees no further changes and must move to the new file.
+ *
+ * @returns {void}
+ * @throws {Error} When the file is missing
+ */
+function startTradeConfigWatcher() {
+  tradeConfigWatcher = fs.watch(config.fileWithPath, (eventType) => {
+    if (eventType === 'rename') {
+      restartTradeConfigWatcher();
+    } else {
+      module.exports.syncTradeConfig();
+    }
+  });
+
+  tradeConfigWatcher.on('error', (error) => {
+    log.error(`Trade config watcher failed for ${config.fileWithPath}: ${error}`);
+  });
+}
+
+/**
+ * Moves the watcher to the file now at the trade config path, then reads it.
+ *
+ * Some editors delete the file before writing a new one, so a missing file is retried.
+ *
+ * @returns {void}
+ */
+function restartTradeConfigWatcher() {
+  tradeConfigWatcher?.close();
+
+  try {
+    startTradeConfigWatcher();
+  } catch (error) {
+    log.warn(`Trade config ${config.fileWithPath} is missing. Watching it again in ${TRADE_CONFIG_WATCH_RETRY_MS} ms: ${error}`);
+    setTimeout(restartTradeConfigWatcher, TRADE_CONFIG_WATCH_RETRY_MS).unref();
+
+    return;
+  }
+
+  module.exports.syncTradeConfig();
+}
+
 /** Stack frames from `helpers/utils.js` itself (skip when detecting `softRequire` caller). */
 const SOFT_REQUIRE_SELF = /[/\\]helpers[/\\]utils\.js$/;
 
@@ -164,32 +215,49 @@ module.exports = {
   },
 
   /**
+   * Applies the trade config file to the in-memory `tradeParams` when they differ.
+   *
+   * The file may be changed by the bot, the CLI instance, or manually by an admin.
+   * An unreadable or invalid file leaves the in-memory config unchanged.
+   */
+  syncTradeConfig() {
+    let newConfigString;
+
+    try {
+      newConfigString = module.exports.readTradeConfig();
+      const newConfig = JSON.parse(newConfigString);
+
+      if (!equal(tradeParams, newConfig)) {
+        log.log(`Trade config updated externally: ${JSON.stringify(diff(tradeParams, newConfig))}.`);
+        tradeParams = Object.assign(tradeParams, newConfig);
+      }
+    } catch (error) {
+      if (newConfigString !== undefined) {
+        log.warn(`Trade config was updated externally, but it is not valid JSON: '${newConfigString}'. Leaving the in-memory config unchanged.`);
+      } else {
+        log.warn(`Failed to read the trade config ${config.fileWithPath}: ${error}`);
+      }
+    }
+  },
+
+  /**
    * Watches `tradeParams_EXCHANGE` for external updates.
    *
-   * The file may be changed by the CLI or manually by an admin.
+   * Only the bot process calls this, from `app.js`. The CLI instance, `mm` commands, and tests load this
+   * module too, and must not start a watcher. A failure to watch is logged and does not stop the bot.
    */
   watchConfig() {
+    if (tradeConfigWatcher) {
+      return;
+    }
+
     log.log(`Watching external changes in the trade config file: ${config.fileWithPath}…`);
 
-    fs.watch(config.fileWithPath, () => {
-      let newConfigString;
-
-      try {
-        newConfigString = this.readTradeConfig();
-        const newConfig = JSON.parse(newConfigString);
-
-        if (!equal(tradeParams, newConfig)) {
-          log.log(`Trade config updated externally: ${JSON.stringify(diff(tradeParams, newConfig))}.`);
-          tradeParams = Object.assign(tradeParams, newConfig);
-        }
-      } catch (error) {
-        if (newConfigString !== undefined) {
-          log.warn(`Trade config was updated externally, but it is not valid JSON: '${newConfigString}'. Leaving the in-memory config unchanged.`);
-        } else {
-          log.warn(`Trade config watcher failed to read ${config.fileWithPath}: ${error}`);
-        }
-      }
-    });
+    try {
+      startTradeConfigWatcher();
+    } catch (error) {
+      log.error(`Failed to watch the trade config ${config.fileWithPath}: ${error}`);
+    }
   },
 
   /**
@@ -200,7 +268,9 @@ module.exports = {
    */
   saveConfig(isWebApi = false, callerName) {
     try {
-      const oldConfigString = this.readTradeConfig();
+      // `saveConfig` is often destructured (`const { saveConfig } = commands`) and
+      // called unbound — never use `this` here.
+      const oldConfigString = module.exports.readTradeConfig();
       const oldConfig = JSON.parse(oldConfigString);
 
       if (!equal(tradeParams, oldConfig)) {
@@ -259,6 +329,44 @@ module.exports = {
    */
   unixTimeStampMs() {
     return new Date().getTime();
+  },
+
+  /**
+   * Parse an exchange ISO timestamp, treating an omitted offset as UTC
+   * @param {string} value ISO date-time with an optional Z or numeric offset
+   * @returns {number} Epoch milliseconds; throws on missing or invalid timestamps
+   */
+  parseUtcTimestamp(value) {
+    const describedValue = typeof value === 'string' ? JSON.stringify(value) : String(value);
+
+    if (typeof value !== 'string' || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?$/i.test(value)) {
+      throw new Error(`Invalid exchange timestamp ${describedValue}`);
+    }
+    const withOffset = /[+-]\d{4}$/i.test(value) ? value.replace(/([+-]\d{2})(\d{2})$/i, '$1:$2') : value;
+    const result = Date.parse(/(?:Z|[+-]\d{2}:\d{2})$/i.test(withOffset) ? withOffset : withOffset + 'Z');
+    if (!Number.isFinite(result)) throw new Error(`Invalid exchange timestamp ${describedValue}`);
+    return result;
+  },
+
+  /**
+   * Truncate finite nonnegative quantities to decimal places without rounding up
+   * @param {number} value Quantity or price, including values in scientific notation
+   * @param {number} decimals Decimal places from exchange rules (0–18)
+   * @returns {number} Truncated value, never greater than the input
+   */
+  truncateDecimals(value, decimals) {
+    if (!Number.isFinite(value) || value < 0 || !Number.isInteger(decimals) || decimals < 0 || decimals > 18) {
+      throw new Error(`Invalid decimal truncation input — value ${value}, decimals ${decimals}`);
+    }
+    const [coefficient, exponent = '0'] = String(value).split('e');
+    const [whole, fraction = ''] = coefficient.split('.');
+    const digits = whole + fraction;
+    const position = whole.length + Number(exponent);
+    const expanded = position <= 0 ? '0.' + '0'.repeat(-position) + digits :
+      position >= digits.length ? digits + '0'.repeat(position - digits.length) :
+      digits.slice(0, position) + '.' + digits.slice(position);
+    const [integer, tail = ''] = expanded.split('.');
+    return Number(integer + (decimals ? '.' + tail.slice(0, decimals) : ''));
   },
 
   /**
@@ -2439,7 +2547,7 @@ module.exports = {
    */
   isOrderOutOfPriceWatcherRange(order) {
     try {
-      const pw = require('../trade/mm_price_watcher');
+      const pw = require('../trade/features/mm_price_watcher');
 
       if (pw.getIsPriceActualConsistentAndEnabled()) {
         const lowPrice = pw.getLowPrice();
@@ -4075,7 +4183,7 @@ module.exports = {
    *
    * @example
    * // In modules/commands/account.js:
-   * const bw = utils.softRequire('../../trade/mm_balance_watcher');
+   * const bw = utils.softRequire('../../trade/features/mm_balance_watcher');
    *
    * @example
    * // Explicit base:
@@ -4123,7 +4231,7 @@ module.exports = {
    * Optional `telegramBot/api.js`. Returns a no-op client when the module is omitted.
    *
    * @param {string} [token] Telegram Bot API token
-   * @returns {import('../telegramBot/api.js') | typeof noopTelegramBot}
+   * @returns {import('types/bot/telegramBot.d.js').TelegramBotApi | typeof noopTelegramBot}
    */
   createTelegramBotApi(token = '') {
     const TelegramBotApiClass = this.softRequire('../telegramBot/api', __filename);
@@ -4211,7 +4319,3 @@ module.exports = {
     return volumeSymbol && addSpace ? `${volumeSymbol} ` : volumeSymbol;
   },
 };
-
-if (process.env.MM_CLI !== '1') {
-  module.exports.watchConfig();
-}

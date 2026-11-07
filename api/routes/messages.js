@@ -3,41 +3,46 @@
 
 /**
  * @module api/routes/messages
- * Chat-style message log for the WebUI operator session.
+ * Shared notify/terminal message feed for the WebUI.
  */
 
 const { z } = require('zod');
 
-const { getAuthenticatedUser } = require('../lib/auth');
+const { getAuthenticatedUser, routeAccess } = require('../lib/auth');
+const webuiLog = require('../lib/webuiLog');
 const { parseOrThrow } = require('../lib/validate');
 const messagesService = require('../services/messages');
 
 const messageBodySchema = z.object({
   message: z.string().min(1),
   isSelfWritten: z.boolean().optional(),
+  level: z.enum(['error', 'warn', 'info', 'log', 'debug', 'trace']).optional(),
 });
 
 /**
- * Registers `GET/POST /api/v1/messages` (require JWT).
+ * Registers `GET/POST /api/v1/messages` (requires JWT; `manager` or `admin`).
+ *
+ * The feed mirrors every `notify()`: withdrawal confirmations, remote ComServer actions,
+ * and balance alerts, so `read-only` tokens cannot read it.
  *
  * @param {import('fastify').FastifyInstance} fastify Parent Fastify instance
  * @returns {Promise<void>}
  */
 async function messagesRoutes(fastify) {
-  fastify.get('/messages', {
-    preHandler: [fastify.authenticate],
-  }, async (request) => {
-    const user = getAuthenticatedUser(request);
-    const messages = await messagesService.listMessages(user.login);
+  fastify.get('/messages', routeAccess(fastify, 'manager'), async () => {
+    const messages = await messagesService.listMessages();
+    webuiLog.trace(`Messages list → ${messages.length} item(s).`);
     return { messages };
   });
 
-  fastify.post('/messages', {
-    preHandler: [fastify.authenticate],
-  }, async (request, reply) => {
+  fastify.post('/messages', routeAccess(fastify, 'manager'), async (request, reply) => {
     const user = getAuthenticatedUser(request);
     const body = parseOrThrow(messageBodySchema, request.body);
     const message = await messagesService.createMessage(user.login, body);
+    webuiLog.debug(
+        `Message stored by ${user.login}` +
+        `${body.level ? ` level=${body.level}` : ''} (${body.message.length} chars).`,
+    );
     reply.code(201);
     return { message };
   });

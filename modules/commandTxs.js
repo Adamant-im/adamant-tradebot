@@ -43,7 +43,7 @@ const log = require('../helpers/log');
 const notify = require('../helpers/notify');
 
 const { timeToConfirm, pendingConfirmation, moduleName } = require('./commands/context');
-const { formSendBackMessage } = require('./commands/helpers');
+const { formSendBackMessage, isPendingConfirmationInitiator } = require('./commands/helpers');
 const base = require('./commands/base');
 const features = require('./commands/features');
 const trade = require('./commands/trade');
@@ -62,6 +62,8 @@ const perpetualModule = utils.softRequire('./commands/perpetual');
 /**
  * Confirms and executes a command previously queued with {@link setPendingConfirmation}.
  *
+ * Only the initiator can confirm a command, from the same channel. A rejected `/y` leaves it pending.
+ *
  * Format: `/y`
  *
  * @param {string[]} params Command params (unused)
@@ -70,24 +72,39 @@ const perpetualModule = utils.softRequire('./commands/perpetual');
  */
 async function y(params, tx) {
   try {
-    if (pendingConfirmation.command) {
-      let commandResult;
+    const { command, timestamp } = pendingConfirmation;
 
-      if (Date.now() - pendingConfirmation.timestamp > timeToConfirm) {
-        log.log(`commandTxs: Expired pending command '${pendingConfirmation.command}'`);
-        commandResult = formSendBackMessage(`I will not confirm the command '${pendingConfirmation.command}' because it has expired. Please try again.`);
-      } else {
-        log.log(`commandTxs: Confirming pending command '${pendingConfirmation.command}'`);
-        commandResult = await module.exports(`${pendingConfirmation.command} -y`, tx);
-        commandResult.msgNotify = ''; // Command itself will notify, we need only msgSendBack
-      }
-
-      pendingConfirmation.command = '';
-
-      return commandResult;
-    } else {
+    if (!command) {
       return formSendBackMessage('There is no pending command to confirm.');
     }
+
+    if (!isPendingConfirmationInitiator(tx)) {
+      log.warn(
+          `commandTxs: Rejected /y from ${tx?.senderTgUsername || tx?.senderId}: the pending command belongs to ` +
+          `${pendingConfirmation.initiatorId} (${pendingConfirmation.source}).`,
+      );
+
+      return formSendBackMessage('I will not confirm the pending command. Only the operator who sent it can confirm it, from the same channel.');
+    }
+
+    // Clear before running, so a second `/y` during a slow command cannot execute it twice
+    pendingConfirmation.command = '';
+
+    if (Date.now() - timestamp > timeToConfirm) {
+      log.log(`commandTxs: Expired pending command '${command}'`);
+
+      return formSendBackMessage(`I will not confirm the command '${command}' because it has expired. Please try again.`);
+    }
+
+    log.log(`commandTxs: Confirming pending command '${command}'`);
+
+    const commandResult = await module.exports(`${command} -y`, tx);
+
+    if (commandResult) {
+      commandResult.msgNotify = ''; // Command itself will notify, we need only msgSendBack
+    }
+
+    return commandResult;
   } catch (e) {
     log.error(`commandTxs: Error in y()-confirmation of ${moduleName} module: ${e}`);
   }
@@ -172,7 +189,7 @@ const commands = {
   y,
   volume: account.volume,
   info: info.info,
-  saveConfig: utils.saveConfig,
+  saveConfig: utils.saveConfig.bind(utils),
   ...(twapModule ? { twap: twapModule.twap } : {}),
   ...(perpetualModule ? { perpetual: perpetualModule.perpetual, positions: perpetualModule.positions } : {}),
   ...(makeModule ? { make: makeModule.make } : {}),

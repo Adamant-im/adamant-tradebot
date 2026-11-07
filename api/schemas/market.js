@@ -7,9 +7,15 @@
 
 const { z } = require('zod');
 
+const { queryBoolean } = require('../lib/validate');
+
+/** Query flag: `true`/`false` strings, not JS truthiness (`"false"` must stay false). */
+const noCacheQuery = queryBoolean();
+
 /** Optional `pair` override; defaults to bot `config.pair` in the service layer. */
 const pairQuerySchema = z.object({
   pair: z.string().optional(),
+  noCache: noCacheQuery,
 });
 
 /** `GET /api/v1/market/orderbook` query schema. */
@@ -27,7 +33,7 @@ const ohlcQuerySchema = pairQuerySchema.extend({
   timeframe: z.string().min(1),
   since: z.coerce.number().int().nonnegative().optional(),
   limit: z.coerce.number().int().positive().max(1000).optional(),
-  excludePartial: z.coerce.boolean().optional(),
+  excludePartial: queryBoolean(),
 });
 
 module.exports = {

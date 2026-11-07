@@ -8,8 +8,9 @@
 const {
   config, log, notify, tradeParams, traderapi2, moduleName, utils, exchangerUtils,
 } = require('./context');
-const { formSendBackMessage, formSendBackAndNotify, validateTraderMinAmount } = require('./helpers');
+const { formSendBackMessage, formSendBackError, formSendBackAndNotify, validateTraderMinAmount } = require('./helpers');
 const { composeFeatureList, getNiceChartIntervalWarning } = require('./features');
+const { markEmergencyStop, markMmGeneralInit } = require('../../helpers/mmHealthState');
 
 /**
  * Starts (or resumes) market-making and runs all enabled bot modules
@@ -46,6 +47,7 @@ function start(params) {
     }
 
     tradeParams.mm_isActive = true;
+    markMmGeneralInit();
 
     const msgNotify = `${config.notifyName} started market-making for ${pair}.`;
     const msgSendBack = `Starting market-making for ${pair}.${enabledFeaturesString}`;
@@ -106,13 +108,19 @@ function stop(params) {
  * Emergency-pauses market-making and sends a priority operator notification.
  * Called by runtime modules (balance watcher, order utils, etc.) on critical failures.
  *
+ * The notification goes to managers and may hold balances or other details. `safety` is stored in
+ * trade params instead and shown to every WebUI role in `GET /status`, so keep it free of such details.
+ *
  * @param {string} callerName Calling module name (used in config save reason)
  * @param {string} details Short description of the emergency (no leading punctuation)
+ * @param {{ source: import('types/webui-api/bot.d.js').WebUiEmergencyStopSource, reason: string }} [safety]
+ *   Source code and operator-safe reason for `GET /status`; defaults to source `other` and a generic reason
  */
-function emergencyStop(callerName, details) {
+function emergencyStop(callerName, details, safety) {
   try {
     if (tradeParams.mm_isActive) {
       tradeParams.mm_isActive = false;
+      markEmergencyStop(safety?.source, safety?.reason);
       utils.saveConfig(false, `commandTxs/${callerName}-EmergencyStop`);
       log.warn(`commandTxs/emergencyStop: Market-making paused by ${callerName}. ${details}`);
 
@@ -146,7 +154,7 @@ function buypercent(params) {
     const buyPercent = buyPercentParam?.paramNumber;
 
     if (!buyPercent || buyPercent <= 0 || buyPercent >= 100) {
-      return formSendBackMessage(`Wrong arguments. ${commandExample}.`);
+      return formSendBackError(`Wrong buyPercent: expected a number between 0 and 100 (exclusive). ${commandExample}.`, 'buyPercent');
     }
 
     // Save Trader parameters
@@ -186,19 +194,19 @@ function amount(params) {
     const amountIntervalParam = parsedParams?.getOtherInterval();
 
     if (!amountIntervalParam) {
-      return formSendBackMessage(`Wrong arguments. ${commandExample}.`);
+      return formSendBackError(`Wrong amount arguments. ${commandExample}.`, 'amount');
     }
 
     const interval = utils.parseRangeOrValue(amountIntervalParam.param);
 
     if (!interval.isRange) {
-      return formSendBackMessage(`Unable to parse from–to trading amounts: _${amountIntervalParam.param}_. ${commandExample}.`);
+      return formSendBackError(`Unable to parse from–to trading amounts: _${amountIntervalParam.param}_. ${commandExample}.`, 'amount');
     }
 
     const coinParam = parsedParams.nextTo(amountIntervalParam.param);
 
     if (coinParam?.paramUc !== config.coin1) {
-      return formSendBackMessage(`Specify trading amounts in ${config.coin1}. ${commandExample}.`);
+      return formSendBackError(`Specify trading amounts in ${config.coin1}. ${commandExample}.`, 'amount');
     }
 
     const minAmount = interval.from;
@@ -220,8 +228,9 @@ function amount(params) {
     if (obLimitParam !== undefined) {
       const percentParsed = utils.parsePercent(obLimitParam, false);
       if (!percentParsed.parsed || !utils.isPositiveNumber(percentParsed.percent) || percentParsed.percent > 100) {
-        return formSendBackMessage(
+        return formSendBackError(
             `Set correct executeInOrderBook amount limit percent with _ob=50%_. ${commandExample}.`,
+            'amount',
         );
       }
       tradeParams.mm_traderObLimitPercent = percentParsed.percent;
@@ -270,13 +279,13 @@ function interval(params) {
     const timeIntervalParam = parsedParams?.getTimeInterval();
 
     if (!timeIntervalParam) {
-      return formSendBackMessage(`Wrong arguments. ${commandExample}.`);
+      return formSendBackError(`Wrong interval arguments. ${commandExample}.`, 'interval');
     }
 
     const interval = utils.parseRangeOrValue(timeIntervalParam.param);
 
     if (!interval.isRange) {
-      return formSendBackMessage(`Unable to parse trading time interval: _${timeIntervalParam.param}_. ${commandExample}.`);
+      return formSendBackError(`Unable to parse trading time interval: _${timeIntervalParam.param}_. ${commandExample}.`, 'interval');
     }
 
     const timeUnit = parsedParams.nextTo(timeIntervalParam.param)?.param;
@@ -331,6 +340,20 @@ function params() {
 
 
 /**
+ * Returns software version and repository information
+ * @returns {Object}
+ */
+function getVersionInfo() {
+  return {
+    Version: config.version,
+    'Repository name': config.projectName,
+    'Repository branch': config.projectBranch,
+    'Development mode': config.dev,
+  };
+}
+
+
+/**
  * Message basic bot information
  * @returns {CommandReply}
  */
@@ -341,10 +364,7 @@ function help(_, __, commandFix) {
   const configParams = {
     'Exchange account': config.account,
     'Full bot name': config.bot_name,
-    Version: config.version,
-    'Repository name': config.projectName,
-    'Repository branch': config.projectBranch,
-    'Development mode': config.dev,
+    ...getVersionInfo(),
   };
 
   let output = `I am **online** and set to trade on ${config.defaultPair} ${marketType} on ${config.exchangeName}.${twoKeysInfo}`;
@@ -369,7 +389,10 @@ function help(_, __, commandFix) {
  * @returns {CommandReply}
  */
 function version() {
-  return formSendBackMessage(`I am running on _adamant-tradebot_ software version _${config.version}_. Revise code on ADAMANT's GitHub.`);
+  let output = 'Software information:';
+  output += utils.codeBlock(JSON.stringify(getVersionInfo(), null, 2));
+
+  return formSendBackMessage(output);
 }
 
 module.exports = {

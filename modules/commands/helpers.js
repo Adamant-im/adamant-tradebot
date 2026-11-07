@@ -3,6 +3,7 @@
 /**
  * @module modules/commands/helpers
  * @typedef {import('types/bot/general.d').CommandReply} CommandReply
+ * @typedef {import('types/bot/commandTxs.d.js').CommandTx} CommandTx
  * @typedef {import('types/bot/commandTxs.d.js').CoinRatesInfoResult} CoinRatesInfoResult
  * @typedef {import('types/bot/commandTxs.d.js').ExchangeRatesInfoResult} ExchangeRatesInfoResult
  * @typedef {import('types/bot/parsedMarket.d').ParsedMarket} ParsedMarket
@@ -11,6 +12,7 @@
 const {
   exchangerUtils, config, log, traderapi, perpetualApi, orderUtils, moduleName, utils, pendingConfirmation,
 } = require('./context');
+const { getCommandInitiator } = require('../../helpers/commandInitiator');
 
 /**
  * Builds a {@link CommandReply} with only a user-facing message (no operator notification).
@@ -23,6 +25,23 @@ function formSendBackMessage(msgSendBack) {
     msgNotify: '',
     msgSendBack,
     notifyType: 'log',
+  };
+}
+
+/**
+ * Builds a {@link CommandReply} that marks a validation / business-rule failure for WebUI.
+ *
+ * @param {string} msgSendBack User-facing error text
+ * @param {string} [errorField] Field path hint for WebUI forms (e.g. `amount`, `priceWatching.source`)
+ * @returns {CommandReply}
+ */
+function formSendBackError(msgSendBack, errorField) {
+  return {
+    msgNotify: '',
+    msgSendBack,
+    notifyType: 'log',
+    isError: true,
+    ...(errorField ? { errorField } : {}),
   };
 }
 
@@ -155,16 +174,44 @@ async function getExchangeRatesInfo(pairRaw) {
 /**
  * Queues a command for explicit `/y` confirmation (used by destructive or high-value actions).
  *
+ * A command without a known initiator is not queued, because nobody could prove ownership of it.
+ * This covers most WebUI requests, which confirm with their own `-y` flag and never send `/y`.
+ *
  * @param {string} command Full command text to execute after confirmation
+ * @param {CommandTx | null} [tx] Initiator transaction
  */
-function setPendingConfirmation(command) {
+function setPendingConfirmation(command, tx) {
   try {
+    const initiator = getCommandInitiator(tx);
+
+    if (!initiator) {
+      log.log(`commandTxs: Not queuing '${command}' for /y confirmation: its initiator is unknown.`);
+      return;
+    }
+
     pendingConfirmation.command = command;
     pendingConfirmation.timestamp = Date.now();
-    log.log(`commandTxs: Pending command to confirm: ${command}`);
+    pendingConfirmation.initiatorId = initiator.initiatorId;
+    pendingConfirmation.source = initiator.source;
+
+    log.log(`commandTxs: Pending command to confirm from ${initiator.initiatorId} (${initiator.source}): ${command}`);
   } catch (e) {
     log.error(`commandTxs: Error in setPendingConfirmation() of ${moduleName} module: ` + e);
   }
+}
+
+/**
+ * Checks whether a sender may confirm the pending command.
+ *
+ * @param {CommandTx | null} [tx] Transaction of the `/y` command
+ * @returns {boolean} True for the same initiator over the same channel that queued the command
+ */
+function isPendingConfirmationInitiator(tx) {
+  const initiator = getCommandInitiator(tx);
+
+  return Boolean(initiator) &&
+    initiator.initiatorId === pendingConfirmation.initiatorId &&
+    initiator.source === pendingConfirmation.source;
 }
 
 
@@ -180,17 +227,20 @@ function validateTraderMinAmount(minAmount, coin1, commandExample) {
   const minAmounts = orderUtils.getMinOrderAmount();
 
   if (minAmounts && minAmount < minAmounts.min) {
-    return formSendBackMessage(
+    return formSendBackError(
         `${minAmount} ${coin1} is below the minimum order amount of ${minAmounts.minFixed} ${coin1} set by the exchange. ${commandExample}.`,
+        'amount',
     );
   }
 }
 
 module.exports = {
   formSendBackMessage,
+  formSendBackError,
   formSendBackAndNotify,
   getCoinRatesInfo,
   getExchangeRatesInfo,
   setPendingConfirmation,
+  isPendingConfirmationInitiator,
   validateTraderMinAmount,
 };

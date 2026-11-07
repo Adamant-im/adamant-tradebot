@@ -10,8 +10,17 @@
  */
 
 /**
- * Telegram user identifier from config: numeric user id or `@username` string.
+ * Telegram user identifier from config: numeric user id (preferred) or `@username` string.
+ * Telegram can reassign a username to another account, so a username entry is weaker than an id.
  * @typedef {number|string} TelegramAdminId
+ */
+
+/**
+ * `admin_telegram` split by `telegramBot/admins.parseTelegramAdmins()`.
+ *
+ * @typedef {Object} TelegramAdmins
+ * @property {Set<number>} ids Numeric Telegram user ids
+ * @property {Set<string>} usernames Lowercase usernames without the leading `@`
  */
 
 /**

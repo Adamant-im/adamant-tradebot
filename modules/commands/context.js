@@ -25,7 +25,7 @@ const orderStats = require('../../trade/orderStats');
 const orderUtils = require('../../trade/orderUtils');
 const balancesHistory = require('../../helpers/balancesHistory');
 
-const TraderApi = require('../../trade/trader_' + config.exchange);
+const TraderApi = require('../../trade/trader/trader_' + config.exchange);
 
 const perpetualEnabled = Boolean(config.perpetual);
 const perpetualApiModule = '../perpetualApi'; // Optional: perpetualApi module exists only in perpetual builds
@@ -73,6 +73,8 @@ const timeToConfirm = 1000 * 60 * 10; // 10 minutes to confirm a pending `/y` co
 const pendingConfirmation = {
   command: '',
   timestamp: 0,
+  initiatorId: '',
+  source: '',
 };
 
 /** @type {PreviousBalancesCache} */

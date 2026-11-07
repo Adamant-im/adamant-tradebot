@@ -5,6 +5,7 @@
  * @typedef {import('types/bot/parsedMarket.d').ParsedMarket} ParsedMarket
  * @typedef {import('types/bot/paramVerifyResult.d').ParsedPositiveSmartNumber} ParsedPositiveSmartNumber
  * @typedef {import('types/bot/general.d').CommandReply} CommandReply
+ * @typedef {import('types/bot/commandTxs.d.js').CommandTx} CommandTx
  */
 
 const {
@@ -20,9 +21,10 @@ const {
  * Format: /fill [pair] {buy/sell} [amount= or quote=] [low=] [high=] [count=]
  * @see https://marketmaking.app/cex-mm/command-reference#fill
  * @param {string[]} params Command parameters
+ * @param {CommandTx} [tx] Initiator transaction
  * @returns {Promise<CommandReply>}
  */
-async function fill(params) {
+async function fill(params, tx) {
   const commandExample = `Try: */fill ADM/BTC buy quote=0.00002000 low=0.00000100 high=0.00000132 count=7*`;
 
   try {
@@ -128,7 +130,7 @@ async function fill(params) {
         exchangerUtils.convertCryptos(formattedPair.coin1, 'USD', qty).outAmount;
 
     if (totalUsd >= config.amount_to_confirm_usd && !isConfirmed) {
-      setPendingConfirmation(`/fill ${parsedParams.paramString}`);
+      setPendingConfirmation(`/fill ${parsedParams.paramString}`, tx);
 
       const totalUsdString = utils.formatNumber(totalUsd.toFixed(0), true);
 
@@ -243,10 +245,11 @@ async function fill(params) {
  * Format: /{buy/sell} [pair] [amount= or quote=] [price=]
  * @see https://marketmaking.app/cex-mm/command-reference#buy-sell
  * @param {string[]} params Command parameters
+ * @param {CommandTx} [tx] Initiator transaction
  * @returns {Promise<CommandReply>}
  */
-async function buy(params) {
-  const parsedParams = parseBuySellParams(params, 'buy');
+async function buy(params, tx) {
+  const parsedParams = parseBuySellParams(params, 'buy', tx);
 
   return buy_sell(parsedParams, 'buy');
 }
@@ -257,10 +260,11 @@ async function buy(params) {
  * Format: /{buy/sell} [pair] [amount= or quote=] [price=]
  * @see https://marketmaking.app/cex-mm/command-reference#buy-sell
  * @param {string[]} params Command parameters
+ * @param {CommandTx} [tx] Initiator transaction
  * @returns {Promise<CommandReply>}
  */
-async function sell(params) {
-  const parsedParams = parseBuySellParams(params, 'sell');
+async function sell(params, tx) {
+  const parsedParams = parseBuySellParams(params, 'sell', tx);
 
   return buy_sell(parsedParams, 'sell');
 }
@@ -272,9 +276,10 @@ async function sell(params) {
  * WARNING: We don't validate perpetual parameters currently
  * @param {string[]} params Command parameters
  * @param {'buy' | 'sell'} side Order side
+ * @param {CommandTx} [tx] Initiator transaction
  * @returns {Object} Parsed command parameters
  */
-function parseBuySellParams(params, side) {
+function parseBuySellParams(params, side, tx) {
   // Default: pair={config.defaultPair} Base/Quote, price=market
   // amount XOR quote
   // buy ADM/BTC amount=200 price=0.00000224 | buy 200 ADM at 0.00000224
@@ -430,7 +435,7 @@ function parseBuySellParams(params, side) {
         const deviationPct = utils.numbersDifferencePercentDirect(marketPrice, price);
 
         if (Math.abs(deviationPct) > constants.ORDER_PRICE_EXTREME_DEVIATION_PERCENT) { // Price is 10x+ from market
-          setPendingConfirmation(`/${side} ${params.join(' ')}`);
+          setPendingConfirmation(`/${side} ${params.join(' ')}`, tx);
 
           const directionWord = deviationPct > 0 ? 'above' : 'below';
           return formSendBackMessage(`**Extreme price warning:** order price _${price}_ is **${Math.abs(deviationPct).toFixed(0)}%** ${directionWord} market (${marketPrice.toFixed(coin2Decimals)} ${coin2}). Did you enter the price correctly?\n\nConfirm with **/y** or ignore.`);
@@ -441,7 +446,7 @@ function parseBuySellParams(params, side) {
     // Ask confirmation
 
     if (totalUSD >= config.amount_to_confirm_usd && !isConfirmed) {
-      setPendingConfirmation(`/${side} ${params.join(' ')}`);
+      setPendingConfirmation(`/${side} ${params.join(' ')}`, tx);
 
       let confirmationMessage = '';
 
@@ -577,9 +582,10 @@ async function buy_sell(params, side) {
  * Format: /convert amount coin1 to coin2
  * @see https://marketmaking.app/cex-mm/command-reference#convert
  * @param {string[]} params Command parameters
+ * @param {CommandTx} [tx] Initiator transaction
  * @returns {Promise<CommandReply>}
  */
-async function convert(params) {
+async function convert(params, tx) {
   const commandExample = `Try: */convert 100 USDC to USD*`;
 
   try {
@@ -642,7 +648,7 @@ async function convert(params) {
     const totalUsd = exchangerUtils.convertCryptos(coin1, 'USD', coin1Amount).outAmount;
 
     if (totalUsd >= config.amount_to_confirm_usd && !isConfirmed) {
-      setPendingConfirmation(`/convert ${parsedParams.paramString}`);
+      setPendingConfirmation(`/convert ${parsedParams.paramString}`, tx);
 
       const amountString = utils.formatNumber(coin1Amount, true);
       const totalUsdString = utils.formatNumber(totalUsd.toFixed(0), true);

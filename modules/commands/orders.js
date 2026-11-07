@@ -16,6 +16,23 @@ const { validateFeature } = require('./features');
 const { composeLiquidityStats, composeTraderOrdersFull, composeOrdersDetails, composeOrderSummary } = require('./compose');
 
 /**
+ * Builds the local database note shown by `/order`.
+ *
+ * @param {import('../../types/bot/ordersDb.d.js').BotOrderDbRecord|null} orderInDb Local order record
+ * @returns {string} Human-readable database status and order details when found
+ */
+function composeOrderDbInfo(orderInDb) {
+  if (!orderInDb) {
+    return `Note: Local order database didn't include this order.`;
+  }
+
+  const orderData = { ...orderInDb };
+  delete orderData.db;
+
+  return `Note: This order was in the local order database:${utils.codeBlock(JSON.stringify(orderData, null, 2))}`;
+}
+
+/**
  * Cancels orders on a spot trading pair or a contract
  * Format: /clear [pair] [purpose] {buy/sell} [condition] {force}
  * @see https://marketmaking.app/cex-mm/command-reference#clear
@@ -165,7 +182,7 @@ async function cancel(params) {
       return formSendBackMessage(`Market or perpetual contract ticker '${pair}' is not found on ${config.exchangeName}. ${commandExample}.`);
     }
 
-    const orderId = parsedParams?.more?.[0]?.param;
+    const orderId = parsedParams?.more?.[0]?.paramPlain || parsedParams?.more?.[0]?.param;
     if (!orderId) {
       return formSendBackMessage(`Order ID is required. ${commandExample}.`);
     }
@@ -192,7 +209,7 @@ async function cancel(params) {
     let result;
 
     try {
-      result = await orderCollector.clearOrderById(orderId, pair, undefined, callerName, reasonToClose, undefined, api);
+      result = await orderCollector.clearOrderById(orderId, pair, parsedParams.orderSide, callerName, reasonToClose, undefined, api);
     } catch (error) {
       return formSendBackMessage(`Error while cancelling order ${orderId}${onWhichAccount} on ${pair}: ${error}`);
     }
@@ -255,7 +272,7 @@ async function order(params) {
       return formSendBackMessage(`Market or perpetual contract ticker '${pair}' is not found on ${config.exchangeName}. ${commandExample}.`);
     }
 
-    const orderId = parsedParams?.more?.[0]?.param;
+    const orderId = parsedParams?.more?.[0]?.paramPlain || parsedParams?.more?.[0]?.param;
     if (!orderId) {
       return formSendBackMessage(`Order ID is required. ${commandExample}.`);
     }
@@ -274,10 +291,22 @@ async function order(params) {
       }
     }
 
+    // Check the local order database
+
+    let orderDbInfo;
+
+    try {
+      const orderInDb = await orderCollector.findOrderByIdInDb(orderId, pair, api);
+      orderDbInfo = composeOrderDbInfo(orderInDb);
+    } catch (error) {
+      orderDbInfo = `Note: Unable to check the local order database: ${error}`;
+      log.warn(`commandTxs/order: ${orderDbInfo}`);
+    }
+
     // Get order details
 
     if (!api.getOrderDetails) {
-      return formSendBackMessage(`A method to get order details is not implemented on ${config.exchangeName}.`);
+      return formSendBackMessage(`A method to get order details is not implemented on ${config.exchangeName}.\n\n${orderDbInfo}`);
     }
 
     let orderDetails;
@@ -285,17 +314,18 @@ async function order(params) {
     try {
       orderDetails = await api.getOrderDetails(orderId, pair);
     } catch (error) {
-      return formSendBackMessage(`Error while receiving order ${orderId}${onWhichAccount} on ${pair}: ${error}`);
+      return formSendBackMessage(`Error while receiving order ${orderId}${onWhichAccount} on ${pair}: ${error}\n\n${orderDbInfo}`);
     }
 
-    if (Object.keys(orderDetails)?.length > 3) {
+    if (Object.keys(orderDetails || {}).length > 3) {
       let output = `${config.exchangeName} order ${orderDetails.orderId}${onWhichAccount} details:`;
       output += utils.codeBlock(JSON.stringify(orderDetails, null, 2));
       output += 'Note: The reported pair may differ due to implementation specifics.';
+      output += `\n\n${orderDbInfo}`;
 
       return formSendBackMessage(output);
     } else {
-      return formSendBackMessage(`Unable to retrieve details for order ${orderId}${onWhichAccount} on ${pair}. Does it exist?`);
+      return formSendBackMessage(`Unable to retrieve details for order ${orderId}${onWhichAccount} on ${pair}. Does it exist?\n${orderDbInfo}`);
     }
   } catch (e) {
     log.error(`commandTxs: Error in order() of ${moduleName} module: ${e}`);

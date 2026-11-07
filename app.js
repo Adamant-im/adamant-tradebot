@@ -11,6 +11,12 @@
 
 const config = require('./modules/configReader');
 const log = require('./helpers/log');
+
+// Only the bot rotates logs/bot.log. The CLI instance and `mm` commands load the logger too and only append.
+// Environment flags cannot tell them apart: a bot started by an older `mm on` keeps MM_CLI=1 in its PM2 env.
+// Called before other modules load, so their startup lines follow the start banner in the new file.
+log.startRotation();
+
 const db = /** @type {DbModule} */ (/** @type {unknown} */ (require('./modules/DB')));
 const utils = require('./helpers/utils');
 const { delay, warmUpConnectorData } = require('./modules/startupWarmup.js');
@@ -26,6 +32,11 @@ bootstrap().catch((error) => {
 });
 
 async function bootstrap() {
+  // Only the bot watches the trade params file. The CLI instance, `mm` commands, and tests load `utils` too.
+  if (!config.doClearDB) {
+    utils.watchConfig();
+  }
+
   // Wait until MongoDB is connected and migrations are done
   if (db.ready && typeof db.ready.then === 'function') {
     await db.ready;
@@ -33,13 +44,21 @@ async function bootstrap() {
 
   // It may take up to a second to create trading params file 'tradeParams_{exchange}.js' from the default one
   await delay(INIT_SERVICES_DELAY_MS);
-  initServices();
+
+  // Pause MM from a stale heartbeat before the WebUI API accepts GET /params.
+  // Only then start refreshing it. `clear_db` runs, the CLI instance, and `mm` commands never write the heartbeat.
+  if (!config.doClearDB) {
+    checkInactivityPeriod();
+    log.startHeartbeat();
+  }
+
+  await initServices();
 
   await warmUpConnectorData();
   startModules();
 }
 
-function initServices() {
+async function initServices() {
   try {
     // Watch ADM transactions to receive commands
     if (config.hasAdmPassphrase) {
@@ -80,10 +99,12 @@ function initServices() {
     // Private WebUI API starts when `config.private_webui` is a positive port (see config.default.jsonc).
     if (require('./api/lib/webuiConfig').isPrivateWebUiApiEnabled(config.private_webui)) {
       const webuiApi = require('./api/server');
-      webuiApi.start().catch((error) => {
+      try {
+        await webuiApi.start();
+      } catch (error) {
         log.error(`${config.notifyName}: WebUI API failed to start. ${error}`);
         process.exit(1);
-      });
+      }
     }
 
     // Optional: modules/botInterchange.js — connect only when ComServer is enabled and the module exists
@@ -118,17 +139,18 @@ function startModules() {
 
       log.log(`${config.notifyName}: Database cleared. Manually stop the Bot now.`);
     } else {
-      checkInactivityPeriod();
+      require('./helpers/mmHealthState').markMmGeneralRestart();
 
       if (config.hasAdmPassphrase) {
         const checker = require('./modules/admTxChecker');
         checker();
       }
 
-      require('./trade/mm_trader').run();
-      require('./trade/mm_orderbook_builder').run();
-      require('./trade/mm_liquidity_provider').run();
-      require('./trade/mm_price_watcher').run();
+      require('./trade/features/mm_trader').run();
+      require('./trade/features/mm_orderbook_builder').run();
+      require('./trade/features/mm_liquidity_provider').run();
+      require('./trade/features/mm_price_watcher').run();
+      require('./helpers/mmRuntimeHealth').run();
 
       if (config.dev) {
         require('./tests/general/manual.test').run();
@@ -166,10 +188,15 @@ function checkInactivityPeriod() {
     const inactiveForTs = now - lastHeartbeatTs;
 
     if (inactiveForTs > pauseAfterInactivityTs) {
-      let details = `The bot was offline for ${utils.timestampInDaysHoursMins(inactiveForTs)}.`;
+      const offlineFor = utils.timestampInDaysHoursMins(inactiveForTs);
+
+      let details = `The bot was offline for ${offlineFor}.`;
       details += ` As a precaution, it is now paused as a safety measure`;
 
-      commandTxs.commands.emergencyStop('Bootstrap', details);
+      commandTxs.commands.emergencyStop('Bootstrap', details, {
+        source: 'inactivity',
+        reason: `The bot was offline for ${offlineFor}`,
+      });
     }
   } catch (e) {
     log.error(`${config.notifyName} failed to check inactivity period. ${e}`);

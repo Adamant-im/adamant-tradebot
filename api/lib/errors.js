@@ -69,10 +69,21 @@ class ServiceUnavailableError extends ApiError {
   }
 }
 
+/** 403 Forbidden — authenticated but not allowed to perform the action. */
+class ForbiddenError extends ApiError {
+  /**
+   * @param {string} [message='Forbidden']
+   */
+  constructor(message = 'Forbidden') {
+    super(403, message);
+  }
+}
+
 module.exports = {
   ApiError,
   BadRequestError,
   UnauthorizedError,
+  ForbiddenError,
   NotFoundError,
   ServiceUnavailableError,
 };

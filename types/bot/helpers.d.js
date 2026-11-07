@@ -70,8 +70,11 @@
  * AES-256-CTR encrypted payload returned by `helpers/encryption.encrypt`.
  *
  * @typedef {Object} EncryptedPayload
- * @property {string} iv Initialization vector as a hex string
- * @property {string} content Ciphertext as a hex string
+ * @property {2} v Payload version. Version 2 is AES-256-GCM.
+ * @property {string} iv Initialization vector as a lowercase hex string
+ * @property {string} content Ciphertext as a lowercase hex string
+ * @property {string} tag GCM auth tag as a lowercase hex string
+ * @property {number} ts Sender time in Unix ms, covered by the auth tag
  */
 
 /**
@@ -100,7 +103,10 @@
  * @property {(str: string) => void} log
  * @property {(str: string) => void} debug
  * @property {(str: string) => void} trace
+ * @property {() => void} [startRotation] Makes this process the owner of `logs/bot.log` and writes the start banner. Only the bot (`app.js`) calls it.
+ * @property {() => void} [startHeartbeat] Starts refreshing the heartbeat file every minute. Only the bot (`app.js`) calls it.
  * @property {string} HEARTBEAT_FILE_PATH Path to the heartbeat file updated every minute
+ * @property {string} [LOG_FILE_PATH] Path to the active log file, `./logs/bot.log`
  */
 
 module.exports = {};

@@ -12,6 +12,9 @@ config.*.jsonc
 config.jsonc
 config.dev.jsonc
 !config.default.jsonc
+# Named configs hold API keys and passphrases
+/config/*
+!/config/.gitkeep
 .DS_Store
 .idea/
 test_*.js

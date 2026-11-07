@@ -45,7 +45,11 @@
  *
  * @typedef {Object} BotFundSupplierCoin
  * @property {string} coin Coin symbol (normalized to uppercase at load time)
- * @property {string[]} sources Source exchange ids (normalized to uppercase at load time)
+ * @property {string[]} sources Source pairs used to top up this coin (normalized to uppercase at load time)
+ * @property {number} [min_balance_total] Top up when the total balance is below this amount
+ * @property {number} [min_balance_free] Top up when the free balance is below this amount
+ * @property {number} [max_balance_total] Do not top up when the resulting total would exceed this amount
+ * @property {number} [top_up_amount] Amount to buy or sell when a threshold is hit
  */
 
 /**
@@ -53,7 +57,21 @@
  *
  * @typedef {Object} BotFundSupplierConfig
  * @property {boolean} enabled Whether the fund supplier module is enabled
+ * @property {boolean} [secondary_notifications] Repeat funding-failure notifications after the cooldown
  * @property {BotFundSupplierCoin[]} coins Coins and their funding sources
+ */
+
+/**
+ * Rotation settings for the bot log file `logs/bot.log` from the `log_rotate` config section.
+ * Validated and completed with defaults by `helpers/logRotation.normalizeLogRotateConfig()`.
+ *
+ * @typedef {Object} BotLogRotateConfig
+ * @property {boolean} enabled Whether the bot rotates its log file. `false` leaves rotation to external tools.
+ * @property {string | number} maxSize Rotation size, e.g. `300M`, or bytes. `0` disables size-based rotation.
+ * @property {number} retain Number of rotated files to keep
+ * @property {boolean} compress Whether rotated files are gzipped
+ * @property {string} rotateInterval 5-field cron expression in server local time. `''` disables scheduled rotation.
+ * @property {boolean} rotateOnRestart Whether a non-empty log file is rotated when the bot starts
  */
 
 /**
@@ -93,7 +111,7 @@
  * @property {string} exchangeName Exchange id as written in config
  * @property {string} exchange Lowercase exchange connector id
  * @property {string} file Trade params filename, e.g. `tradeParams_binance.js`
- * @property {string} fileWithPath Relative path to trade params under `./trade/settings/`
+ * @property {string} fileWithPath Absolute path to the trade params file the bot loads, independent of the working directory
  * @property {boolean} email_notify_enabled Whether SMTP and recipient lists are configured
  * @property {string} bot_id Unique bot identifier used in logs and ComServer
  * @property {string} accountFull `{account}@{exchangeName}` label
@@ -104,6 +122,7 @@
  * @property {string} [address] ADAMANT address when ADM account is configured
  * @property {string} passPhrase ADAMANT mnemonic from config
  * @property {string[]} admin_accounts ADAMANT addresses allowed to run bot commands
+ * @property {Array<number|string>} admin_telegram Telegram user ids (preferred) or `@username` strings allowed to run bot commands
  * @property {boolean} notify_non_admins Whether to send a one-time reply to non-admin senders
  * @property {string} manageTelegramBotToken Telegram management bot token
  * @property {string[]} [node_ADM] ADAMANT node URLs
@@ -126,9 +145,10 @@
  * @property {BotNiceChartConfig} nice_chart Nice Chart integration settings
  * @property {BotFundSupplierConfig} fund_supplier Fund supplier module settings
  * @property {Record<string, number>} volumes_thresholds_usd Emoji-to-USD volume tier map
- * @property {string} log_level Minimum log level (`log`, `info`, `warn`, `error`)
+ * @property {string} log_level Most verbose level to log: `none`, `error`, `warn`, `info`, `log`, `debug`, or `trace`
+ * @property {BotLogRotateConfig} log_rotate Rotation settings for `logs/bot.log`
  * @property {boolean} silent_mode Suppress non-priority notifications when true
- * @property {Object} [api] Arbitrary API-related settings from config
+ * @property {BotApiConfig} [api] Health and debug HTTP API settings
  * @property {string} [pauseAfterInactivity] Inactivity pause duration string
  * @property {string} [ws_type] WebSocket transport type
  * @property {boolean} [socket] Whether ADAMANT socket delivery is enabled
@@ -147,6 +167,7 @@
  * @property {Object} [email_smtp] Nodemailer-compatible SMTP settings
  * @property {number} [private_webui] Private WebUI listen port
  * @property {string} [private_webui_secret_key] Shared HMAC secret for private WebUI JWT verification
+ * @property {string} [private_webui_jwt_max_ttl] Maximum accepted WebUI JWT lifetime (`exp` minus now), e.g. `24h`
  * @property {string} [private_webui_bind_host] Bind address for the private WebUI API (`127.0.0.1` or `0.0.0.0`)
  * @property {string[]} [private_webui_allowed_ips] Optional client IP allowlist for the private WebUI API
  * @property {string} [public_webui] Public WebUI base URL
@@ -158,6 +179,16 @@
  * @property {boolean} [exchange_socket_pull] Pull-based socket mode for some connectors
  * @property {number} [clearAllOrdersInterval] Interval in minutes to clear unknown orders via order collector; `0` disables
  * @property {BotExchangeRestrictions} [exchange_restrictions] Optional per-exchange limits from config
+ */
+
+/**
+ * Health and debug HTTP API settings (`config.api`).
+ *
+ * @typedef {Object} BotApiConfig
+ * @property {number | false} [port] Listen port; `false` or `0` disables the API
+ * @property {boolean} [health] Serve `GET /ping` on all interfaces
+ * @property {boolean} [debug] Serve `GET /db` to direct localhost requests that carry `debug_token` (not for production)
+ * @property {string} [debug_token] Bearer token for `GET /db`, at least 32 characters; `/db` stays off without it
  */
 
 /**

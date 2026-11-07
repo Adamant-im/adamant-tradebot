@@ -1,6 +1,6 @@
-const StakeCubeApi = require('./api/stakecube_api');
-const utils = require('../helpers/utils');
-const config = require('./../modules/configReader');
+const StakeCubeApi = require('../api/stakecube_api');
+const utils = require('../../helpers/utils');
+const config = require('./../../modules/configReader');
 
 // API endpoints:
 const apiServer = 'https://stakecube.io/api/v2';

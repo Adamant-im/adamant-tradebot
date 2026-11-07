@@ -161,7 +161,7 @@ For additional management options, including Telegram, CLI, and WebUI access, re
 ## Requirements
 
 - Ubuntu 20+ or CentOS 8+ (other Linux distros may work but are not tested)
-- Node.js v22.2+
+- Node.js v22.12.0+
 - npm v9+
 - MongoDB ([installation instructions](https://www.mongodb.com/docs/manual/administration/install-community/)
 
@@ -177,7 +177,7 @@ npm i
 ## Pre-launch tuning
 
 The bot uses `config.jsonc` if present, otherwise `config.default.jsonc`.
-For named configs, use `config.<name>.jsonc` and pass `<name>` as a launch argument.
+For named configs, use `config/config.<name>.jsonc` and pass `<name>` as a launch argument (the project root also works as a fallback).
 
 ```bash
 cp config.default.jsonc config.jsonc
@@ -190,14 +190,16 @@ Parameter descriptions are in comments inside `config.jsonc`.
 
 You can start the bot with `node app.js`, but a process manager is recommended.
 
+`npm start` and `node app.js` do not start the process again after it exits. After three unsettled iteration timeouts the bot logs a diagnostic report, sends a priority notification, and exits with code 1. Automatic recovery from that exit requires PM2 (`autorestart`), a Docker restart policy, or another supervisor. A bot started directly must be started again by hand.
+
 ### NPM scripts
 
 ```bash
 npm start                               # config.default.jsonc or config.jsonc
-npm run start:config -- <name>          # config.<name>.jsonc
+npm run start:config -- <name>          # config/config.<name>.jsonc
 npm run start:dev                       # config.dev.jsonc
 npm run clear                           # clear DB for default config
-npm run clear:config -- <name> clear_db # clear DB for config.<name>.jsonc
+npm run clear:config -- <name> clear_db # clear DB for config/config.<name>.jsonc
 ```
 
 ### PM2
@@ -213,6 +215,67 @@ pm2 start app.js --name tradebot-p2b -- p2b_mmtest
 ```
 
 Add the process to `pm2 startup` or cron so it restarts on reboot.
+
+PM2 also saves the bot's console output to `~/.pm2/logs/<name>-out.log` and `~/.pm2/logs/<name>-error.log`. The bot does not rotate these files, so install [pm2-logrotate](https://github.com/keymetrics/pm2-logrotate) for them:
+
+```bash
+pm2 install pm2-logrotate
+```
+
+pm2-logrotate only handles PM2's own files. The bot rotates its log file `logs/bot.log` itself, see [Logging](#logging).
+
+## Logging
+
+The bot writes its log to `logs/bot.log` in its working directory. With Docker Compose, this is `./docker/logs/bot.log` on the host. Each run starts with a `[The bot started]` line.
+
+### Rotation and retention
+
+The bot rotates `logs/bot.log` itself, so rotation works the same under PM2, Docker, or plain `node app.js`. Configure it in the `log_rotate` section of the config:
+
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| `enabled` | `true` | Rotate, compress, and delete old files. Set `false` to keep one growing file. |
+| `maxSize` | `"300M"` | Rotate before the file exceeds this size: bytes, or a number with `K`, `M`, or `G`, at least `1K`. `0` disables size-based rotation. |
+| `retain` | `5` | Number of rotated files to keep. Older ones are deleted. |
+| `compress` | `true` | Gzip rotated files |
+| `rotateInterval` | `"0 0 * * *"` | Scheduled rotation as a 5-field cron expression in the server's local time: minute, hour, day of month, month, day of week. Supports `*`, lists, ranges, and steps. `""` disables it. |
+| `rotateOnRestart` | `false` | Start each run with a new file. With frequent restarts, short files can push older history out of `retain`. |
+
+A rotation renames the file to `logs/bot-YYYY-MM-DD_HH-mm-ss.log` (server local time). The bot continues in a new `logs/bot.log` without losing lines, and the new file starts with a note naming the previous one. Rotated files are gzipped in the background, and only the newest `retain` of them are kept. With the defaults, the logs take at most the 300 MB active file plus five compressed files.
+
+A failed rotation, for example on a full disk or with wrong permissions, never stops trading. The bot logs the error, sends a notification at most once an hour, and keeps logging.
+
+`log_level` sets how much is written: `none` < `error` < `warn` < `info` < `log` < `debug` < `trace`. The default `log` is verbose. Use `info` or `warn` to write less.
+
+### Reading logs
+
+`mm logs` and the WebUI log export read `logs/bot.log` and the rotated files, including gzipped ones. `mm logs -f` keeps following the log across rotations. To read files directly:
+
+```bash
+tail -F logs/bot.log
+zgrep "order" logs/bot-*.log.gz
+```
+
+### Using the system logrotate
+
+To manage `logs/bot.log` with the system logrotate instead, set `"enabled": false` in `log_rotate`. Both the `create` and `copytruncate` modes work: the bot re-opens `logs/bot.log` within 10 seconds after it is moved or deleted. Do not combine logrotate with `"enabled": true`.
+
+### Upgrading from older versions
+
+Older versions wrote `logs/YYYY-MM-DD.log`, named after the day the process started, and never rotated it. The bot leaves these files untouched. At startup it warns about them and shows their total size. Delete them when you no longer need them:
+
+```bash
+rm logs/????-??-??.log
+```
+
+### Console output
+
+The bot also prints every log line to stdout. PM2 and Docker store that output separately from `logs/bot.log`:
+
+- PM2 keeps it in `~/.pm2/logs`. Rotate it with pm2-logrotate, see [PM2](#pm2).
+- Docker keeps it in the container log. `docker/docker-compose.yml` limits it to three 10 MB files.
+
+Run each bot process from its own working directory. The CLI instance writes to the same `logs/bot.log` as its bot, but only the bot rotates it.
 
 ## Updating
 
