@@ -45,6 +45,9 @@ ADAMANT Market-Making Software is not a black-box market-making service.
 
 It is open-source software backed by ADAMANT — a 10-year open-source crypto project with public repositories, long-term community history, and production infrastructure.
 
+> Developed and maintained by the ADAMANT developer community and cryptofoundry as part of an open-source blockchain ecosystem developed since 2016.
+> We build custom crypto software, trading bots, payment systems and blockchain infrastructure. [Tell us what to build](https://adamant.business#contact).
+
 You can inspect the code, run the software yourself, monitor its behavior, and keep your exchange access under your own control.
 
 ## Who it is for
@@ -117,12 +120,6 @@ The free basic version supports selected centralized exchanges:
 Need another exchange?
 
 Premium and custom exchange support is available for other CEXs.
-
-## Limited onboarding offer
-
-Your exchange is not supported yet? We may add a connector to your exchange for free or with a special discount as part of the onboarding campaign.
-
-Offer valid until **September 1, 2026**—contact us.
 
 ## Premium features and support
 
