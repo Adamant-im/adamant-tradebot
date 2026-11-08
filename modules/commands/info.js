@@ -348,7 +348,7 @@ async function ticker(params) {
   } else {
     type = 'spot market';
 
-    ticker = await traderapi.getRates(pair);
+    ticker = await orderUtils.getRatesCached(pair, moduleName);
   }
 
   if (ticker?.high && ticker?.low) {
@@ -406,7 +406,7 @@ async function stats(params) {
     if (pairObj.perpetual) {
       exchangeRates = await perpetualApi.getTickerInfo(pairObj.pair, true);
     } else {
-      exchangeRates = await traderapi.getRates(pairObj.pair);
+      exchangeRates = await orderUtils.getRatesCached(pairObj.pair, moduleName);
     }
 
     const totalVolume24 = +exchangeRates?.volume;
@@ -652,7 +652,7 @@ async function calc(params, tx, isWebApi = false) {
       return formSendBackMessage(`Wrong amount: _${amountParam.paramPlain}_. ${commandExample}.`);
     }
 
-    // Add the global market value when Infoservice supports both currencies
+    // Identify exchange-derived estimates separately from Infoservice market values.
 
     if (exchangerUtils.hasTicker(inCurrency) && exchangerUtils.hasTicker(outCurrency)) {
       const result = exchangerUtils.convertCryptos(inCurrency, outCurrency, amount).outAmount;
@@ -662,9 +662,16 @@ async function calc(params, tx, isWebApi = false) {
       }
 
       const precision = exchangerUtils.isFiat(outCurrency) ? 2 : constants.PRECISION_DECIMALS;
+      const fallbackSources = [inCurrency, outCurrency]
+          .map((coin) => exchangerUtils.getFallbackRateInfo(coin))
+          .filter(Boolean)
+          .map((fallback) => fallback.source === 'exchange' ?
+            `${fallback.exchange} ${fallback.pair} spot ticker fallback` : 'assumed stablecoin USD parity');
+      const valueLabel = fallbackSources.length ?
+        `Estimated value (${[...new Set(fallbackSources)].join('; ')})` : 'Global market value';
       output = isWebApi ?
         utils.formatNumber(result.toFixed(precision), false) :
-        `Global market value of ${utils.formatNumber(amount)} ${inCurrency} equals ${utils.formatNumber(result.toFixed(precision), true)} ${outCurrency}.`;
+        `${valueLabel} of ${utils.formatNumber(amount)} ${inCurrency} equals ${utils.formatNumber(result.toFixed(precision), true)} ${outCurrency}.`;
     }
 
     if (isWebApi) {
@@ -675,7 +682,7 @@ async function calc(params, tx, isWebApi = false) {
 
     const pair = `${inCurrency}/${outCurrency}`;
     const pairReverse = `${outCurrency}/${inCurrency}`;
-    let exchangeRates = await traderapi.getRates(pair);
+    let exchangeRates = await orderUtils.getRatesCached(pair, moduleName);
     let askValue;
     let bidValue;
 
@@ -683,7 +690,7 @@ async function calc(params, tx, isWebApi = false) {
       askValue = exchangeRates.ask * amount;
       bidValue = exchangeRates.bid * amount;
     } else {
-      exchangeRates = await traderapi.getRates(pairReverse);
+      exchangeRates = await orderUtils.getRatesCached(pairReverse, moduleName);
 
       if (exchangeRates) {
         askValue = amount / exchangeRates.ask;

@@ -45,16 +45,30 @@
  */
 
 /**
+ * Diagnostic for a USD rate supplied outside Infoservice.
+ *
+ * @typedef {Object} FallbackRateInfo
+ * @property {'exchange' | 'stablecoin'} source Exchange ticker or assumed stablecoin parity
+ * @property {number} usdRate Positive finite USD price
+ * @property {string} [pair] Configured spot pair for exchange observations
+ * @property {string} [exchange] Configured exchange display name
+ * @property {'last' | 'mid' | 'bid' | 'ask'} [priceSource] Effective ticker field used for this observation
+ * @property {number} [timestamp] Exchange ticker cache observation timestamp
+ */
+
+/**
  * Public export of `helpers/cryptos/exchanger.js`.
  *
  * @typedef {Object} ExchangerModule
  * @property {CryptoRatesMap | undefined} currencies Latest Infoservice rates cache
  * @property {Record<string, unknown>} markets Exchange-specific market metadata attached at runtime
- * @property {() => Promise<void>} updateCryptoRates Refreshes `currencies` from Infoservice
+ * @property {() => Promise<void>} updateCryptoRates Refreshes Infoservice and eligible exchange fallback rates
+ * @property {() => Promise<void>} syncStartupRates Waits up to 15 seconds for rates after connector warmup
+ * @property {(coin: string) => FallbackRateInfo | undefined} getFallbackRateInfo Describes an active fallback USD rate
  * @property {(from: string, to: string) => number | undefined} getRate Returns the price of `from` in `to`
  * @property {(from: string, to: string, amount?: number, considerExchangerFee?: boolean, specificRate?: number, validateSpecificRate?: boolean) => ConvertCryptosResult} convertCryptos Converts between cryptocurrencies
  * @property {(coin: string) => boolean} isFiat Whether the symbol is treated as fiat
- * @property {(coin: string) => boolean} hasTicker Whether Infoservice exposes a direct ticker for the coin
+ * @property {(coin: string) => boolean} hasTicker Whether Infoservice or a usable fallback provides the coin
  * @property {(coin: string) => boolean} [isERC20] Attached at runtime by crypto modules for ERC-20 fee conversion
  * @property {(pair: string) => ParsedPairInfo} parsePair Parses pair/exchange/account/project from a string
  * @property {(maxAmount?: number) => Coin1VolumeEstimate | undefined} estimateCurrentDailyTradeVolume Estimates daily MM volume from trade params

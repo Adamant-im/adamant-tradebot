@@ -360,9 +360,9 @@ describe('mm_price_watcher', () => {
       expect(pw.getHighPrice()).toBeCloseTo(1.04, 4);
     });
 
-    test('converts ADM/BTC@OtherEx via direct BTC/USDT cross-market pair (Case 1B.c)', async () => {
+    test.each(['OtherEx', EXCHANGE.toLowerCase()])('converts ADM/BTC@%s using the correct exchange ticker cache', async (targetExchange) => {
       applyTradeParams({
-        mm_priceWatcherSource: 'ADM/BTC@OtherEx',
+        mm_priceWatcherSource: `ADM/BTC@${targetExchange}`,
         mm_priceWatcherSourcePolicy: 'strict',
         mm_priceWatcherDeviationPercent: 0,
       });
@@ -389,13 +389,21 @@ describe('mm_price_watcher', () => {
 
       mockPwExternalApi.getOrderBook.mockResolvedValue(makeOrderBook(0.000015, 0.000017));
       mockPwExternalApi.getRates.mockResolvedValue({ bid: 64_000, ask: 65_000 });
+      mockOrderUtils.getOrderBookCached.mockResolvedValue(makeOrderBook(0.000015, 0.000017));
+      mockOrderUtils.getRatesCached.mockResolvedValue({ bid: 64_000, ask: 65_000 });
       mockUtils.getOrderBookInfo.mockReturnValue({ smartBid: 0.000015, smartAsk: 0.000017 });
       mockUtils.randomValue.mockImplementation((a, b) => (a + b) / 2);
       mockUtils.numbersDifferencePercent.mockReturnValue(1);
 
       await pw.reviewPrices();
 
-      expect(mockPwExternalApi.getRates).toHaveBeenCalledWith('BTC/USDT');
+      if (targetExchange === 'OtherEx') {
+        expect(mockPwExternalApi.getRates).toHaveBeenCalledWith('BTC/USDT');
+        expect(mockOrderUtils.getRatesCached).not.toHaveBeenCalled();
+      } else {
+        expect(mockOrderUtils.getRatesCached).toHaveBeenCalledWith('BTC/USDT', expect.any(String), true);
+        expect(mockPwExternalApi.getRates).not.toHaveBeenCalled();
+      }
       expect(mockExchangerUtils.convertCryptos).toHaveBeenCalledWith(
           'BTC', COIN2, 0.000015, false, 64_000, false,
       );

@@ -106,11 +106,14 @@ module.exports = {
     const ordersEntry = openOrdersCached[pair];
     const ratesEntry = ratesCached[pair];
     const ordersFresh = ordersEntry && typeof ordersEntry.timestamp === 'number' &&
+      now >= ordersEntry.timestamp &&
       (now - ordersEntry.timestamp) < ageLimit;
     const ratesFresh = ratesEntry && typeof ratesEntry.timestamp === 'number' &&
+      now >= ratesEntry.timestamp &&
       (now - ratesEntry.timestamp) < ageLimit;
     const balancesFresh = typeof balancesCached.timestamp === 'number' &&
       balancesCached.timestamp > 0 &&
+      now >= balancesCached.timestamp &&
       (now - balancesCached.timestamp) < ageLimit;
     const orders = ordersFresh && Array.isArray(ordersEntry.data) ? ordersEntry.data : undefined;
     const rates = ratesFresh && ratesEntry.data && typeof ratesEntry.data === 'object' ?
@@ -512,7 +515,7 @@ module.exports = {
    *    stopLossPrice?: Number,
    *    smpType?: String,
    * }} [perpetualOptions] Options for perpetual contract order
-   * @return {Promise<Object | { message: string } | undefined>} A database record for a placed orders
+   * @return {Promise<Object | { message: string } | undefined>} Saved order or failure details, retaining an uncertain client reference
    */
   async addGeneralOrder(
       orderSide,
@@ -642,6 +645,10 @@ module.exports = {
         log.warn(`orderUtils: Unable to place ${purpose}-order${whichAccount} with params: ${orderParamsString}.${details}`);
 
         return {
+          ...(orderReq?.isSubmissionUncertain ? {
+            clientOrderId: orderReq.clientOrderId,
+            isSubmissionUncertain: true,
+          } : {}),
           message: whichAccountMsg + orderReq?.message,
         };
       }
@@ -1169,12 +1176,15 @@ module.exports = {
    * @param {string} pair BTC/USDT for spot
    * @param {string} moduleName Caller name for logs
    * @param {boolean} [noCache=false] Always fetch fresh data when true
+   * @param {number} [cacheValidMs=ratesCachedValidMs] Finite non-negative cache TTL in milliseconds
+   * @param {AbortSignal} [signal] Ignore canceled results, including shared-cache writes; the connector may keep running
    * @returns {Promise<import('types/rates.d.js').RatesResult | undefined>} Ticker object (cloned) or undefined
    */
-  async getRatesCached(pair, moduleName, noCache = false) {
+  async getRatesCached(pair, moduleName, noCache = false, cacheValidMs = ratesCachedValidMs, signal) {
     let result;
 
     try {
+      if (signal?.aborted) return undefined;
       const cached = ratesCached[pair];
       const socketDataAvailable = traderapi.features().socketEnabled &&
         typeof traderapi.isPublicWsEnabled === 'function' &&
@@ -1187,7 +1197,10 @@ module.exports = {
       }
 
       const cacheTerm = Date.now() - cached?.timestamp;
-      const isCacheValid = cacheTerm < ratesCachedValidMs;
+      const ageLimit = typeof cacheValidMs === 'number' && Number.isFinite(cacheValidMs) && cacheValidMs >= 0 ?
+        cacheValidMs :
+        ratesCachedValidMs;
+      const isCacheValid = cacheTerm >= 0 && cacheTerm < ageLimit;
 
       if (
         !socketDataAvailable &&
@@ -1206,6 +1219,7 @@ module.exports = {
         }
 
         const rates = await traderapi.getRates(pair);
+        if (signal?.aborted) return undefined;
 
         if (rates) {
           ratesCached[pair] = {
@@ -1220,7 +1234,7 @@ module.exports = {
         }
       }
     } catch (e) {
-      log.error(`Error in getRatesCached() of ${moduleName} module: ${e}`);
+      if (!signal?.aborted) log.error(`Error in getRatesCached() of ${moduleName} module: ${e}`);
     }
 
     return result;
@@ -1476,19 +1490,25 @@ module.exports = {
 
           // Store all balances history
           const accountNo = api.isSecondAccount ? 1 : 0;
-          balancesHistory.saveSnapshotIfChanged({
+          const callerName = `${moduleName}|getBalancesCached`;
+          const bw = utils.softRequire('./features/mm_balance_watcher');
+          const snapshotSave = Promise.resolve(balancesHistory.saveSnapshotIfChanged({
             accountNo,
             walletType: walletType || null,
             balances: balancesWithTotals,
             source: 'getBalancesCached',
-            callerName: `${moduleName}|getBalancesCached`,
+            callerName,
             timestamp: fetchTimestamp,
-          });
+          }));
 
-          // Balance Watcher && Guard
+          // Persist before comparing; other balance consumers do not wait for MongoDB.
+          if (bw?.shouldCompareBalances(callerName)) {
+            await snapshotSave;
+          } else {
+            snapshotSave.catch((error) => log.error(`Error saving balance snapshot for ${callerName}: ${error}`));
+          }
 
-          const bw = utils.softRequire('./features/mm_balance_watcher');
-          await bw?.guardBalances(accountNo, walletType, `${moduleName}|getBalancesCached`);
+          await bw?.guardBalances(accountNo, walletType, callerName);
         } else {
           const message = `Unable to get${walletTypeString} balances${onWhichAccount}: ${errorMessage || '{ No details }'}`;
           log.warn(`orderUtils: ${message}`);

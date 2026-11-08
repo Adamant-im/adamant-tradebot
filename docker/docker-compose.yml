@@ -1,3 +1,11 @@
+# Docker keeps container stdout in its own log. For mm-app it duplicates logs/bot.log,
+# which the bot rotates itself (log_rotate in the config). Cap these copies so they do not grow without limit.
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   mm-app:
     image: ghcr.io/adamant-im/adamant-tradebot:latest
@@ -12,12 +20,14 @@ services:
       - ./config:/app/config
       - ./trade-config:/app/trade-config
       - ./logs:/app/logs
+    logging: *default-logging
     restart: unless-stopped
 
   mongo:
     image: mongo:8
     volumes:
       - mongo-data:/data/db
+    logging: *default-logging
     restart: unless-stopped
 
 volumes:

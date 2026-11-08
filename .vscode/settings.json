@@ -3,7 +3,7 @@
   "typescript.enablePromptUseWorkspaceTsdk": true,
   "github.copilot.chat.codeGeneration.instructions": [
     {
-      "file": ".github/ai-agent-instructions.md"
+      "file": "AGENTS.md"
     }
   ]
 }

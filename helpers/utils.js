@@ -370,6 +370,50 @@ module.exports = {
   },
 
   /**
+   * Round a nonnegative decimal onto an exchange step grid without binary floating-point division
+   * The grid is origin + n*step. Use a filter's minimum as origin when the exchange defines an offset.
+   * @param {number | string} value Requested quantity or price
+   * @param {number | string} step Positive step, including values greater than one or scientific notation
+   * @param {number | string} [origin=0] Nonnegative grid origin
+   * @param {'floor' | 'ceil'} [rounding='floor'] Floor quantities/buy prices; ceil sell prices to preserve limit intent
+   * @returns {string} Exact decimal string rounded in the requested direction
+   */
+  quantizeToStep(value, step, origin = 0, rounding = 'floor') {
+    /**
+     * @param {number | string} input Finite nonnegative decimal
+     * @returns {{digits: bigint, scale: number}} Integer coefficient and decimal scale
+     */
+    function parts(input) {
+      const text = String(input);
+      const match = /^(\d+)(?:\.(\d*))?(?:e([+-]?\d+))?$/i.exec(text);
+
+      if (!match || !Number.isFinite(Number(input))) throw new Error(`Invalid decimal step input: ${text}`);
+
+      const fraction = match[2] || '';
+      const scale = fraction.length - Number(match[3] || 0);
+      if (scale > 400 || scale < -308) throw new Error('Decimal exponent exceeds the supported range');
+      const digits = BigInt(match[1] + fraction);
+
+      return { digits: scale < 0 ? digits * 10n ** BigInt(-scale) : digits, scale: Math.max(0, scale) };
+    }
+
+    const values = [value, step, origin].map(parts);
+    const scale = Math.max(...values.map((item) => item.scale));
+    const [amount, increment, minimum] = values.map((item) => item.digits * 10n ** BigInt(scale - item.scale));
+
+    if (increment <= 0n || amount < minimum || !['floor', 'ceil'].includes(rounding)) {
+      throw new Error(`Invalid step grid: value ${value}, step ${step}, origin ${origin}, rounding ${rounding}`);
+    }
+
+    const offset = rounding === 'ceil' ? increment - 1n : 0n;
+    const result = minimum + (amount - minimum + offset) / increment * increment;
+    const digits = result.toString().padStart(scale + 1, '0');
+    const fraction = scale ? digits.slice(-scale).replace(/0+$/, '') : '';
+
+    return (scale ? digits.slice(0, -scale) : digits) + (fraction ? '.' + fraction : '');
+  },
+
+  /**
    * Converts provided `time` (ms) to ADAMANT's epoch timestamp (sec)
    * @param {number} time Timestamp to convert
    * @return {number}
@@ -2744,6 +2788,8 @@ module.exports = {
    * Builds a human-readable balance-diff message ending with a single newline.
    *
    * Includes coin1/coin2 changes and total-holdings deltas.
+   * Marks newly available base-coin valuations separately from asset movements
+   * while preserving the historical totals recorded in the reference snapshot.
    *
    * @param {AssetsResult} bc Current balances
    * @param {BalanceSnapshotWithTimestamp} [bpt] Previous balances with timestamp
@@ -2779,6 +2825,18 @@ module.exports = {
 
     const balancesHistory = require('../helpers/balancesHistory');
     const { BALANCE_TOTAL_TYPES, BALANCE_TOTAL_COINS, totalsKeyToTypeCoin } = balancesHistory;
+
+    // Historical totals can omit the base coin until its first usable quote price appears.
+    // Preserve those recorded values, but distinguish this repricing from asset movements.
+    const previousBase = bpt?.balances?.find((balance) => balance.code === coin1)?.total;
+    const previousQuote = bpt?.balances?.find((balance) => balance.code === coin2)?.total ?? 0;
+    const previousTradingTotal = bpt?.balances?.find((balance) => balance.code === 'totalTradingCOIN2')?.total;
+    if (previousBase > 0 && previousTradingTotal === previousQuote) {
+      const fallback = require('./cryptos/exchanger').getFallbackRateInfo(coin1);
+      if (fallback?.source === 'exchange') {
+        output += `Note: the previous ${coin2} trading total excluded ${coin1}. Total changes include its newly available spot valuation, in addition to any balance changes.\n\n`;
+      }
+    }
 
     // totalsDiff[type][key] = { delta, sign }
     const initTotalsDiff = () =>

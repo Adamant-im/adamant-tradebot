@@ -9,7 +9,7 @@
  */
 
 const {
-  constants, utils, config, log, tradeParams, moduleName, exchangerUtils, orderUtils, traderapi,
+  constants, utils, config, log, tradeParams, moduleName, exchangerUtils, orderUtils,
 } = require('./context');
 const {
   formSendBackMessage, formSendBackAndNotify, setPendingConfirmation,
@@ -1331,7 +1331,7 @@ async function enable(params, tx, isWebApi = false) {
 
       let ratesInfo;
 
-      const exchangeRates = await traderapi.getRates(pair);
+      const exchangeRates = await orderUtils.getRatesCached(pair, moduleName);
       if (exchangeRates?.ask) {
         const delta = exchangeRates.ask-exchangeRates.bid;
         midPriceCalculated = (exchangeRates.ask+exchangeRates.bid)/2;

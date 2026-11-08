@@ -272,7 +272,7 @@ The bot also prints every log line to stdout. PM2 and Docker store that output s
 - PM2 keeps it in `~/.pm2/logs`. Rotate it with pm2-logrotate, see [PM2](#pm2).
 - Docker keeps it in the container log. `docker/docker-compose.yml` limits it to three 10 MB files.
 
-Run each bot process from its own working directory. The CLI instance writes to the same `logs/bot.log` as its bot, but only the bot rotates it.
+Run each bot process from its own working directory.
 
 ## Updating
 

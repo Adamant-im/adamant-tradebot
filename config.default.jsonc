@@ -63,6 +63,18 @@
   /** InfoService endpoints for fetching exchange rates */
   "infoservice": ["https://info.adamant.im"],
 
+  /** Exchange spot ticker fallback after Infoservice confirms a missing USD rate. Use { "enabled": false } to disable. */
+  "coin_price_fallback": {
+    /** Enable fallback for the configured base coin and unlisted stablecoins */
+    "enabled": true,
+
+    /** Price field: "last", "mid", "bid", or "ask". Missing or invalid "last" falls back to (bid + ask) / 2. */
+    "priceSource": "last",
+
+    /** Ticker cache validity in milliseconds; fallback refreshes every Infoservice tick (60 seconds) */
+    "cacheMs": 30000
+  },
+
   /** Whitelist of ADAMANT accounts allowed to manage the bot */
   "admin_accounts": ["U123.."],
 

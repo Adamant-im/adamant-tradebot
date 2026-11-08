@@ -117,6 +117,7 @@ jest.mock('../../modules/configReader', () => ({
   public_webui_license_token: '',
   fileWithPath: '/tmp/adamant-tradebot-test-config.jsonc',
   pair: 'ETH/USDT',
+  coin_price_fallback: { enabled: true, priceSource: 'last', cacheMs: 30_000 },
   coin1: 'ETH',
   coin2: 'USDT',
   exchange: 'binance',
@@ -840,6 +841,7 @@ describe('WebUI API v1', () => {
       expect(response.statusCode).toBe(200);
       expect(response.json().config.pair).toBe('ETH/USDT');
       expect(response.json().config.api).toEqual({ port: 0, health: false, debug: true });
+      expect(response.json().config.coin_price_fallback).toEqual({ enabled: true, priceSource: 'last', cacheMs: 30_000 });
       expect(response.payload).not.toContain('debug-token-must-not-leak');
     }
   });

@@ -1,6 +1,7 @@
 /**
  * @module modules/configReader
  * @typedef {import('types/bot/configReader.d.js').BotConfig} BotConfig
+ * @typedef {import('types/bot/configReader.d.js').BotCoinPriceFallbackConfig} BotCoinPriceFallbackConfig
  */
 
 const jsonminify = require('jsonminify');
@@ -52,6 +53,14 @@ const fields = {
   infoservice: {
     type: Array,
     default: ['https://info.adamant.im'],
+  },
+  coin_price_fallback: {
+    type: Object,
+    default: /** @type {BotCoinPriceFallbackConfig} */ ({
+      enabled: true,
+      priceSource: 'last',
+      cacheMs: 30_000,
+    }),
   },
   exchanges: {
     type: Array,
@@ -521,6 +530,26 @@ try {
     coin.coin = coin.coin?.toUpperCase();
     coin.sources = coin.sources?.map((source) => source?.toUpperCase()) || [];
   });
+
+  const fallbackKeys = Object.keys(fields.coin_price_fallback.default);
+  const unknownFallbackKeys = Object.keys(config.coin_price_fallback).filter((key) => !fallbackKeys.includes(key));
+  if (unknownFallbackKeys.length) {
+    console.warn(`Config reader: Unknown coin_price_fallback keys are ignored: ${unknownFallbackKeys.join(', ')}.`);
+  }
+
+  config.coin_price_fallback = {
+    ...fields.coin_price_fallback.default,
+    ...Object.fromEntries(Object.entries(config.coin_price_fallback).filter(([key]) => fallbackKeys.includes(key))),
+  };
+
+  const fallback = config.coin_price_fallback;
+  if (typeof fallback.enabled !== 'boolean' ||
+      typeof fallback.priceSource !== 'string' ||
+      !['last', 'mid', 'bid', 'ask'].includes(fallback.priceSource.toLowerCase()) ||
+      typeof fallback.cacheMs !== 'number' || !Number.isFinite(fallback.cacheMs) || fallback.cacheMs < 0) {
+    exit(`Configuration for ${configOwnerLabel} is invalid: coin_price_fallback requires boolean enabled, priceSource last/mid/bid/ask, and finite non-negative cacheMs. Cannot start the bot.`);
+  }
+  fallback.priceSource = /** @type {typeof fallback.priceSource} */ (fallback.priceSource.toLowerCase());
 
   try {
     config.log_rotate = require('../helpers/logRotation').normalizeLogRotateConfig(config.log_rotate);

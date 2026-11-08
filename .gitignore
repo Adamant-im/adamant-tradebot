@@ -31,7 +31,9 @@ trade/settings/*
 # ai
 CLAUDE.md
 .ai-tasks/
+.ai-general/
 .ai-ignored/
+.ai-gitignore/
 .cursor/
 .claude/
 .playwright-mcp/

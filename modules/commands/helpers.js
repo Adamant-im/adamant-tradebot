@@ -10,7 +10,7 @@
  */
 
 const {
-  exchangerUtils, config, log, traderapi, perpetualApi, orderUtils, moduleName, utils, pendingConfirmation,
+  exchangerUtils, config, log, perpetualApi, orderUtils, moduleName, utils, pendingConfirmation,
 } = require('./context');
 const { getCommandInitiator } = require('../../helpers/commandInitiator');
 
@@ -63,7 +63,7 @@ function formSendBackAndNotify(msgSendBack, msgNotify = '') {
 
 
 /**
- * Fetches global coin rates from the Currencyinfo service and formats a reply string.
+ * Formats Infoservice coin rates or explicitly identified fallback USD rates.
  *
  * @param {string} coin Base coin symbol, e.g. `BTC`
  * @returns {CoinRatesInfoResult}
@@ -75,7 +75,7 @@ function getCoinRatesInfo(coin) {
 
   try {
     const currencyinfoRates = Object
-        .keys(er)
+        .keys(er || {})
         .filter((t) => t.startsWith(coin + '/'))
         .map((t) => {
           const quoteCoin = t.replace(coin + '/', '');
@@ -86,7 +86,16 @@ function getCoinRatesInfo(coin) {
         })
         .join(', ');
 
-    if (!currencyinfoRates.length) {
+    const fallback = exchangerUtils.getFallbackRateInfo(coin);
+
+    if (fallback) {
+      const source = fallback.source === 'exchange' ?
+        `${fallback.exchange} spot ticker (${fallback.pair}, ${fallback.priceSource}), updated ${utils.timeAgoString(fallback.timestamp)}` :
+        'assumed stablecoin USD parity';
+      const infoserviceInfo = currencyinfoRates.length ? `Global market rates for ${coin}:\n${currencyinfoRates}.\n\n` : '';
+      ratesString = `${infoserviceInfo}Fallback rate for ${coin} from ${source}:\n${coin}/**USD**: ${utils.toFixedMeaningful(fallback.usdRate)}.`;
+      success = true;
+    } else if (!currencyinfoRates.length) {
       ratesString = `I can’t get global rates for ${coin} from Currencyinfo service. Probably, Currencyinfo doesn't monitor the coin.`;
       success = false;
     } else {
@@ -131,7 +140,7 @@ async function getExchangeRatesInfo(pairRaw) {
       er = await perpetualApi.getTickerInfo(pair, true);
     } else {
       type = 'spot pair';
-      er = await traderapi.getRates(pair);
+      er = await orderUtils.getRatesCached(pair, moduleName);
     }
 
     if (er) {

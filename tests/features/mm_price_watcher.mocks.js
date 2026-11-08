@@ -85,6 +85,7 @@ const mockOrderUtils = {
   })),
   updateOrders: jest.fn(async (orders) => orders),
   getOrderBookCached: jest.fn(),
+  getRatesCached: jest.fn(),
   getBalancesCached: jest.fn(),
 };
 

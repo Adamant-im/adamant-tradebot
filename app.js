@@ -55,6 +55,7 @@ async function bootstrap() {
   await initServices();
 
   await warmUpConnectorData();
+  await require('./helpers/cryptos/exchanger').syncStartupRates();
   startModules();
 }
 

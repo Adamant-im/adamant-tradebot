@@ -15,6 +15,15 @@
  */
 
 /**
+ * Exchange spot ticker fallback settings for coins omitted by Infoservice.
+ *
+ * @typedef {Object} BotCoinPriceFallbackConfig
+ * @property {boolean} enabled Whether exchange fallback and unlisted stablecoin USD parity are enabled
+ * @property {'last' | 'mid' | 'bid' | 'ask'} priceSource Ticker field; invalid or missing last falls back to mid
+ * @property {number} cacheMs Finite non-negative ticker cache validity in milliseconds
+ */
+
+/**
  * Balance watcher thresholds from config.
  *
  * @typedef {Object} BotBalanceWatcherConfig
@@ -127,6 +136,7 @@
  * @property {string} manageTelegramBotToken Telegram management bot token
  * @property {string[]} [node_ADM] ADAMANT node URLs
  * @property {string[]} infoservice Infoservice base URL list used for crypto rates
+ * @property {BotCoinPriceFallbackConfig} coin_price_fallback Exchange ticker fallback settings
  * @property {string[]} exchanges Supported exchange ids from config
  * @property {string} apikey Spot API key
  * @property {string} apisecret Spot API secret

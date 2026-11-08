@@ -1,6 +1,11 @@
 const path = require('path');
 const { resolveJestConfigName } = require('../../scripts/jest-resolve-config');
 
+// Order-book unit tests only need precision metadata; do not initialize exchange APIs or MongoDB.
+jest.mock('../../trade/orderUtils', () => ({
+  parseMarket: () => ({ coin1Decimals: 5, coin2Decimals: 2, coin2DecimalsForStable: 2 }),
+}));
+
 const originalArgv = process.argv.slice();
 
 process.argv = [process.argv[0], process.argv[1], resolveJestConfigName()];
@@ -215,11 +220,12 @@ describe('softRequire', () => {
   });
 
   test('resolves relative paths from an explicit fromFile base', () => {
-    const base = path.join(__dirname, '../../modules/commands/account.js');
-    const mod = utils.softRequire('../../trade/features/mm_trader', base);
+    // A dependency-free target tests resolution without starting exchange APIs or MongoDB.
+    const base = path.join(__dirname, '../../helpers/cryptos/exchanger.js');
+    const mod = utils.softRequire('../const', base);
 
     expect(mod).toBeDefined();
-    expect(typeof mod.run).toBe('function');
+    expect(mod).toBe(require('../../helpers/const'));
   });
 
   test('returns undefined for a missing relative module', () => {

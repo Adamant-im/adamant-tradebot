@@ -28,6 +28,7 @@ const PUBLIC_CONFIG_KEYS = [
   'socket',
   'ws_type',
   'infoservice',
+  'coin_price_fallback',
   'notify_non_admins',
   'silent_mode',
   'log_level',

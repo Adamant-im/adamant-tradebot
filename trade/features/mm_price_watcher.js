@@ -976,7 +976,9 @@ async function setPriceRange() {
           // Case 1B.c: Cross-market found on the target exchange
           // Convert `targetExchange.coin2` → `config.coin2` using cross-market rates from the target exchange
 
-          const crossMarketRates = await pwExchangeApi.getRates(crossMarketPair);
+          const crossMarketRates = targetExchange.toLowerCase() === exchange.toLowerCase() ?
+            await orderUtils.getRatesCached(crossMarketPair, moduleName, true) :
+            await pwExchangeApi.getRates(crossMarketPair);
           if (!crossMarketRates) {
             errorSettingPriceRange(`Unable to get rates for the ${crossMarketPair} cross-pair at ${targetExchange} exchange. It may be a temporary API error.`);
             return false;
