@@ -1,17 +1,12 @@
 name: Publish npm package
 
-# Publishes the package to npm with build provenance when a GitHub Release is
-# published or triggered manually via workflow_dispatch.
-# Authentication uses the repository secret NPM_TOKEN and npm build provenance
-# is generated via GitHub Actions OIDC (id-token: write).
-
 on:
   release:
     types: [published]
   workflow_dispatch:
     inputs:
       release_tag:
-        description: 'Release tag to publish (e.g. v10.0.0)'
+        description: 'Release tag to publish'
         required: false
         default: 'v10.0.0'
 
@@ -21,9 +16,11 @@ permissions:
 
 jobs:
   publish:
+    name: Publish to npm
     runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || !github.event.release.prerelease
     steps:
-      - name: Checkout source
+      - name: Checkout
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.release.tag_name || inputs.release_tag || github.ref }}
@@ -38,8 +35,11 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
-          registry-url: https://registry.npmjs.org
+          node-version: 24
+          registry-url: https://registry.npmjs.org/
+
+      - name: Update npm
+        run: npm install -g npm@latest
 
       - name: Install dependencies
         run: npm ci
@@ -54,14 +54,5 @@ jobs:
             exit 1
           fi
 
-      - name: Check npm auth
-        run: |
-          echo "Checking npm auth token identity:"
-          npm whoami --registry https://registry.npmjs.org || echo "npm whoami failed"
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
-
-      - name: Publish to npm with provenance
-        run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Publish to npm
+        run: npm publish --provenance
