@@ -54,6 +54,13 @@ jobs:
             exit 1
           fi
 
+      - name: Check npm auth
+        run: |
+          echo "Checking npm auth token identity:"
+          npm whoami --registry https://registry.npmjs.org || echo "npm whoami failed"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
       - name: Publish to npm with provenance
         run: npm publish --provenance --access public
         env:
