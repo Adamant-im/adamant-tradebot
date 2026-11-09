@@ -1,15 +1,9 @@
 name: Publish npm package
 
 # Publishes the package to npm with build provenance when a GitHub Release is
-# published. Authentication uses npm Trusted Publishing (OIDC) with a token
-# fallback if OIDC is not yet configured on npmjs.com.
-#
-# One-time setup on npmjs.com (package Settings -> Trusted Publishing):
-# - Publisher: GitHub Actions
-# - Organization: Adamant-im
-# - Repository: adamant-tradebot
-# - Workflow filename: publish-npm.yml
-# - Environment: (leave empty)
+# published or triggered manually via workflow_dispatch.
+# Authentication uses the repository secret NPM_TOKEN and npm build provenance
+# is generated via GitHub Actions OIDC (id-token: write).
 
 on:
   release:
@@ -45,6 +39,7 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 24
+          registry-url: https://registry.npmjs.org
 
       - name: Update npm
         run: npm install -g npm@latest
@@ -63,17 +58,6 @@ jobs:
           fi
 
       - name: Publish to npm with provenance
-        run: |
-          rm -f /home/runner/work/_temp/.npmrc ~/.npmrc
-          echo "Attempting publish via npm Trusted Publishing (OIDC)..."
-          if (unset NODE_AUTH_TOKEN && npm publish --provenance --access public); then
-            echo "Successfully published to npm via OIDC Trusted Publishing!"
-          elif [ -n "$FALLBACK_TOKEN" ]; then
-            echo "OIDC publish failed; publishing with repository token and provenance..."
-            NODE_AUTH_TOKEN="$FALLBACK_TOKEN" npm publish --provenance --access public
-          else
-            echo "::error::Publish failed and no fallback token available."
-            exit 1
-          fi
+        run: npm publish --provenance --access public
         env:
-          FALLBACK_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
