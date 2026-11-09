@@ -41,7 +41,7 @@ module.exports = {
     // See also `utils.test.js`
     // ==
 
-    // const traderapi = require('../../trade/trader_' + config.exchange)(
+    // const traderapi = require('../../trade/trader/trader_' + config.exchange)(
     //   config.apikey,
     //   config.apisecret,
     //   config.apipassword,
@@ -136,7 +136,7 @@ module.exports = {
     console.log('========================== Testing SPOT API');
     console.log('==');
 
-    const traderapi = require('../../trade/trader_' + config.exchange)(
+    const traderapi = require('../../trade/trader/trader_' + config.exchange)(
       config.apikey,
       config.apisecret,
       config.apipassword,
@@ -147,7 +147,7 @@ module.exports = {
       config.exchange_socket_pull,
     );
 
-    // const traderapi2 = require('../../trade/trader_azbit')(
+    // const traderapi2 = require('../../trade/trader/trader_azbit')(
     //   config.apikey,
     //   config.apisecret,
     //   config.apipassword,
@@ -549,7 +549,7 @@ module.exports = {
 
     // const DEX = 'dex_uniswapv2';
     // const dexPair = 'UNI/LINK'; // https://app.uniswap.org/explore/pools/ethereum/0x9b2662DC8b80B0fE79310AD316b943CB5Bb15e8b
-    // const traderApiDex = require('../../trade/trader_' + DEX)(undefined, undefined, undefined, log);
+    // const traderApiDex = require('../../trade/trader/trader_' + DEX)(undefined, undefined, undefined, log);
 
     // setTimeout(async () => {
     //   console.log(`${dexPair}@${DEX} market info:`);
@@ -579,7 +579,7 @@ module.exports = {
 
     // const DEX = 'dex_uniswapv3';
     // const dexPair = 'WBTC/USDT';
-    // const traderApiDex = require('../../trade/trader_' + DEX)(undefined, undefined, undefined, log);
+    // const traderApiDex = require('../../trade/trader/trader_' + DEX)(undefined, undefined, undefined, log);
 
     // setTimeout(async () => {
     //   console.log(`${dexPair}@${DEX} (1%) market info:`);

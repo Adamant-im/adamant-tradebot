@@ -348,7 +348,7 @@ async function ticker(params) {
   } else {
     type = 'spot market';
 
-    ticker = await traderapi.getRates(pair);
+    ticker = await orderUtils.getRatesCached(pair, moduleName);
   }
 
   if (ticker?.high && ticker?.low) {
@@ -406,7 +406,7 @@ async function stats(params) {
     if (pairObj.perpetual) {
       exchangeRates = await perpetualApi.getTickerInfo(pairObj.pair, true);
     } else {
-      exchangeRates = await traderapi.getRates(pairObj.pair);
+      exchangeRates = await orderUtils.getRatesCached(pairObj.pair, moduleName);
     }
 
     const totalVolume24 = +exchangeRates?.volume;
@@ -623,88 +623,99 @@ async function pair(params) {
  * @returns {Promise<CommandReply>}
  */
 async function calc(params, tx, isWebApi = false) {
-  let output = '';
-  try {
+  const commandExample = `Try: */calc 2.05 BTC to USDT*`;
 
-    if (params.length !== 4) {
-      return {
-        msgNotify: '',
-        msgSendBack: 'Wrong arguments. Command works like this: */calc 2.05 BTC in USDT*.',
-        notifyType: 'log',
-      };
+  let output = '';
+
+  try {
+    // Parse parameters
+
+    const parsedParams = utils.parseCommandParams(params, 4);
+    const conversionWord = ['to', 'in'].find((word) => parsedParams?.is(word));
+
+    if (!parsedParams?.exactParamsCount || !conversionWord || parsedParams.indexOf(conversionWord) !== 2) {
+      return formSendBackMessage(`Unexpected arguments. ${commandExample}.`);
     }
 
-    const amount = +params[0];
-    const inCurrency = params[1].toUpperCase().trim();
-    const outCurrency = params[3].toUpperCase().trim();
-    const pair = inCurrency + '/' + outCurrency;
-    const pair2 = outCurrency + '/' + inCurrency;
+    const amountParam = parsedParams.moreByIndex(0);
+    const inCurrency = parsedParams.prevTo(conversionWord)?.paramUc;
+    const outCurrency = parsedParams.nextTo(conversionWord)?.paramUc;
+
+    if (!amountParam || !inCurrency || !outCurrency) {
+      return formSendBackMessage(`Unexpected arguments. ${commandExample}.`);
+    }
+
+    const parsedSmartAmount = amountParam.paramSmartNumber;
+    const amount = parsedSmartAmount.isNumber ? parsedSmartAmount.number : amountParam.paramNumber;
 
     if (!utils.isPositiveOrZeroNumber(amount)) {
-      output = `Wrong amount: _${params[0]}_. Command works like this: */calc 2.05 BTC in USD*.`;
-      return {
-        msgNotify: '',
-        msgSendBack: `${output}`,
-        notifyType: 'log',
-      };
-    }
-    if (!exchangerUtils.hasTicker(inCurrency)) {
-      output = `I don’t have rates of crypto *${inCurrency}* from Infoservice. Made a typo? Try */calc 2.05 BTC in USDT*.`;
-    }
-    if (!exchangerUtils.hasTicker(outCurrency)) {
-      output = `I don’t have rates of crypto *${outCurrency}* from Infoservice. Made a typo? Try */calc 2.05 BTC in USDT*.`;
+      return formSendBackMessage(`Wrong amount: _${amountParam.paramPlain}_. ${commandExample}.`);
     }
 
-    let result;
-    if (!output) {
-      result = exchangerUtils.convertCryptos(inCurrency, outCurrency, amount).outAmount;
+    // Identify exchange-derived estimates separately from Infoservice market values.
+
+    if (exchangerUtils.hasTicker(inCurrency) && exchangerUtils.hasTicker(outCurrency)) {
+      const result = exchangerUtils.convertCryptos(inCurrency, outCurrency, amount).outAmount;
+
       if (!utils.isPositiveOrZeroNumber(result)) {
-        output = `Unable to calc _${params[0]}_ ${inCurrency} in ${outCurrency}.`;
-        return {
-          msgNotify: '',
-          msgSendBack: `${output}`,
-          notifyType: 'log',
-        };
+        return formSendBackMessage(`Unable to calc _${amountParam.paramPlain}_ ${inCurrency} in ${outCurrency}.`);
       }
 
       const precision = exchangerUtils.isFiat(outCurrency) ? 2 : constants.PRECISION_DECIMALS;
-      output = isWebApi ? utils.formatNumber(result.toFixed(precision), false) : `Global market value of ${utils.formatNumber(amount)} ${inCurrency} equals ${utils.formatNumber(result.toFixed(precision), true)} ${outCurrency}.`;
+      const fallbackSources = [inCurrency, outCurrency]
+          .map((coin) => exchangerUtils.getFallbackRateInfo(coin))
+          .filter(Boolean)
+          .map((fallback) => fallback.source === 'exchange' ?
+            `${fallback.exchange} ${fallback.pair} spot ticker fallback` : 'assumed stablecoin USD parity');
+      const valueLabel = fallbackSources.length ?
+        `Estimated value (${[...new Set(fallbackSources)].join('; ')})` : 'Global market value';
+      output = isWebApi ?
+        utils.formatNumber(result.toFixed(precision), false) :
+        `${valueLabel} of ${utils.formatNumber(amount)} ${inCurrency} equals ${utils.formatNumber(result.toFixed(precision), true)} ${outCurrency}.`;
+    }
+
+    if (isWebApi) {
+      return formSendBackMessage(output);
+    }
+
+    // Add exchange-specific bid and ask values
+
+    const pair = `${inCurrency}/${outCurrency}`;
+    const pairReverse = `${outCurrency}/${inCurrency}`;
+    let exchangeRates = await orderUtils.getRatesCached(pair, moduleName);
+    let askValue;
+    let bidValue;
+
+    if (exchangeRates) {
+      askValue = exchangeRates.ask * amount;
+      bidValue = exchangeRates.bid * amount;
     } else {
-      output = '';
-    }
+      exchangeRates = await orderUtils.getRatesCached(pairReverse, moduleName);
 
-    if (output && !isWebApi) {
-      output += '\n\n';
-    }
-    let askValue; let bidValue;
-
-    let exchangeRates = await traderapi.getRates(pair);
-    if (!isWebApi) {
       if (exchangeRates) {
-        askValue = exchangeRates.ask * amount;
-        bidValue = exchangeRates.bid * amount;
-        output += `${config.exchangeName} value of ${utils.formatNumber(amount)} ${inCurrency}:\nBid: **${utils.formatNumber(bidValue.toFixed(8))} ${outCurrency}**, ask: **${utils.formatNumber(askValue.toFixed(8))} ${outCurrency}**.`;
-      } else {
-        exchangeRates = await traderapi.getRates(pair2);
-        if (exchangeRates) {
-          askValue = amount / exchangeRates.ask;
-          bidValue = amount / exchangeRates.bid;
-          output += `${config.exchangeName} value of ${utils.formatNumber(amount)} ${inCurrency}:\nBid: **${utils.formatNumber(bidValue.toFixed(8))} ${outCurrency}**, ask: **${utils.formatNumber(askValue.toFixed(8))} ${outCurrency}**.`;
-        } else {
-          output += `Unable to get ${config.exchangeName} rates for ${pair}.`;
-        }
+        askValue = amount / exchangeRates.ask;
+        bidValue = amount / exchangeRates.bid;
       }
     }
 
+    if (output) {
+      output += '\n\n';
+    }
+
+    if (exchangeRates) {
+      output += `${config.exchangeName} value of ${utils.formatNumber(amount)} ${inCurrency}:\n`;
+      output += `Bid: **${utils.formatNumber(bidValue.toFixed(8))} ${outCurrency}**, `;
+      output += `ask: **${utils.formatNumber(askValue.toFixed(8))} ${outCurrency}**.`;
+    } else {
+      output += `Unable to get ${config.exchangeName} rates for ${pair}.`;
+    }
   } catch (e) {
-    log.error(`commandTxs: Error in calc() of ${moduleName} module: ${e}`);
+    output = `Error in calc() of ${moduleName} module: ${e}`;
+
+    log.error(output);
   }
 
-  return {
-    msgNotify: '',
-    msgSendBack: output,
-    notifyType: 'log',
-  };
+  return formSendBackMessage(output);
 }
 
 
@@ -798,9 +809,12 @@ function coinNetworkInfoString(coinOrNetwork, coin) {
   const minWithdrawal = coinOrNetwork.minWithdrawal || coin?.minWithdrawal;
   const maxWithdrawal = coinOrNetwork.maxWithdrawal || coin?.maxWithdrawal;
 
-  if (utils.isPositiveOrZeroNumber(withdrawalFee) || coinOrNetwork.minWithdrawal) {
-    if (utils.isPositiveOrZeroNumber(withdrawalFee)) {
-      message += `Withdrawal fee — ${withdrawalFee} ${withdrawalFeeCurrency}`;
+  const isPercentageFee = typeof withdrawalFee === 'string' && /^(?:\d+(?:\.\d+)?|\.\d+)%$/.test(withdrawalFee);
+  if (utils.isPositiveOrZeroNumber(withdrawalFee) || isPercentageFee || coinOrNetwork.minWithdrawal) {
+    if (utils.isPositiveOrZeroNumber(withdrawalFee) || isPercentageFee) {
+      message += isPercentageFee ?
+        `Withdrawal fee — ${withdrawalFee} (fee currency — ${withdrawalFeeCurrency})` :
+        `Withdrawal fee — ${withdrawalFee} ${withdrawalFeeCurrency}`;
     } else {
       message += 'Withdrawal fee — unknown';
     }
@@ -837,8 +851,8 @@ function coinNetworkInfoString(coinOrNetwork, coin) {
  * @return {string}
  */
 function buildStatusString(coinOrNetwork) {
-  let statusString = '';
-  statusString = coinOrNetwork.status === 'ONLINE' ? `${coinOrNetwork.status.toLowerCase()}` : `**${coinOrNetwork.status}**`;
+  const status = typeof coinOrNetwork.status === 'string' && coinOrNetwork.status ? coinOrNetwork.status : 'UNKNOWN';
+  let statusString = status === 'ONLINE' ? status.toLowerCase() : `**${status}**`;
 
   if (coinOrNetwork.depositStatus || coinOrNetwork.withdrawalStatus) {
     if (coinOrNetwork.status !== coinOrNetwork.depositStatus || coinOrNetwork.status !== coinOrNetwork.withdrawalStatus) {

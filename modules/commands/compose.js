@@ -114,9 +114,9 @@ async function composeLiquidityStats(pairRaw) {
   const exchange = config.exchange;
 
   const fillsEngine = utils.softRequire('../../helpers/fillsEngine', __filename);
-  const liqProvider = utils.softRequire('../../trade/mm_liquidity_provider');
-  const safeLiq = utils.softRequire('../../trade/mm_liquidity_safe');
-  const liqSs = utils.softRequire('../../trade/mm_liquidity_ss');
+  const liqProvider = utils.softRequire('../../trade/features/mm_liquidity_provider');
+  const safeLiq = utils.softRequire('../../trade/features/mm_liquidity_safe');
+  const liqSs = utils.softRequire('../../trade/features/mm_liquidity_ss');
 
   const hasSafeLiq = !!safeLiq;
   const hasSs = !!liqSs;
@@ -654,7 +654,7 @@ async function composeTraderOrdersFull(pairRaw) {
 
   let output = '';
 
-  const niceChart = utils.softRequire('../../trade/mm_nice_chart');
+  const niceChart = utils.softRequire('../../trade/features/mm_nice_chart');
   const niceChartEnabled = config.nice_chart?.enabled !== false;
 
   const isTActive = tradeParams.mm_isActive && tradeParams.mm_isTraderActive;

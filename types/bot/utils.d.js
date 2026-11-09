@@ -247,7 +247,8 @@
  * @property {string} moduleName Short module filename derived from `module.id`
  * @property {(amountDecimals?: number, quoteDecimals?: number, priceDecimals?: number) => void} setDebugDecimals Overrides debug decimal places
  * @property {() => string} readTradeConfig Reads the trade config file as a JSON string
- * @property {() => void} watchConfig Watches the trade config file for external edits
+ * @property {() => void} syncTradeConfig Applies the trade config file to the in-memory trade params
+ * @property {() => void} watchConfig Watches the trade config file for external edits. Called by `app.js` only.
  * @property {(isWebApi?: boolean, callerName?: string) => void} saveConfig Persists in-memory trade params when changed
  * @property {(object: unknown) => string} getFullObjectString `util.inspect` wrapper for logs
  * @property {(data: unknown, length?: number, multiLineObjects?: boolean) => string} getLogString Truncates values for logs

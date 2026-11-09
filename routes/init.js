@@ -13,45 +13,66 @@ const config = require('../modules/configReader');
 const healthRoutes = require('./health');
 const debugRoutes = require('./debug');
 const { localhostOnlyHook } = require('./localhostOnly');
+const { MIN_DEBUG_TOKEN_LENGTH, createDebugTokenHook, isWeakDebugToken } = require('./debugAuth');
 
 /**
- * Starts the debug/health API when `config.api.port` is set.
+ * Builds the debug/health Fastify app without opening a listening socket.
  *
- * Health (`/ping`) listens on all interfaces when enabled. Debug routes are
- * registered in an encapsulated plugin with a localhost-only hook.
+ * Health (`/ping`) answers on all interfaces when enabled. Debug routes (`/db`) are registered only
+ * with a strong `api.debug_token`, in an encapsulated plugin that accepts direct localhost requests
+ * carrying that token. A reverse proxy on the same host makes remote clients look local, so the
+ * loopback check alone is not enough.
  *
- * @returns {Promise<void>}
+ * @returns {Promise<{ fastify: import('fastify').FastifyInstance, accessNotes: string[] }>}
  */
-async function initApi() {
+async function buildApi() {
   const fastify = Fastify({
     logger: false,
   });
+
+  /** @type {string[]} */
+  const accessNotes = [];
 
   fastify.register(sensible);
 
   if (config.api.health) {
     await fastify.register(healthRoutes);
-  }
-
-  if (config.api.debug) {
-    await fastify.register(async (debugApi) => {
-      debugApi.addHook('onRequest', localhostOnlyHook);
-      await debugApi.register(debugRoutes);
-    });
-  }
-
-  await fastify.listen({
-    port: config.api.port,
-    host: '0.0.0.0',
-  });
-
-  const accessNotes = [];
-  if (config.api.health) {
     accessNotes.push('health /ping on all interfaces');
   }
+
   if (config.api.debug) {
-    accessNotes.push('debug /db on localhost only');
+    if (isWeakDebugToken(config.api.debug_token)) {
+      log.warn(
+          `Debug API: /db is disabled because api.debug_token is missing or shorter than ${MIN_DEBUG_TOKEN_LENGTH} characters.`,
+      );
+    } else {
+      await fastify.register(async (debugApi) => {
+        debugApi.addHook('onRequest', localhostOnlyHook);
+        debugApi.addHook('onRequest', createDebugTokenHook(config.api.debug_token));
+        await debugApi.register(debugRoutes);
+      });
+      accessNotes.push('debug /db for direct localhost requests with api.debug_token');
+    }
   }
+
+  return {
+    fastify,
+    accessNotes,
+  };
+}
+
+/**
+ * Starts the debug/health API when `config.api.port` is set.
+ *
+ * @returns {Promise<void>}
+ */
+async function initApi() {
+  const { fastify, accessNotes } = await buildApi();
+
+  await fastify.listen({
+    port: Number(config.api.port),
+    host: '0.0.0.0',
+  });
 
   log.info(
       `API server is listening on port ${config.api.port}` +
@@ -60,5 +81,6 @@ async function initApi() {
 }
 
 module.exports = {
+  buildApi,
   initApi,
 };

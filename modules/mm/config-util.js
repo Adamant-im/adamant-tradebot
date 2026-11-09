@@ -16,7 +16,10 @@ const jsonminify = require('jsonminify');
 const { diff } = require('deep-object-diff');
 const { createKeypairFromPassphrase, createAddressFromPublicKey, isAdmAddress } = require('adamant-api');
 
-/** Config keys masked in status output and interactive prompts. */
+/**
+ * Config keys masked in status output and interactive prompts.
+ * Nested and dotted keys match by their last segment, so keep names specific enough to be secret anywhere.
+ */
 const SECRET_KEYS = new Set([
   'passPhrase',
   'apikey',
@@ -29,9 +32,19 @@ const SECRET_KEYS = new Set([
   'perpetual_apisecret',
   'perpetual_apipassword',
   'manageTelegramBotToken',
+  'telegramBotToken',
   'private_webui_secret_key',
+  'public_webui_license_token',
   'com_server_secret_key',
   'webui_api_secret',
+  'debug_token',
+  // `email_smtp.auth.password`
+  'password',
+  // Webhook URLs embed their tokens; these lists are masked item by item
+  'slack',
+  'slack_priority',
+  'discord_notify',
+  'discord_notify_priority',
 ]);
 
 const CONFIG_FILE_MODE = 0o600;
@@ -289,6 +302,182 @@ function replaceJsoncNestedKey(content, dotPath, value) {
 }
 
 /**
+ * True when `content` has a `"key":` token (used for missing-block inserts).
+ *
+ * @param {string} content
+ * @param {string} key
+ * @returns {boolean}
+ */
+function hasJsoncKey(content, key) {
+  const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`"${escapedKey}"\\s*:`).test(content);
+}
+
+/**
+ * @param {string} content
+ * @param {number} index
+ * @returns {number}
+ */
+function lineStartAt(content, index) {
+  const nl = content.lastIndexOf('\n', index - 1);
+  return nl === -1 ? 0 : nl + 1;
+}
+
+/**
+ * Extracts a top-level JSONC entry, including the comment block above it.
+ *
+ * @param {string} content JSONC file contents
+ * @param {string} key Top-level key
+ * @returns {string | undefined}
+ */
+function extractTopLevelEntry(content, key) {
+  const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const keyMatch = new RegExp(`"${escapedKey}"\\s*:`).exec(content);
+  if (!keyMatch) {
+    return undefined;
+  }
+
+  let start = lineStartAt(content, keyMatch.index);
+  while (start > 0) {
+    const prevEnd = content[start - 1] === '\n' ? start - 1 : start;
+    const prevStart = lineStartAt(content, prevEnd);
+    const prevLine = content.slice(prevStart, start).trim();
+    if (prevLine === '' || prevLine.startsWith('//') || prevLine.startsWith('/*') || prevLine.startsWith('*')) {
+      start = prevStart;
+      continue;
+    }
+    break;
+  }
+
+  let cursor = keyMatch.index + keyMatch[0].length;
+  while (cursor < content.length && /\s/.test(content[cursor])) {
+    cursor++;
+  }
+  const valueEnd = findJsonValueEnd(content, cursor);
+  if (valueEnd === undefined) {
+    return undefined;
+  }
+  let end = valueEnd;
+  while (end < content.length && /\s/.test(content[end]) && content[end] !== '\n') {
+    end++;
+  }
+  if (content[end] === ',') {
+    end++;
+  }
+  if (content[end] === '\n') {
+    end++;
+  }
+  return content.slice(start, end);
+}
+
+/**
+ * Inserts a top-level JSONC entry before the root closing brace.
+ *
+ * @param {string} content JSONC file contents
+ * @param {string} snippet Entry text (comments + `"key": value`)
+ * @returns {string}
+ */
+function insertTopLevelEntry(content, snippet) {
+  const lastBrace = content.lastIndexOf('}');
+  if (lastBrace < 0) {
+    return content;
+  }
+  const head = content.slice(0, lastBrace).replace(/\s+$/, '');
+  const tail = content.slice(lastBrace);
+  const needsComma = !head.endsWith(',') && !head.endsWith('{');
+  // extractTopLevelEntry keeps the trailing comma of a mid-file default entry.
+  // The inserted block is always the last root property, so that comma is invalid JSON.
+  const block = snippet.replace(/^\n+/, '').replace(/\s+$/, '').replace(/,(\s*)$/, '$1');
+  return `${head}${needsComma ? ',' : ''}\n\n${block}\n${tail}`;
+}
+
+/**
+ * Replaces a nested scalar, or inserts it after the parent `{` when missing.
+ *
+ * @param {string} content JSONC file contents
+ * @param {string} parentKey Top-level object key
+ * @param {string} childKey Nested scalar key
+ * @param {unknown} value New JSON-serializable value
+ * @returns {string}
+ */
+function upsertJsoncNestedScalar(content, parentKey, childKey, value) {
+  const patched = replaceJsoncNestedKey(content, `${parentKey}.${childKey}`, value);
+  if (patched !== content) {
+    return patched;
+  }
+  if (!hasJsoncKey(content, parentKey)) {
+    return content;
+  }
+
+  const escapedParent = parentKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const parentMatch = new RegExp(`"${escapedParent}"\\s*:`).exec(content);
+  if (!parentMatch) {
+    return content;
+  }
+  let cursor = parentMatch.index + parentMatch[0].length;
+  while (cursor < content.length && /\s/.test(content[cursor])) {
+    cursor++;
+  }
+  if (content[cursor] !== '{') {
+    return content;
+  }
+  const serialized = JSON.stringify(value);
+  return `${content.slice(0, cursor + 1)}\n    "${childKey}": ${serialized},${content.slice(cursor + 1)}`;
+}
+
+/**
+ * Path to the shipped `config.default.jsonc` (commented template for missing blocks).
+ *
+ * @returns {string}
+ */
+function defaultConfigTemplatePath() {
+  return path.join(__dirname, '../../config.default.jsonc');
+}
+
+/**
+ * Patches nested JSONC scalars in place. Missing parent objects are copied from
+ * `config.default.jsonc` (comments included); existing blocks keep their structure.
+ *
+ * @param {string} configPath Config file path
+ * @param {Record<string, unknown>} patches Dot-path → value, e.g. `{ 'nice_chart.enabled': false }`
+ * @param {{ defaultConfigPath?: string }} [options]
+ */
+function updateConfigNestedKeys(configPath, patches, options = {}) {
+  let content = fs.readFileSync(configPath, 'utf8');
+  const defaultPath = options.defaultConfigPath || defaultConfigTemplatePath();
+  let defaultContent;
+
+  /** @param {string} parent */
+  const ensureParent = (parent) => {
+    if (hasJsoncKey(content, parent)) {
+      return;
+    }
+    if (defaultContent === undefined && fs.existsSync(defaultPath)) {
+      defaultContent = fs.readFileSync(defaultPath, 'utf8');
+    }
+    const fromDefault = defaultContent ? extractTopLevelEntry(defaultContent, parent) : undefined;
+    if (fromDefault) {
+      content = insertTopLevelEntry(content, fromDefault);
+      return;
+    }
+    content = insertTopLevelEntry(content, `  "${parent}": {}`);
+  };
+
+  for (const [dotPath, value] of Object.entries(patches)) {
+    const dotIndex = dotPath.indexOf('.');
+    if (dotIndex === -1 || dotPath.indexOf('.', dotIndex + 1) !== -1) {
+      continue;
+    }
+    const parent = dotPath.slice(0, dotIndex);
+    const child = dotPath.slice(dotIndex + 1);
+    ensureParent(parent);
+    content = upsertJsoncNestedScalar(content, parent, child, value);
+  }
+
+  writePrivateConfigFile(configPath, content);
+}
+
+/**
  * Replaces passPhrase and appends the derived ADM address as an inline comment.
  *
  * @param {string} content JSONC file contents
@@ -386,6 +575,44 @@ function saveConfig(configPath, config) {
 }
 
 /**
+ * User info of a URL: the `user:password` or `token` part between `scheme://` and the last `@` before the host.
+ *
+ * Matched right after `scheme://` instead of with WHATWG `URL`, which cannot parse multi-host MongoDB URIs
+ * (`mongodb://u:p@h1:27017,h2:27017/db`). User info cannot contain `/`, `?`, `#`, or whitespace, so an `@`
+ * in a path or query is not taken for credentials. If a password holds an unencoded `@`, the match runs to
+ * the last `@`, so the whole password is still hidden.
+ */
+const URL_USER_INFO_REGEXP = /(?<=[a-z\d]:\/\/)([^\s/?#]*)@/gi;
+
+/**
+ * Hides credentials embedded in URLs, keeping scheme, user, hosts, path, and query readable.
+ *
+ * `mongodb://user:pass@host:27017/` becomes `mongodb://user:****@host:27017/`, and a user-info-only
+ * token such as `https://token@host` becomes `https://****@host`. Works on a bare URL and on text
+ * that contains URLs, such as a log line or an error message. Text without URL credentials is returned unchanged.
+ *
+ * Safe for the bot runtime and the `mm` CLI: this module does not load `modules/configReader.js`.
+ *
+ * @param {string} text URL or free text
+ * @returns {string} Text with URL passwords and tokens replaced by `****`
+ */
+function redactUrlCredentials(text) {
+  if (typeof text !== 'string' || !text.includes('@')) {
+    return text;
+  }
+
+  return text.replace(URL_USER_INFO_REGEXP, (match, userInfo) => {
+    const separator = userInfo.indexOf(':');
+
+    if (separator === -1) {
+      return '****@';
+    }
+
+    return `${userInfo.slice(0, separator)}:****@`;
+  });
+}
+
+/**
  * Masks a secret for terminal display: first/last 4 chars visible.
  *
  * @param {unknown} value Raw secret value
@@ -405,19 +632,69 @@ function maskSecret(value) {
 }
 
 /**
- * Applies masking rules for a config key/value pair.
+ * Returns whether a config key holds a secret. Dotted keys are checked by their last segment,
+ * so `api.debug_token` counts as `debug_token`.
  *
- * @param {string} key Top-level config key
+ * @param {string} key Config key, top-level or dotted
+ * @returns {boolean}
+ */
+function isSecretConfigKey(key) {
+  const leafKey = key.includes('.') ? key.slice(key.lastIndexOf('.') + 1) : key;
+
+  return SECRET_KEYS.has(leafKey);
+}
+
+/**
+ * Masks the value of a secret key. A list is masked item by item, including the index-keyed object
+ * that `deep-object-diff` returns for a changed array in `getChangedConfig()`.
+ *
+ * @param {unknown} value Secret scalar, array, or index-keyed object
+ * @returns {unknown} Masked value of the same shape
+ */
+function maskSecretValue(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => maskSecret(item));
+  }
+
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([index, item]) => [index, maskSecret(item)]));
+  }
+
+  return maskSecret(value);
+}
+
+/**
+ * Applies masking rules for a config key/value pair.
+ * Nested objects are masked key by key, so a secret inside a section (e.g. `api.debug_token`) is hidden too.
+ * Other strings keep their value, except for credentials embedded in URLs (e.g. `db.url`).
+ *
+ * @param {string} key Config key, top-level or dotted
  * @param {unknown} value Config value
  * @returns {unknown} Masked value when the key is sensitive
  */
 function maskConfigValue(key, value) {
-  if (SECRET_KEYS.has(key)) {
-    return maskSecret(value);
+  if (isSecretConfigKey(key)) {
+    return maskSecretValue(value);
   }
 
   if (Array.isArray(value)) {
-    return value.map((item) => (typeof item === 'string' && key === 'admin_accounts' ? maskSecret(item) : item));
+    return value.map((item) => {
+      if (typeof item !== 'string') {
+        return item;
+      }
+
+      return key === 'admin_accounts' ? maskSecret(item) : redactUrlCredentials(item);
+    });
+  }
+
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+        Object.entries(value).map(([childKey, childValue]) => [childKey, maskConfigValue(childKey, childValue)]),
+    );
+  }
+
+  if (typeof value === 'string') {
+    return redactUrlCredentials(value);
   }
 
   return value;
@@ -498,7 +775,7 @@ function isValidPair(pair) {
 /**
  * Checks whether a trader connector module exists for the exchange.
  *
- * Uses lowercase exchange id to match `trade/trader_{exchange}.js` naming.
+ * Uses lowercase exchange id to match `trade/trader/trader_{exchange}.js` naming.
  * DEX connectors (e.g. DEX_UniswapV2 → trader_dex_uniswapv2.js) follow the
  * same rule after configReader lowercases the exchange name at runtime.
  *
@@ -508,7 +785,7 @@ function isValidPair(pair) {
  */
 function exchangeConnectorExists(exchange, packageRoot) {
   const lc = exchange.toLowerCase();
-  const traderPath = path.join(packageRoot, 'trade', `trader_${lc}.js`);
+  const traderPath = path.join(packageRoot, 'trade', 'trader', `trader_${lc}.js`);
   return fs.existsSync(traderPath);
 }
 
@@ -581,6 +858,7 @@ module.exports = {
   getNestedValue,
   isAdmAddress,
   isPassphrase,
+  isSecretConfigKey,
   isValidPair,
   loadDefaultConfig,
   loadUserConfig,
@@ -588,13 +866,18 @@ module.exports = {
   maskSecret,
   normalizePair,
   parseJsoncFile,
+  redactUrlCredentials,
   replaceJsoncKey,
   replaceJsoncNestedKey,
   replacePassPhraseWithAddressComment,
   saveConfig,
   saveConfigFromDefault,
   setNestedValue,
+  extractTopLevelEntry,
+  insertTopLevelEntry,
+  upsertJsoncNestedScalar,
   updateConfigKey,
+  updateConfigNestedKeys,
   updatePassPhraseKey,
   ensureTradeParams,
 };

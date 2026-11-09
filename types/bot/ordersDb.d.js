@@ -23,7 +23,7 @@
  * @typedef {Object} BotOrder
  *
  * @property {string|number} _id Exchange-assigned order id
- * @property {Object} [db] I don't remember if it even exists somewhere, but trade/mm_ladder.js deletes it
+ * @property {Object} [db] I don't remember if it even exists somewhere, but trade/features/mm_ladder.js deletes it
  * @property {number} date Order creation timestamp (ms)
  * @property {OrderPurpose} purpose Order purpose identifier
  * @property {'buy'|'sell'} side Order side

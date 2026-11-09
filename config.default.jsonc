@@ -63,16 +63,31 @@
   /** InfoService endpoints for fetching exchange rates */
   "infoservice": ["https://info.adamant.im"],
 
+  /** Exchange spot ticker fallback after Infoservice confirms a missing USD rate. Use { "enabled": false } to disable. */
+  "coin_price_fallback": {
+    /** Enable fallback for the configured base coin and unlisted stablecoins */
+    "enabled": true,
+
+    /** Price field: "last", "mid", "bid", or "ask". Missing or invalid "last" falls back to (bid + ask) / 2. */
+    "priceSource": "last",
+
+    /** Ticker cache validity in milliseconds; fallback refreshes every Infoservice tick (60 seconds) */
+    "cacheMs": 30000
+  },
+
   /** Whitelist of ADAMANT accounts allowed to manage the bot */
   "admin_accounts": ["U123.."],
 
   /**
-   * Telegram chat IDs or usernames allowed to manage the bot.
-   * Use @ShowJsonBot to determine numeric chat IDs.
+   * Telegram users allowed to manage the bot. Use numeric user IDs: get yours from @ShowJsonBot.
+   *
+   * Warning: `@username` entries still work, but they are not safe. Telegram can reassign a username
+   * to another account, and its new owner would get full control of the bot (/stop, /withdraw, …).
+   * The bot logs a warning at startup while the list contains usernames.
    */
   "admin_telegram": [
     // 1744022467,
-    // "@username"
+    // "@username" — not recommended, see the warning above
   ],
 
   /** If true, bot notifies unknown Telegram users that they’re not admins */
@@ -362,10 +377,47 @@
   "silent_mode": false,
 
   /**
-   * Logging verbosity:
-   *   none < error < warn < info < log
+   * Logging verbosity, from least to most verbose:
+   *   none < error < warn < info < log < debug < trace
    */
   "log_level": "log",
+
+  /**
+   * Rotation and retention of the bot log file `logs/bot.log`.
+   * The bot rotates the file itself, so this works the same under PM2, Docker, or plain `node app.js`.
+   * A rotated file is renamed to `logs/bot-YYYY-MM-DD_HH-mm-ss.log` (server local time),
+   * then gzipped in the background when `compress` is true.
+   * PM2 keeps its own stdout/stderr files; rotate those with pm2-logrotate (see README).
+   */
+  "log_rotate": {
+    /**
+     * Set false to keep one growing file, e.g. when the system logrotate manages it.
+     * The bot re-opens `logs/bot.log` within seconds after it is moved or deleted.
+     */
+    "enabled": true,
+
+    /** Rotate before the file exceeds this size: bytes, or a number with K, M, or G (min 1K). 0 disables size-based rotation. */
+    "maxSize": "300M",
+
+    /** Number of rotated files to keep. Older ones are deleted. */
+    "retain": 5,
+
+    /** Gzip rotated files */
+    "compress": true,
+
+    /**
+     * Scheduled rotation, as a 5-field cron expression in the server's local time zone:
+     * minute hour day-of-month month day-of-week. Supports *, lists, ranges, and steps.
+     * "0 0 * * *" rotates every day at midnight. Set "" to rotate by size only.
+     */
+    "rotateInterval": "0 0 * * *",
+
+    /**
+     * Rotate a non-empty log file when the bot starts, so each run begins with a new file.
+     * With frequent restarts (e.g. a crash loop), short files can push older history out of `retain`.
+     */
+    "rotateOnRestart": false
+  },
 
   /**
    * Shared HMAC secret for private WebUI (scenario A) JWT verification.
@@ -374,6 +426,16 @@
    * Required before enabling `private_webui`.
    */
   "private_webui_secret_key": "some-random-string",
+
+  /**
+   * Maximum lifetime of a WebUI JWT accepted by this bot. Examples: 12h, 1d.
+   *
+   * Every token must carry an `exp` claim; tokens without `exp` are rejected.
+   * A token whose `exp` lies further in the future than this value is rejected too,
+   * and a WebSocket session is closed when its token expires.
+   * Keep it at or above the WebUI token lifetime (`WEBUI_JWT_EXPIRES`, default 12h).
+   */
+  "private_webui_jwt_max_ttl": "24h",
 
   /**
    * **Inbound API listen port on this bot** (private WebUI, scenario A).
@@ -428,8 +490,20 @@
     /** Health endpoint: http://ip:port/ping */
     "health": false,
 
-    /** Debug endpoint (not for production) */
-    "debug": false
+    /**
+     * Debug endpoint `GET /db` (not for production). It dumps whole database collections.
+     * Works only with `debug_token` set, and only for requests from this host. Requests that carry
+     * reverse-proxy headers (X-Forwarded-For, Forwarded, X-Real-IP, Via, …) are rejected.
+     * Example: curl -H "Authorization: Bearer <debug_token>" "http://127.0.0.1:<port>/db?tb=ordersDb"
+     */
+    "debug": false,
+
+    /**
+     * Bearer token for the debug endpoint: a random string of at least 32 characters.
+     * Required because a reverse proxy on the same host makes remote clients look local.
+     * If it is empty or shorter, `/db` stays disabled even when `debug` is true.
+     */
+    "debug_token": ""
   },
 
   /**
@@ -453,11 +527,15 @@
    * Inter-bot communication server (ComServer) URL.
    *
    * Set `false` to disable. Example: `http://com.example.com:3000`
+   * Requires ComServer 2.0 or newer.
    * The bot connects outbound (Socket.IO + HTTP); no inbound port is opened here.
    *
    * Prefer `https://` so traffic uses TLS. Plain `http://` sends payloads without
-   * transport encryption — only the AES layer in `com_server_secret_key` protects content.
+   * transport encryption — only the AES-GCM layer keyed by `com_server_secret_key` protects them.
    * Requires a strong `com_server_secret_key` (same value on ComServer and every bot).
+   *
+   * Remote commands run only for senders listed in this bot's own `admin_accounts` or `admin_telegram`.
+   * List your operators on every bot that should accept them.
    */
   "com_server": false,
 

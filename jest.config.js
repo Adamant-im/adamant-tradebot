@@ -3,6 +3,8 @@ const allowDiscovery = Boolean(process.env.JEST_SCOPE);
 module.exports = {
   forceExit: true,
   setupFiles: ['<rootDir>/jest.setup.js'],
+  // `cookie` 2 (loaded by `fastify.inject()`) is ESM-only. Jest's CommonJS loader cannot `require()` it untransformed.
+  transformIgnorePatterns: ['/node_modules/(?!(cookie)/)'],
   testPathIgnorePatterns: [
     '/node_modules/',
     // Ignore the entire tests tree unless a scoped run sets JEST_SCOPE=1.

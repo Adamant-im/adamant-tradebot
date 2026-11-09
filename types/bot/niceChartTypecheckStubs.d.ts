@@ -1,4 +1,5 @@
 declare var __dirname: string;
+declare var __filename: string;
 declare var process: any;
 declare var require: any;
 declare var module: any;

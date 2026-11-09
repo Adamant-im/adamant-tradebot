@@ -27,6 +27,7 @@
  * @property {string} [senderTgUsername] Human-readable Telegram sender label
  * @property {string} [senderShellUsername] Human-readable OS shell username (CLI)
  * @property {number} [timestamp] Original message or transaction timestamp (Unix seconds for ADM/TG; ms for CLI)
+ * @property {boolean} [viaComServer] Set by the receiving bot on commands relayed through ComServer
  */
 
 /**
@@ -46,7 +47,7 @@
  *
  * @typedef {Object} BotFeatureDefinition
  * @property {string} description Human-readable feature label
- * @property {string} [module] Relative path to `trade/mm_*.js`; when omitted, no standalone module file is required
+ * @property {string} [module] Relative path to `trade/features/mm_*.js`; when omitted, no standalone module file is required
  * @property {string} tradeParamActiveName `tradeParams` boolean/number field that toggles the feature
  * @property {boolean} perpetual Whether the feature is available on perpetual contracts
  * @property {string} [requires] Another `tradeParamActiveName` that must be active first
@@ -55,15 +56,33 @@
 /**
  * Registry of feature metadata keyed by {@link BotFeatureKey}.
  *
- * @typedef {Record<BotFeatureKey, BotFeatureDefinition>} BotFeaturesRegistry
+ * @typedef {Partial<Record<BotFeatureKey, BotFeatureDefinition>>} BotFeaturesRegistry
+ */
+
+/**
+ * Channel a command arrived over. `comserver-*` values mark commands relayed from another bot.
+ *
+ * @typedef {'adm'|'telegram'|'cli'|'webui'|'comserver-adm'|'comserver-telegram'} CommandSource
+ */
+
+/**
+ * Who sent a command and over which channel.
+ *
+ * @typedef {Object} CommandInitiator
+ * @property {CommandSource} source Command channel
+ * @property {string} initiatorId Stable sender id within the channel: ADM address, Telegram user id, shell username, or WebUI login
  */
 
 /**
  * In-memory `/y` confirmation state for destructive commands.
  *
+ * Only the initiator can confirm the command, from the same channel.
+ *
  * @typedef {Object} PendingConfirmationState
  * @property {string} command Full command text to re-run after `/y`
  * @property {number} timestamp Unix ms when the command was queued
+ * @property {string} initiatorId Sender who queued the command. See {@link CommandInitiator}.
+ * @property {CommandSource | ''} source Channel the command was queued from
  */
 
 /**

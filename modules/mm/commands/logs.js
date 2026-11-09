@@ -3,35 +3,40 @@
 /**
  * `mm logs` — show bot logs from file, PM2, or Docker.
  *
+ * Log files are `logs/bot.log` and its rotated copies (`bot-*.log`, `bot-*.log.gz`), plus dated
+ * `YYYY-MM-DD.log` files from versions before log rotation. Reading starts at the newest line and
+ * stops as soon as enough lines are found, so large and compressed files are not loaded into memory.
+ *
  * @module modules/mm/commands/logs
  * @typedef {import('types/bot/mm').MmContext} MmContext
  * @typedef {import('types/bot/mm').MmParsedArgs} MmParsedArgs
+ * @typedef {import('../../../helpers/logReader').LogLineClass} LogLineClass
  */
 
-const fs = require('fs');
-const path = require('path');
+/**
+ * @typedef {Object} LogsOptions
+ * @property {number} [tail] Number of lines; disables the session view
+ * @property {string} [since] Duration such as `1h`; disables the session view
+ * @property {string} [level] Keep lines with this level token
+ * @property {string} [grep] Keep lines containing this text
+ * @property {boolean} [follow] Follow the log file
+ */
+
 const { createContext } = require('../context');
 const docker = require('../docker');
 const pm2 = require('../pm2');
+const terminal = require('../terminal');
+const { findCurrentLogFile, followLogFile, listLogFiles, readRecentLogLines } = require('../../../helpers/logReader');
 
 const BOT_STARTED_MARKER = '[The bot started]';
 const DEFAULT_TAIL = 100;
 const PM2_SESSION_TAIL = 10000;
 
-/**
- * @param {string} dir
- * @returns {string[]}
- */
-function readLogFiles(dir) {
-  if (!fs.existsSync(dir)) {
-    return [];
-  }
+/** Timestamp anywhere in a line, used for PM2 and Docker output */
+const ANY_TIMESTAMP_PATTERN = /\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}/;
 
-  return fs.readdirSync(dir)
-      .filter((name) => name.endsWith('.log'))
-      .map((name) => path.join(dir, name))
-      .sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs);
-}
+/** Timestamp of a bot log line: ` info|2026-10-02 12:00:00|message` */
+const LOG_LINE_TIMESTAMP_PATTERN = /^\s*[a-z]+\|(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2})\|/;
 
 /**
  * Parses a simple duration like 1h, 30m, 1d.
@@ -96,6 +101,8 @@ function useBotSessionView(options) {
 }
 
 /**
+ * Filters PM2 or Docker output that is already in memory.
+ *
  * @param {string[]} lines
  * @param {{ tail?: number, since?: string, level?: string, grep?: string }} options
  */
@@ -107,7 +114,7 @@ function filterLines(lines, options) {
     if (ms) {
       const cutoff = Date.now() - ms;
       filtered = filtered.filter((line) => {
-        const match = /\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}:\d{2}/.exec(line);
+        const match = ANY_TIMESTAMP_PATTERN.exec(line);
         if (!match) {
           return true;
         }
@@ -130,27 +137,65 @@ function filterLines(lines, options) {
 }
 
 /**
- * Reads recent lines from ./logs/*.log in the work directory.
+ * Builds the line classifier for log files. Matches `filterLines()`: `--since` ends the scan at
+ * the first line older than the cutoff, and the session view ends it at the last bot start.
+ * Blank lines are skipped, so `--tail` counts only real lines.
  *
- * @param {string} logsDir
- * @param {number} [maxFiles=3]
- * @returns {string[]}
+ * @param {LogsOptions} options
+ * @param {number} [now] Current time, Unix ms
+ * @returns {(line: string) => LogLineClass}
  */
-function readLocalLogLines(logsDir, maxFiles = 3) {
-  const files = readLogFiles(logsDir);
-  const selected = maxFiles > 1 ? files.slice(0, maxFiles).reverse() : files.slice(0, maxFiles);
-  /** @type {string[]} */
-  const lines = [];
+function createLineClassifier(options, now = Date.now()) {
+  const sinceMs = options.since ? parseSince(options.since) : undefined;
+  const cutoff = sinceMs ? now - sinceMs : undefined;
+  const sessionView = useBotSessionView(options);
 
-  for (const file of selected) {
-    lines.push(...fs.readFileSync(file, 'utf8').split('\n'));
-  }
+  return (line) => {
+    if (!line.trim()) {
+      return 'skip';
+    }
 
-  return lines;
+    if (cutoff !== undefined) {
+      const match = LOG_LINE_TIMESTAMP_PATTERN.exec(line);
+      const timestamp = match ? Date.parse(match[1].replace(' ', 'T')) : NaN;
+
+      if (Number.isFinite(timestamp) && timestamp < cutoff) {
+        return 'stop';
+      }
+    }
+
+    if (!matchesFilters(line, options)) {
+      return 'skip';
+    }
+
+    return sessionView && line.includes(BOT_STARTED_MARKER) ? 'keep-and-stop' : 'keep';
+  };
 }
 
 /**
- * Follows a local log file, printing new lines until SIGINT.
+ * Reads recent lines from the log files in `logsDir`, newest file first, including rotated and gzipped ones.
+ *
+ * @param {string} logsDir Logs directory
+ * @param {LogsOptions} [options] Same options as `mm logs`
+ * @returns {Promise<{ lines: string[], truncated: boolean, found: boolean }>} `found` is `false` when there are no log files
+ */
+async function readLocalLogs(logsDir, options = {}) {
+  const files = listLogFiles(logsDir).filter((file) => file.size > 0);
+
+  if (!files.length) {
+    return { lines: [], truncated: false, found: false };
+  }
+
+  const { lines, truncated } = await readRecentLogLines(files, {
+    limit: useBotSessionView(options) ? DEFAULT_TAIL : (options.tail ?? DEFAULT_TAIL),
+    classify: createLineClassifier(options),
+  });
+
+  return { lines, truncated, found: true };
+}
+
+/**
+ * Follows the local log file across rotations, printing new lines until SIGINT.
  *
  * @param {string} filePath
  * @param {{ level?: string, grep?: string }} filters
@@ -158,38 +203,14 @@ function readLocalLogLines(logsDir, maxFiles = 3) {
  */
 function followLocalLogFile(filePath, filters) {
   return new Promise((resolve) => {
-    let position = fs.statSync(filePath).size;
-
-    const readNewLines = () => {
-      const stat = fs.statSync(filePath);
-      if (stat.size < position) {
-        position = 0;
+    const follower = followLogFile(filePath, (line) => {
+      if (line && matchesFilters(line, filters)) {
+        console.log(line);
       }
-      if (stat.size <= position) {
-        return;
-      }
-
-      const length = stat.size - position;
-      const buffer = Buffer.alloc(length);
-      const fd = fs.openSync(filePath, 'r');
-      try {
-        fs.readSync(fd, buffer, 0, length, position);
-      } finally {
-        fs.closeSync(fd);
-      }
-      const chunk = buffer.toString('utf8');
-      position = stat.size;
-      for (const line of chunk.split('\n')) {
-        if (line && matchesFilters(line, filters)) {
-          console.log(line);
-        }
-      }
-    };
-
-    fs.watchFile(filePath, { interval: 500 }, readNewLines);
+    });
 
     const stop = () => {
-      fs.unwatchFile(filePath);
+      follower.stop();
       resolve();
     };
 
@@ -200,13 +221,13 @@ function followLocalLogFile(filePath, filters) {
 
 /**
  * @param {MmContext} ctx
- * @param {{ tail?: number, since?: string, level?: string, grep?: string }} options
+ * @param {LogsOptions} options
  * @returns {Promise<number>}
  */
 async function runFollowLogs(ctx, options) {
-  const latest = readLogFiles(ctx.logsDir)[0];
-  if (latest) {
-    await followLocalLogFile(latest, options);
+  const current = findCurrentLogFile(ctx.logsDir);
+  if (current) {
+    await followLocalLogFile(current, options);
     return 0;
   }
 
@@ -227,10 +248,10 @@ async function runFollowLogs(ctx, options) {
 }
 
 /**
- * Shows bot logs from Docker, PM2, or plain log files in ./logs.
+ * Shows bot logs from the log files in ./logs, or from Docker or PM2 when there are none.
  *
  * @param {MmContext} ctx Runtime context
- * @param {{ tail?: number, since?: string, level?: string, grep?: string, follow?: boolean }} [options]
+ * @param {LogsOptions} [options]
  * @returns {Promise<number>} Always 0 unless compose/PM2 fails
  */
 async function runLogs(ctx, options = {}) {
@@ -242,11 +263,11 @@ async function runLogs(ctx, options = {}) {
   }
 
   const sessionView = useBotSessionView(options);
-  const maxFiles = sessionView ? 5 : 1;
+  const local = await readLocalLogs(ctx.logsDir, options);
   /** @type {string[]} */
-  let lines = readLocalLogLines(ctx.logsDir, maxFiles);
+  let lines = local.lines;
 
-  if (!lines.some((line) => line.trim()) && ctx.mode === 'docker' && docker.canUseHostCompose(ctx)) {
+  if (!local.found && ctx.mode === 'docker' && docker.canUseHostCompose(ctx)) {
     const result = await docker.compose(ctx, [
       'logs',
       '--tail',
@@ -257,14 +278,14 @@ async function runLogs(ctx, options = {}) {
       console.error(result.stderr || result.stdout);
       return result.code;
     }
-    lines = result.stdout.split('\n');
+    lines = filterLines(result.stdout.split('\n'), options);
   }
 
-  if (!lines.some((line) => line.trim()) && ctx.mode !== 'docker') {
+  if (!local.found && ctx.mode !== 'docker') {
     try {
       const pm2Lines = sessionView ? PM2_SESSION_TAIL : (options.tail ?? DEFAULT_TAIL);
       const pm2Logs = await pm2.getLogs(ctx.pm2ProcessName, pm2Lines);
-      lines = pm2Logs.split('\n');
+      lines = filterLines(pm2Logs.split('\n'), options);
     } catch {
       // No PM2 process or log files — lines stay empty
     } finally {
@@ -275,8 +296,14 @@ async function runLogs(ctx, options = {}) {
   }
 
   console.log('');
-  console.log(filterLines(lines, options).join('\n'));
+  console.log(lines.join('\n'));
   console.log('');
+
+  if (local.truncated) {
+    console.error(terminal.dim(
+        `Older log files were not searched. For a full search, use zgrep on ${ctx.logsDir}/bot-*.log.gz.`,
+    ));
+  }
 
   return 0;
 }
@@ -293,4 +320,11 @@ async function logs(args) {
   });
 }
 
-module.exports = { logs, runLogs };
+module.exports = {
+  logs,
+  runLogs,
+  readLocalLogs,
+  createLineClassifier,
+  filterLines,
+  matchesFilters,
+};

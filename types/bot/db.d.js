@@ -17,13 +17,18 @@
 /**
  * Static methods exposed on a `dbModel` collection class (see `helpers/dbModel.js`).
  *
+ * `updateOne` uses `UpdateFilter<Document>` rather than `UpdateFilter<T>` because
+ * MongoDB's `UpdateFilter` is invariant in `T`. Otherwise `DbModelCollection<any>`
+ * (what `helpers/dbModel.js` returns) cannot be assigned to a typed collection
+ * such as `DbModelCollection<IncomingAdmTxRecord>`.
+ *
  * @template T
  * @typedef {Object} DbModelCollectionStatics
  * @property {(req?: import('mongodb').Filter<T>) => Promise<DbModelRecord<T>[]>} find
  * @property {(req?: import('mongodb').Document[]) => Promise<DbModelRecord<T>[]>} aggregate
  * @property {(req?: import('mongodb').Filter<T>) => Promise<DbModelRecord<T> | null>} findOne
  * @property {(req?: import('mongodb').Filter<T>) => Promise<number>} deleteOne
- * @property {(req: { filter: import('mongodb').Filter<T>, update: import('mongodb').UpdateFilter<T>, options?: import('mongodb').UpdateOptions }) => Promise<import('mongodb').UpdateResult>} updateOne
+ * @property {(req: { filter: import('mongodb').Filter<T>, update: import('mongodb').UpdateFilter<import('mongodb').Document>, options?: import('mongodb').UpdateOptions }) => Promise<import('mongodb').UpdateResult>} updateOne
  * @property {(req?: import('mongodb').Filter<T>) => Promise<number>} count
  * @property {import('mongodb').Collection<T>} db Underlying native MongoDB collection
  */

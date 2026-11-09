@@ -12,6 +12,9 @@ config.*.jsonc
 config.jsonc
 config.dev.jsonc
 !config.default.jsonc
+# Named configs hold API keys and passphrases
+/config/*
+!/config/.gitkeep
 .DS_Store
 .idea/
 test_*.js
@@ -24,6 +27,13 @@ test_encode.py
 coverage/
 trade/settings/*
 !trade/settings/tradeParams_Default.js
+
+# ai
 CLAUDE.md
 .ai-tasks/
+.ai-general/
 .ai-ignored/
+.ai-gitignore/
+.cursor/
+.claude/
+.playwright-mcp/

@@ -34,10 +34,11 @@
  * @typedef {import('types/trades.d').TradesResult} TradesResult
  */
 
-const NonkycAPI = require('./api/nonkyc_api');
-const utils = require('../helpers/utils');
-const _networks = require('./../helpers/networks');
-const config = require('./../modules/configReader');
+const NonkycAPI = require('../api/nonkyc_api');
+const utils = require('../../helpers/utils');
+const _networks = require('./../../helpers/networks');
+const config = require('./../../modules/configReader');
+const { collectOffsetPages } = require('../../helpers/offsetPages');
 
 /**
  * API endpoints:
@@ -62,7 +63,7 @@ const orderStatusMap = {
  * @param {string} apiKey Exchange API key used for signed requests
  * @param {string} secretKey Exchange API secret used to sign requests
  * @param {string} pwd Reserved; NonKYC does not require a trade password
- * @param {import('../helpers/log')} log Logger instance used for connector diagnostics
+ * @param {import('../../helpers/log')} log Logger instance used for connector diagnostics
  * @param {boolean} [publicOnly=false] If true, skip authenticated initialization
  * @param {boolean} [loadMarket=true] If true, preloads markets/currencies cache during initialization
  * @param {boolean} [useSocket=false] Reserved unified-interface flag; NonKYC does not use WebSocket
@@ -418,26 +419,21 @@ module.exports = (
     },
 
     /**
-     * List of all account open orders
+     * List of all account open orders.
+     * NonKYC pages by offset, 500 orders per page. Adjacent requests overlap
+     * by 10 orders to detect and recover shifted page boundaries.
      * @param {string} pair In classic format as BTC/USDT
      * @returns {Promise<OrdersResultItem[]|undefined>}
      */
     async getOpenOrders(pair) {
-      /** @type {OrdersResultItem[]} */
-      let allOrders = [];
-      let ordersInfo;
-      let offset = 0;
       const limit = 500;
 
-      do {
-        // @ts-ignore -- TypeScript doesn't infer method names inside an object literal factory return
-        ordersInfo = await this.getOpenOrdersPage(pair, limit, offset);
-        if (!ordersInfo) return undefined;
-        allOrders = allOrders.concat(ordersInfo);
-        offset += limit;
-      } while (ordersInfo.length === limit);
-
-      return allOrders;
+      return collectOffsetPages((offset) => this.getOpenOrdersPage(pair, limit, offset), {
+        limit,
+        idOf: (order) => order.orderId,
+        logger: log,
+        label: `${exchangeName} ${pair}`,
+      });
     },
 
     /**

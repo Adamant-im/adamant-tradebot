@@ -6,7 +6,7 @@
  * @prop {number} ask Ask price
  * @prop {number} bid Bid price
  * @prop {number} high 24h highest price
- * @prop {number} last Latest price
+ * @prop {number} [last] Latest price
  * @prop {number} low 24h lowest price
  * @prop {number} volume Trading volume in base currency
  * @prop {number} volumeInCoin2 Trading volume in quote currency

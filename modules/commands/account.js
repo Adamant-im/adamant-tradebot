@@ -12,8 +12,9 @@
 const {
   constants, config, log, traderapi, traderapi2, perpetualApi, orderUtils,
   balancesHistory, moduleName, utils, previousBalances, TraderApi,
+  tradeParams, exchangerUtils,
 } = require('./context');
-const { formSendBackMessage } = require('./helpers');
+const { formSendBackMessage, formSendBackError, validateTraderMinAmount } = require('./helpers');
 
 /**
  * Fetches deposit addresses for one trade account and formats a user-facing string.
@@ -187,7 +188,7 @@ function composeBalancesString(balances, accountType, scope = 'allcoins') {
  * Includes the balance difference from the previous request (available only for the default trading account/wallet).
  *
  * @param {number} accountNo `0` for the first account, `1` for the second
- * @param {string} userId `senderId` (or WebUI user ID). The bot stores previous balances *per user* to show balance changes since the last request.
+ * @param {string} userId Requester id (`senderId` in chat, WebUI login like `MM5353877995`). Previous balances are stored per id.
  * @param {'pair'|'priority'|'allcoins'} [scope='allcoins']
  *   - 'pair'     → include only coin1 + coin2
  *   - 'priority' → include coin1 + coin2 + constants.COINS_BY_PRIORITY
@@ -205,7 +206,7 @@ async function getBalancesInfo(accountNo = 0, userId = '', scope = 'allcoins', a
 
     const balances =
       /** @type {AssetsResultWithTimestamp} */
-      (await orderUtils.getBalancesCached(true, moduleName, false, accountType, api)); // Cache allowed
+      (await orderUtils.getBalancesCached(true, moduleName, isWebApi, accountType, api));
 
     const balancesFetchTimestamp = balances?._timestamp || Date.now();
 
@@ -254,7 +255,7 @@ async function getBalancesInfo(accountNo = 0, userId = '', scope = 'allcoins', a
     // Add '\n\nChanges in…\n' or ''
     // Only when `accountType` refers to the default trading account/wallet
 
-    if (!isWebApi && !accountType) {
+    if (!accountType) {
       // Try in-memory cache first. Fallback to DB if nothing in memory (after restart).
       const prevBalances =
         previousBalances[accountNo][normalizedUserId] ||
@@ -288,7 +289,7 @@ async function getBalancesInfo(accountNo = 0, userId = '', scope = 'allcoins', a
     // Information on how balances have changed compared to the reference snapshot
     // Add '\nCompared against the reference snapshot from…\n' or ''
 
-    const bw = utils.softRequire('../../trade/mm_balance_watcher');
+    const bw = utils.softRequire('../../trade/features/mm_balance_watcher');
     const changes = await bw?.guardBalances(accountNo, accountType, 'getBalancesInfo-stats');
     const { coin1, coin2 } = config;
 
@@ -345,22 +346,29 @@ async function balances(params, tx, user, isWebApi = false) {
   try {
     // Parse command params
 
-    const parsedParams = utils.parseCommandParams(params, 0);
+    const parsedParams = utils.parseCommandParams(Array.isArray(params) ? params : [], 0) ||
+      utils.parseCommandParams([], 0);
 
     const scopes = ['pair', 'priority', 'allcoins'];
     const scopeParam = parsedParams.getWhereIncluded(scopes);
     const scope = scopeParam?.param;
 
     const accountTypes = traderapi.features().accountTypes;
-    const accountTypeFull = [...traderapi.features().accountTypes || [], 'full'];
-    const accountTypeParam = parsedParams.getWhereIncluded(accountTypeFull);
-    const accountType = accountTypes ? accountTypeParam?.param : undefined;
+    const accountTypeNames = [...(Array.isArray(accountTypes) ? accountTypes : []), 'full']
+        .map((item) => String(item).toLowerCase());
+    const accountTypeParam = parsedParams.getWhereIncluded(accountTypeNames);
+    const accountType = accountTypeParam ?
+      (Array.isArray(accountTypes) ?
+        accountTypes.find((item) => String(item).toLowerCase() === accountTypeParam.param) ||
+          (accountTypeParam.param === 'full' ? 'full' : accountTypeParam.paramPlain) :
+        accountTypeParam.paramPlain) :
+      undefined;
 
     if (parsedParams?.paramCount && !scope && !accountType) {
       return formSendBackMessage(`Unknown scope or account type: _${parsedParams.getFirst().param}_. ${commandExample}.`);
     }
 
-    const userId = isWebApi ? user?.login : tx.senderId;
+    const userId = user?.login || tx?.senderId;
     const normalizedUserId = String(userId);
 
     // Fetch and format balances information for each account separately
@@ -375,7 +383,7 @@ async function balances(params, tx, user, isWebApi = false) {
     // Format combined balance information for both accounts (summary)
     // Combined account balances are shown only for the default trading account
 
-    if (account0Balances && account1Balances && !isWebApi && !accountType) {
+    if (account0Balances && account1Balances && !accountType) {
       // Last snapshots for each account
       const prevAcc0 = previousBalances[0][normalizedUserId] ||
         await balancesHistory.getLastUserSnapshot(normalizedUserId, 0, accountType);
@@ -542,16 +550,65 @@ async function account(_, tx, isWebApi = false) {
 
 
 /**
- * Stub handler for the `/volume` command (reserved; not exposed in the public command list).
+ * Sets estimated daily trading volume by deriving `mm_maxAmount` from the target.
+ * Keeps `mm_minAmount` and interval unchanged.
  *
+ * Format: `/volume {dailyAmount} {coin1}`
+ * Example: `/volume 10000 ADM`
+ *
+ * @param {string[]} params Expected: daily volume amount, base coin
  * @returns {CommandReply}
  */
-function volume() {
-  return {
-    msgNotify: '',
-    msgSendBack: 'This is a stub.',
-    notifyType: 'log',
-  };
+function volume(params) {
+  const commandExample = `Try: */volume 10000 ${config.coin1}*`;
+
+  try {
+    const parsedParams = utils.parseCommandParams(params, 2);
+    const amountParam = parsedParams?.getFirst();
+    const dailyVolume = amountParam?.paramNumber;
+    const coinParam = parsedParams?.nextTo(amountParam?.param);
+
+    if (!utils.isPositiveNumber(dailyVolume)) {
+      return formSendBackError(`Wrong daily volume. ${commandExample}.`, 'volume');
+    }
+
+    if (coinParam?.paramUc !== config.coin1) {
+      return formSendBackError(`Specify daily volume in ${config.coin1}. ${commandExample}.`, 'volume');
+    }
+
+    const oldVolume = exchangerUtils.estimateCurrentDailyTradeVolume();
+    const newMaxAmount = exchangerUtils.calcMaxAmountFromDailyTradeVolume(dailyVolume);
+
+    if (!utils.isPositiveNumber(newMaxAmount)) {
+      return formSendBackError(
+          `Unable to derive max trade amount from daily volume _${dailyVolume}_ ${config.coin1}. Check interval settings. ${commandExample}.`,
+          'volume',
+      );
+    }
+
+    const minAmountValidation = validateTraderMinAmount(
+        tradeParams.mm_minAmount,
+        config.coin1,
+        commandExample,
+    );
+    if (minAmountValidation) {
+      return minAmountValidation;
+    }
+
+    tradeParams.mm_maxAmount = newMaxAmount;
+    const newVolume = exchangerUtils.estimateCurrentDailyTradeVolume();
+
+    let msgSendBack = `Daily trading volume target set to ~_${utils.formatNumber(dailyVolume, true)}_ ${config.coin1}.`;
+    msgSendBack += ` Trade amounts are now _${tradeParams.mm_minAmount}–${tradeParams.mm_maxAmount}_ ${config.coin1}.`;
+    if (oldVolume && newVolume) {
+      msgSendBack += ` Estimate changed: ${exchangerUtils.getVolumeChangeInfoString(oldVolume, newVolume)}.`;
+    }
+
+    return formSendBackMessage(msgSendBack);
+  } catch (e) {
+    log.error(`commandTxs: Error in volume() of ${moduleName} module: ${e}`);
+    return formSendBackError('Failed to set daily volume.', 'volume');
+  }
 }
 
 module.exports = {

@@ -22,7 +22,7 @@
  *      Support-order count is determined by getMaxOrderNumberOneSide(side),
  *      and limited within MIN_SS_ORDERS_ONE_SIDE … MAX_SS_ORDERS_ONE_SIDE.
  *
- *      Optional module: trade/mm_liquidity_ss.js.
+ *      Optional module: trade/features/mm_liquidity_ss.js.
  *
  * - '/enable liq 1.5-2% 1000 ADM 100 USDT middle':
  *      Place liq-orders in the 1.5–2% deviation range (further from the midpoint).
@@ -40,24 +40,30 @@
  *   - Flowing liquidity: when you sell, the same amount is placed back on the
  *     buy side at a lower price.
  *   - Details: [2024-03 MM bot / Safe liquidity]
- *   - Optional module: trade/mm_liquidity_safe.js
+ *   - Optional module: trade/features/mm_liquidity_safe.js
  */
 
 /**
- * @module trade/mm_liquidity_provider
+ * @module trade/features/mm_liquidity_provider
  * @typedef {import('types/bot/parsedMarket.d').ParsedMarket} ParsedMarket
  * @typedef {import('types/bot/liquidity.d').LiqLimits} LiqLimits
  * @typedef {import('types/bot/ordersDb.d.js').BotOrderDbRecord} BotOrderDbRecord
  */
 
-const utils = require('../helpers/utils');
-const constants = require('../helpers/const');
-const config = require('../modules/configReader');
-const log = require('../helpers/log');
-const notify = require('../helpers/notify');
-const tradeParams = require('./settings/tradeParams_' + config.exchange);
+const utils = require('../../helpers/utils');
+const constants = require('../../helpers/const');
+const config = require('../../modules/configReader');
+const log = require('../../helpers/log');
+const {
+  IDLE_INTERVAL_MS,
+  createIterationLock,
+  runExclusiveIteration,
+  rescheduleIteration,
+} = require('../../helpers/moduleIteration');
+const notify = require('../../helpers/notify');
+const tradeParams = require('../settings/tradeParams_' + config.exchange);
 
-const traderapi = require('./trader_' + config.exchange)(
+const traderapi = require('../trader/trader_' + config.exchange)(
     config.apikey,
     config.apisecret,
     config.apipassword,
@@ -70,14 +76,14 @@ const traderapi = require('./trader_' + config.exchange)(
 
 const isPerpetual = Boolean(config.perpetual);
 
-const db = require('../modules/DB');
-const orderUtils = require('./orderUtils');
-const exchangerUtils = require('../helpers/cryptos/exchanger');
-const orderCollector = require('./orderCollector');
+const db = require('../../modules/DB');
+const orderUtils = require('../orderUtils');
+const exchangerUtils = require('../../helpers/cryptos/exchanger');
+const orderCollector = require('../orderCollector');
 
 // Optional sub-modules (loaded via softRequire so the bot works even without them)
-const safeLiq = utils.softRequire('../trade/mm_liquidity_safe'); // Safe Liquidity: liqLimits, VWAP bounds
-const ss = utils.softRequire('../trade/mm_liquidity_ss'); // Spread-support (SS) liq-orders
+const safeLiq = utils.softRequire('./mm_liquidity_safe'); // Safe Liquidity: liqLimits, VWAP bounds
+const ss = utils.softRequire('./mm_liquidity_ss'); // Spread-support (SS) liq-orders
 
 let lastNotifyBalancesTimestamp = 0;
 let lastNotifyPriceTimestamp = 0;
@@ -96,7 +102,7 @@ const minMaxAmounts = {}; // Stores min-max amounts for depth liq-orders (buy, s
 /** @type {LiqLimits} */
 let liqLimits = createDefaultLiqLimits();
 
-let isPreviousIterationFinished = true;
+const iterationLock = createIterationLock();
 
 const formattedPair = /** @type {ParsedMarket} */ (orderUtils.parseMarket(config.defaultPair));
 const { pair, coin1, coin2, coin1Decimals, coin2Decimals, coin2DecimalsForStable } = formattedPair;
@@ -120,31 +126,34 @@ module.exports = {
    * as long as it is enabled.
    */
   async iteration() {
-    const interval = setPause();
-    if (
-      interval &&
-      tradeParams.mm_isActive &&
-      tradeParams.mm_isLiquidityActive &&
-      (
-        !tradeParams.mm_isTraderActive ||
-        constants.MM_POLICIES_REGULAR.includes(tradeParams.mm_Policy)
-      ) &&
-      !isPerpetual
-    ) {
-      if (isPreviousIterationFinished) {
-        isPreviousIterationFinished = false;
-        await this.updateLiquidity();
-        isPreviousIterationFinished = true;
-      } else {
-        log.log(`${readableModuleName}: Postponing iteration of the liquidity provider for ${interval} ms. Previous iteration is in progress yet.`);
+    let delay = IDLE_INTERVAL_MS;
+
+    try {
+      const interval = setPause();
+      if (
+        interval &&
+        tradeParams.mm_isActive &&
+        tradeParams.mm_isLiquidityActive &&
+        (
+          !tradeParams.mm_isTraderActive ||
+          constants.MM_POLICIES_REGULAR.includes(tradeParams.mm_Policy)
+        ) &&
+        !isPerpetual
+      ) {
+        delay = interval;
+        await runExclusiveIteration({
+          moduleName,
+          lock: iterationLock,
+          work: () => this.updateLiquidity(),
+          onBusy: () => {
+            log.log(`${readableModuleName}: Postponing iteration of the liquidity provider for ${interval} ms. Previous iteration is in progress yet.`);
+          },
+        });
       }
-      setTimeout(() => {
-        this.iteration();
-      }, interval);
-    } else {
-      setTimeout(() => {
-        this.iteration();
-      }, 3000); // Check for config.mm_isActive every 3 seconds
+    } catch (error) {
+      log.error(`Error in ${moduleName} iteration: ${error}`);
+    } finally {
+      rescheduleIteration(() => this.iteration(), delay);
     }
   },
 
@@ -152,8 +161,10 @@ module.exports = {
    * Top-level logic of the Liquidity Provider.
    * Updates existing liq-orders, places spread-support orders, then depth (regular) liq-orders,
    * and logs the module statistics.
+   *
+   * @param {string} [trendOverride] One-time trend for this call. Does not change tradeParams.mm_liquidityTrend.
    */
-  async updateLiquidity() {
+  async updateLiquidity(trendOverride) {
     try {
       const { ordersDb } = db;
       /** @type {BotOrderDbRecord[]} */
@@ -187,7 +198,7 @@ module.exports = {
       // 1. Place spread support liq-orders
 
       if (ss && tradeParams.mm_liquiditySpreadSupport) {
-        const ssResult = await ss.updateSsLiquidity(liquidityOrders, orderBookInfo);
+        const ssResult = await ss.updateSsLiquidity(liquidityOrders, orderBookInfo, trendOverride);
         liqSsInfoString = ssResult.liqSsInfoString;
 
         // Reload liq-orders from DB to include newly placed SS orders
@@ -216,7 +227,7 @@ module.exports = {
       let amountPlaced;
 
       do {
-        amountPlaced = await this.placeLiquidityOrder(liquidityDepthStats.bidsTotalQuoteAmount, liquidityDepthStats.bidsCount, 'buy', orderBookInfo);
+        amountPlaced = await this.placeLiquidityOrder(liquidityDepthStats.bidsTotalQuoteAmount, liquidityDepthStats.bidsCount, 'buy', orderBookInfo, trendOverride);
         if (amountPlaced) {
           liquidityDepthStats.bidsTotalQuoteAmount += amountPlaced;
           liquidityDepthStats.bidsCount += 1;
@@ -224,7 +235,7 @@ module.exports = {
       } while (amountPlaced);
 
       do {
-        amountPlaced = await this.placeLiquidityOrder(liquidityDepthStats.asksTotalAmount, liquidityDepthStats.asksCount, 'sell', orderBookInfo);
+        amountPlaced = await this.placeLiquidityOrder(liquidityDepthStats.asksTotalAmount, liquidityDepthStats.asksCount, 'sell', orderBookInfo, trendOverride);
         if (amountPlaced) {
           liquidityDepthStats.asksTotalAmount += amountPlaced;
           liquidityDepthStats.asksCount += 1;
@@ -255,21 +266,22 @@ module.exports = {
   async updateLiquidityAfterPriceChange(orderSide, callerName) {
     log.log(`${readableModuleName}/${callerName}: Updating ${orderSide} liq-orders after a price movement.`);
 
-    if (isPreviousIterationFinished) {
-      const previousLiquidityTrend = tradeParams.mm_liquidityTrend;
-      tradeParams.mm_liquidityTrend = orderSide === 'buy' ? 'uptrend' : 'downtrend';
+    const trendOverride = orderSide === 'buy' ? 'uptrend' : 'downtrend';
 
-      // utils.saveConfig(false, 'Liquidity-UpdateTrend'); // Don't save, it's a one-time operation
-      log.log(`${readableModuleName}/${callerName}: After a price move triggered by a ${orderSide}-order, a one-time liquidity trend was set to '${tradeParams.mm_liquidityTrend}' from '${previousLiquidityTrend}'.`);
+    await runExclusiveIteration({
+      moduleName,
+      lock: iterationLock,
+      onBusy: () => {
+        log.log(`${readableModuleName}/${callerName}: Skipping liq-orders update as previous iteration is in progress.`);
+      },
+      work: async () => {
+        // One-time trend stays on this call. tradeParams.mm_liquidityTrend is left unchanged
+        // so a timeout or a later tick cannot place orders with it, and a late completion cannot restore a stale value.
+        log.log(`${readableModuleName}/${callerName}: After a price move triggered by a ${orderSide}-order, this update uses a one-time liquidity trend '${trendOverride}'. Configured trend stays '${tradeParams.mm_liquidityTrend}'.`);
 
-      isPreviousIterationFinished = false;
-      await this.updateLiquidity();
-      isPreviousIterationFinished = true;
-
-      tradeParams.mm_liquidityTrend = previousLiquidityTrend;
-    } else {
-      log.log(`${readableModuleName}/${callerName}: Skipping liq-orders update as previous iteration is in progress.`);
-    }
+        await this.updateLiquidity(trendOverride);
+      },
+    });
   },
 
   /**
@@ -361,10 +373,11 @@ module.exports = {
    * @param {number} totalOrdersPlaced Total number of depth liq-orders already placed on one side
    * @param {string} orderSide Order side: 'buy' or 'sell'
    * @param {Object} orderBookInfo Order book metrics used to calculate the order price
+   * @param {string} [trendOverride] One-time trend for this order. Falls back to tradeParams.mm_liquidityTrend.
    * @return {Promise<number|false|undefined>}
    *   Quote amount (buy) or base amount (sell) placed; false if limit reached; undefined on error
    */
-  async placeLiquidityOrder(totalQtyPlaced, totalOrdersPlaced, orderSide, orderBookInfo) {
+  async placeLiquidityOrder(totalQtyPlaced, totalOrdersPlaced, orderSide, orderBookInfo, trendOverride) {
     try {
       const side = orderSide;
       const subPurpose = 'depth';
@@ -377,7 +390,7 @@ module.exports = {
           totalQtyPlaced > tradeParams.mm_liquidityBuyQuoteAmount;
 
       // Set a price for the depth liq-order
-      const priceReq = await setPrice(side, orderBookInfo, subPurposeString, isOverLiquidityOrder);
+      const priceReq = await setPrice(side, orderBookInfo, subPurposeString, isOverLiquidityOrder, trendOverride);
       const price = priceReq.price;
       if (!price) {
         if (priceReq.message) {
@@ -591,11 +604,12 @@ module.exports = {
  * @param {string} subPurposeString Human-readable suffix for logging (always ' (depth)' for this function)
  * @param {boolean} isOverLiquidityOrder When true, indicates an order placed over the initial liquidity limit.
  *   Such orders are moved closer to the spread, regardless of mm_liquiditySpreadPercentMin.
+ * @param {string} [trendOverride] One-time trend for this order. Falls back to tradeParams.mm_liquidityTrend.
  * @return {Promise<{ price: number, message?: string, isCorrected?: boolean }>}
  *   'price' is the calculated order price; 'message' is a human-readable error message or a note;
  *   'isCorrected' is whether the Pw or VWAP adjusted the price
  */
-async function setPrice(side, orderBookInfo, subPurposeString, isOverLiquidityOrder) {
+async function setPrice(side, orderBookInfo, subPurposeString, isOverLiquidityOrder, trendOverride) {
   try {
     let high; let low;
     let targetPrice;
@@ -608,7 +622,7 @@ async function setPrice(side, orderBookInfo, subPurposeString, isOverLiquidityOr
      * downtrendAveragePrice is randomly <15% closer to highestBid
      */
 
-    switch (tradeParams.mm_liquidityTrend) {
+    switch (trendOverride || tradeParams.mm_liquidityTrend) {
       case 'downtrend':
         targetPrice = orderBookInfo.downtrendAveragePrice;
         break;

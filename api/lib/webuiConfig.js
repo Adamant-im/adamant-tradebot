@@ -35,7 +35,7 @@ function isPublicWebUiRelayEnabled(config) {
 }
 
 /**
- * Resolves the active WebUI transport (`GET /api/v1/bot`, `/health`).
+ * Resolves the active WebUI transport (`GET /api/v1/bot`, `/health`, `/status`).
  *
  * Relay wins when `public_webui` + `public_webui_license_token` are set; otherwise `directHttp`.
  *

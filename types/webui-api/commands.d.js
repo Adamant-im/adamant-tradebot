@@ -15,4 +15,15 @@
  * @property {string} confirmMessage Confirmation text; client must re-submit with `confirm: true`
  */
 
+/**
+ * `POST /api/v1/commands/transfer` JSON body: move funds between exchange sub-accounts.
+ * Requires the `manager` or `admin` role. The former `GET` route with a query string is removed.
+ *
+ * @typedef {Object} WebUiTransferBody
+ * @property {number} amount Positive amount to move
+ * @property {string} coin Coin ticker, e.g. `USDT`
+ * @property {string} from Source account type from `exchangeFeatures.accountTypes`, e.g. `trade`
+ * @property {string} to Destination account type, e.g. `main`
+ */
+
 module.exports = {};

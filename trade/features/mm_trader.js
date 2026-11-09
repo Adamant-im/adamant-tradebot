@@ -12,7 +12,7 @@
 */
 
 /**
- * @module trade/mm_trader
+ * @module trade/features/mm_trader
  * @typedef {import('types/bot/general.d.js').RandomValueFunction} RandomValueFunction
  * @typedef {import('types/bot/general.d.js').RandomDeviationFunction} RandomDeviationFunction
  * @typedef {import('types/bot/parsedMarket.d').ParsedMarket} ParsedMarket
@@ -38,16 +38,22 @@
  * @typedef {import('types/bot/ordersDb.d.js').BotOrderDbRecord} BotOrderDbRecord
 */
 
-const constants = require('../helpers/const');
-const utils = require('../helpers/utils');
-const config = require('../modules/configReader');
-const log = require('../helpers/log');
-const notify = require('../helpers/notify');
-const tradeParams = require('./settings/tradeParams_' + config.exchange);
-const db = require('../modules/DB');
-const orderCollector = require('./orderCollector');
-const orderUtils = require('./orderUtils');
-const fillsEngine = utils.softRequire('../helpers/fillsEngine', __filename);
+const constants = require('../../helpers/const');
+const utils = require('../../helpers/utils');
+const config = require('../../modules/configReader');
+const log = require('../../helpers/log');
+const {
+  IDLE_INTERVAL_MS,
+  createIterationLock,
+  runExclusiveIteration,
+  rescheduleIteration,
+} = require('../../helpers/moduleIteration');
+const notify = require('../../helpers/notify');
+const tradeParams = require('../settings/tradeParams_' + config.exchange);
+const db = require('../../modules/DB');
+const orderCollector = require('../orderCollector');
+const orderUtils = require('../orderUtils');
+const fillsEngine = utils.softRequire('../../helpers/fillsEngine', __filename);
 
 /**
  * Fallback when `helpers/fillsEngine.js` is omitted from a trimmed build.
@@ -76,10 +82,10 @@ const noopFillsEngine = {
   async addFillsDbRecord() {},
 };
 
-const TraderApi = require('./trader_' + config.exchange);
+const TraderApi = require('../trader/trader_' + config.exchange);
 const isPerpetual = Boolean(config.perpetual);
 
-const perpetualApiModule = '../modules/perpetualApi'; // Optional: perpetualApi module exists only in perpetual builds
+const perpetualApiModule = '../../modules/perpetualApi'; // Optional: perpetualApi module exists only in perpetual builds
 const perpetualApiFactory = isPerpetual ? utils.softRequire(perpetualApiModule, __filename) : undefined;
 
 if (isPerpetual && !perpetualApiFactory) {
@@ -151,19 +157,24 @@ log.log(`Module ${moduleName} is loaded.`);
  * @returns {TraderRuntimeState} Initialized trader runtime state
  */
 function createInitialTraderState(overrides = {}) {
-  const traderSbw = utils.softRequire('../trade/mm_trader_sbw') || noopTraderSbw;
+  const traderSbw = utils.softRequire('./mm_trader_sbw') || noopTraderSbw;
   const sbwState = traderSbw.getInitialState(overrides);
 
-  return {
+  const state = {
     lastNotifyBalancesTimestamp: 0,
     lastNotifyPriceTimestamp: 0,
-    isPreviousIterationFinished: true,
     lastOrderSide: 'buy',
     lastClosingTradeBucketTs: undefined,
     niceChartConsecutiveFailures: 0,
     ...sbwState,
     ...overrides,
   };
+
+  if (!state.iterationLock || typeof state.iterationLock.finished !== 'boolean') {
+    state.iterationLock = createIterationLock();
+  }
+
+  return state;
 }
 
 /**
@@ -284,6 +295,7 @@ function createTraderRuntime(overrides = {}) {
     priceWatcher: overrides.priceWatcher,
     liquidityProvider: overrides.liquidityProvider,
     traderSbw: overrides.traderSbw,
+    exit: overrides.exit,
   };
 
   if (Object.prototype.hasOwnProperty.call(overrides, 'niceChart')) {
@@ -328,59 +340,67 @@ function createTraderRuntime(overrides = {}) {
      * Algorithm:
      * 1. Compute the next randomized (or calculated closing trade) pause from current trade parameters
      * 2. Check whether MM/trader are enabled and the policy is supported
-     * 3. Skip overlapping work with `isPreviousIterationFinished`
+     * 3. Skip overlapping work until the previous iteration finishes or times out
      * 4. Run one `executeMmOrder()` attempt and always release the iteration lock
-     * 5. Reschedule the next tick, or fall back to a short polling delay while disabled
-     * 6. Update Sniper Bot Watcher state on each iteration end to prevent stale counters and enable timely resets when the bot is inactive for a while
+     * 5. Always reschedule the next tick, including when this tick throws or never settles
+     * 6. Update Sniper Bot Watcher state while Trader is disabled so stale counters can reset
      *
      * @returns {Promise<void>} Resolves after the current tick is processed and the next one is scheduled
      */
     async iteration() {
-      const now = Date.now();
-      const regularInterval = setPause(runtime);
-      const closingTradePlan = resolveNiceChartCloseTradePlan(runtime, now, regularInterval);
-      const interval = closingTradePlan.interval;
-      const currentTradeParams = deps.tradeParams;
+      let delay = IDLE_INTERVAL_MS;
 
-      if (
-        interval &&
-        currentTradeParams.mm_isActive &&
-        currentTradeParams.mm_isTraderActive &&
-        deps.constants.MM_POLICIES_VOLUME.includes(currentTradeParams.mm_Policy)
-      ) {
-        if (runtimeState.isPreviousIterationFinished) {
-          runtimeState.isPreviousIterationFinished = false;
+      try {
+        const now = Date.now();
+        const regularInterval = setPause(runtime);
+        const closingTradePlan = resolveNiceChartCloseTradePlan(runtime, now, regularInterval);
+        const interval = closingTradePlan.interval;
+        const currentTradeParams = deps.tradeParams;
 
-          try {
-            if (closingTradePlan.isClosingTrade) {
-              deps.log.debug(
-                  `Trader: Executing planned closing candle trade for ${runtime.formattedPair.pair} ` +
-                  `(remainingMs=${closingTradePlan.remainingMs}, closeTimestamp=${closingTradePlan.closeTimestamp}).`,
-              );
-            }
+        if (
+          interval &&
+          currentTradeParams.mm_isActive &&
+          currentTradeParams.mm_isTraderActive &&
+          deps.constants.MM_POLICIES_VOLUME.includes(currentTradeParams.mm_Policy)
+        ) {
+          delay = interval;
 
-            await this.executeMmOrder({ now, isClosingTrade: closingTradePlan.isClosingTrade });
-          } finally {
-            runtimeState.isPreviousIterationFinished = true;
+          await runExclusiveIteration({
+            moduleName: readableModuleName,
+            lock: runtimeState.iterationLock,
+            log: deps.log,
+            notify: /** @type {(message: string, type: string, silent?: boolean, isPriority?: boolean) => void} */ (deps.notify),
+            ...(typeof deps.exit === 'function' ? { exit: deps.exit } : {}),
+            onBusy: () => {
+              deps.log.warn(`Trader: Postponing iteration for ${interval} ms. Previous iteration is still in progress.`);
+            },
+            work: async () => {
+              if (closingTradePlan.isClosingTrade) {
+                deps.log.debug(
+                    `Trader: Executing planned closing candle trade for ${runtime.formattedPair.pair} ` +
+                    `(remainingMs=${closingTradePlan.remainingMs}, closeTimestamp=${closingTradePlan.closeTimestamp}).`,
+                );
+              }
+
+              await this.executeMmOrder({ now, isClosingTrade: closingTradePlan.isClosingTrade });
+            },
+          });
+
+          if (closingTradePlan.plannedClosingTs) {
+            deps.log.log(
+                `Trader: Next iteration scheduled for Nice Chart close candle on ${runtime.formattedPair.pair} ` +
+                `(plannedClosingTs=${closingTradePlan.plannedClosingTs}, in=${interval} ms, ` +
+                `closeTimestamp=${closingTradePlan.closeTimestamp}).`,
+            );
           }
         } else {
-          deps.log.warn(`Trader: Postponing iteration for ${interval} ms. Previous iteration is still in progress.`);
+          resolveTraderSbw(runtime).resetSniperBotCounters(runtime);
         }
-
-        if (closingTradePlan.plannedClosingTs) {
-          deps.log.log(
-              `Trader: Next iteration scheduled for Nice Chart close candle on ${runtime.formattedPair.pair} ` +
-              `(plannedClosingTs=${closingTradePlan.plannedClosingTs}, in=${interval} ms, ` +
-              `closeTimestamp=${closingTradePlan.closeTimestamp}).`,
-          );
-        }
-
-        setTimeout(() => this.iteration(), interval);
-        return;
+      } catch (error) {
+        deps.log.error(`Error in ${readableModuleName} iteration: ${error}`);
+      } finally {
+        rescheduleIteration(() => this.iteration(), delay);
       }
-
-      setTimeout(() => this.iteration(), 3000);
-      resolveTraderSbw(runtime).resetSniperBotCounters(runtime);
     },
 
     /**
@@ -906,7 +926,7 @@ function createTraderRuntime(overrides = {}) {
 
             // Maintain tight spread after executeInOrderBook order.
             // This restores highestBid and lowestAsk to prevent significant price movement.
-            const sm = deps.utils.softRequire('../trade/mm_spread_maintainer');
+            const sm = deps.utils.softRequire('./mm_spread_maintainer');
             sm?.maintainSpreadAfterPriceChange(side, undefined, 'Trader', undefined, priceReq);
 
             // Cancel t-order if it remains in open or partially filled state
@@ -1105,7 +1125,7 @@ function resolveNiceChart(runtime, stepInput = {}) {
     return resolveRuntimeDependency(runtime.deps.niceChart);
   }
 
-  return resolveRuntimeDependency(runtime.deps.utils.softRequire('../trade/mm_nice_chart'));
+  return resolveRuntimeDependency(runtime.deps.utils.softRequire('./mm_nice_chart'));
 }
 
 /**
@@ -1149,7 +1169,7 @@ function resolveLiquidityProvider(runtime, stepInput = {}) {
  * @returns {TraderSbwService} Resolved SBW helper module or a no-op fallback
  */
 function resolveTraderSbw(runtime) {
-  return resolveRuntimeDependency(runtime.deps.traderSbw) || runtime.deps.utils.softRequire('../trade/mm_trader_sbw') || noopTraderSbw;
+  return resolveRuntimeDependency(runtime.deps.traderSbw) || runtime.deps.utils.softRequire('./mm_trader_sbw') || noopTraderSbw;
 }
 
 /**
@@ -2115,7 +2135,7 @@ function setAmount(runtime) {
 
   // Take into account the `volatilityKoef`
 
-  const vv = utils.softRequire('../trade/mm_volume_volatility');
+  const vv = utils.softRequire('./mm_volume_volatility');
 
   if (tradeParams.mm_isVolumeVolatilityActive && vv?.getIsVolatilityKoefActual()) {
     const vvKoef = vv.getVolatilityKoef();

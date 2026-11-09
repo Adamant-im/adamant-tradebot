@@ -31,10 +31,11 @@
 
 /**
  * Partial transaction context attached to a remote command relayed through ComServer.
- * May originate from ADAMANT, Telegram, or WebUI; only a subset of fields is present.
+ * Originates from ADAMANT or Telegram; only a subset of fields is present.
  *
  * @typedef {Partial<AdamantIncomingTx> & {
- *   senderTgUsername?: string
+ *   senderTgUsername?: string,
+ *   viaComServer?: boolean
  * }} RemoteCommandTx
  */
 
@@ -43,9 +44,9 @@
  *
  * @typedef {Object} RemoteCommandParams
  * @property {string[]} command Command tokens: `[name, ...args]`
- * @property {RemoteCommandTx} [tx] Source message/transaction metadata
+ * @property {RemoteCommandTx} [tx] Source message/transaction metadata. Must identify an operator of this bot.
  * @property {string} id Request id echoed in the response
- * @property {string} connectionId ComServer connection id echoed in the response
+ * @property {string} connectionId Socket id of the target bot, echoed in the response
  */
 
 /**
@@ -79,6 +80,7 @@
  * @property {() => void} connect Opens the encrypted socket connection
  * @property {() => void} initHandlers Registers ComServer event listeners
  * @property {() => void} startPolling Starts the periodic heartbeat loop
+ * @property {(commandResult: CommandReply | undefined, params: RemoteCommandParams, tx: RemoteCommandTx) => void} sendRemoteCommandResponse Sends a remote command result to ComServer
  */
 
 module.exports = {};
