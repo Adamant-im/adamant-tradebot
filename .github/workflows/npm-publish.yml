@@ -1,0 +1,67 @@
+name: Publish npm package
+
+# Publishes the package to npm with build provenance when a GitHub Release is
+# published or triggered manually via workflow_dispatch.
+# Authentication uses the repository secret NPM_TOKEN and npm build provenance
+# is generated via GitHub Actions OIDC (id-token: write).
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release tag to publish (e.g. v10.0.0)'
+        required: false
+        default: 'v10.0.0'
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.release_tag || github.ref }}
+          fetch-depth: 0
+
+      - name: Verify release tag is on master
+        if: github.event_name == 'release'
+        run: |
+          git fetch origin master
+          git merge-base --is-ancestor HEAD origin/master
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify package version matches the release tag
+        if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
+        run: |
+          PKG_VERSION="v$(node -p "require('./package.json').version")"
+          TAG="${{ github.event.release.tag_name || inputs.release_tag }}"
+          if [ -n "$TAG" ] && [ "$PKG_VERSION" != "$TAG" ]; then
+            echo "::error::package.json version ($PKG_VERSION) does not match release tag ($TAG)"
+            exit 1
+          fi
+
+      - name: Check npm auth
+        run: |
+          echo "Checking npm auth token identity:"
+          npm whoami --registry https://registry.npmjs.org || echo "npm whoami failed"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Publish to npm with provenance
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
