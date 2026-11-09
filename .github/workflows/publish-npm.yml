@@ -1,8 +1,8 @@
 name: Publish npm package
 
 # Publishes the package to npm with build provenance when a GitHub Release is
-# published. Authentication uses npm Trusted Publishing (OIDC) — no token is
-# stored in the repository.
+# published. Authentication uses npm Trusted Publishing (OIDC) with a token
+# fallback if OIDC is not yet configured on npmjs.com.
 #
 # One-time setup on npmjs.com (package Settings -> Trusted Publishing):
 # - Publisher: GitHub Actions
@@ -15,6 +15,11 @@ on:
   release:
     types: [published]
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release tag to publish (e.g. v10.0.0)'
+        required: false
+        default: 'v10.0.0'
 
 permissions:
   contents: read
@@ -27,7 +32,7 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.release.tag_name || github.ref }}
+          ref: ${{ github.event.release.tag_name || inputs.release_tag || github.ref }}
           fetch-depth: 0
 
       - name: Verify release tag is on master
@@ -40,23 +45,35 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 24
-          registry-url: https://registry.npmjs.org
 
       - name: Update npm
-        run: npm install -g npm@^11.5.1
+        run: npm install -g npm@latest
 
       - name: Install dependencies
         run: npm ci
 
       - name: Verify package version matches the release tag
-        if: github.event_name == 'release'
+        if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
         run: |
           PKG_VERSION="v$(node -p "require('./package.json').version")"
-          TAG="${{ github.event.release.tag_name }}"
-          if [ "$PKG_VERSION" != "$TAG" ]; then
+          TAG="${{ github.event.release.tag_name || inputs.release_tag }}"
+          if [ -n "$TAG" ] && [ "$PKG_VERSION" != "$TAG" ]; then
             echo "::error::package.json version ($PKG_VERSION) does not match release tag ($TAG)"
             exit 1
           fi
 
       - name: Publish to npm with provenance
-        run: npm publish --provenance --access public
+        run: |
+          rm -f /home/runner/work/_temp/.npmrc ~/.npmrc
+          echo "Attempting publish via npm Trusted Publishing (OIDC)..."
+          if (unset NODE_AUTH_TOKEN && npm publish --provenance --access public); then
+            echo "Successfully published to npm via OIDC Trusted Publishing!"
+          elif [ -n "$FALLBACK_TOKEN" ]; then
+            echo "OIDC publish failed; publishing with repository token and provenance..."
+            NODE_AUTH_TOKEN="$FALLBACK_TOKEN" npm publish --provenance --access public
+          else
+            echo "::error::Publish failed and no fallback token available."
+            exit 1
+          fi
+        env:
+          FALLBACK_TOKEN: ${{ secrets.NPM_TOKEN }}
