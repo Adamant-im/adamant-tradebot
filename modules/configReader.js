@@ -1,12 +1,14 @@
 /**
  * @module modules/configReader
  * @typedef {import('types/bot/configReader.d.js').BotConfig} BotConfig
+ * @typedef {import('types/bot/configReader.d.js').BotCoinPriceFallbackConfig} BotCoinPriceFallbackConfig
  */
 
 const jsonminify = require('jsonminify');
 const fs = require('fs');
 const path = require('path');
 const { createKeypairFromPassphrase, createAddressFromPublicKey } = require('adamant-api');
+const { findNamedConfigPath } = require('./configPaths');
 
 /** @type {BotConfig} */
 let config = {};
@@ -30,6 +32,11 @@ const fields = {
     default: '',
     isRequired: false,
   },
+  private_webui_jwt_max_ttl: {
+    type: String,
+    default: '24h',
+    isRequired: false,
+  },
   passPhrase: {
     type: String,
     isRequired: false,
@@ -46,6 +53,14 @@ const fields = {
   infoservice: {
     type: Array,
     default: ['https://info.adamant.im'],
+  },
+  coin_price_fallback: {
+    type: Object,
+    default: /** @type {BotCoinPriceFallbackConfig} */ ({
+      enabled: true,
+      priceSource: 'last',
+      cacheMs: 30_000,
+    }),
   },
   exchanges: {
     type: Array,
@@ -216,6 +231,10 @@ const fields = {
     type: String,
     default: 'log',
   },
+  log_rotate: {
+    type: Object,
+    default: {}, // Missing fields get defaults from helpers/logRotation.js
+  },
   private_webui: {
     type: Number,
     isRequired: false,
@@ -305,7 +324,7 @@ try {
       process.env.DEV === 'true';
 
   const doClearDB = process.argv.includes('clear_db');
-  // First argv token that is not a path and not `clear_db` selects `config.<name>.jsonc`
+  // First argv token that is not a path and not `clear_db` selects `config.<name>.jsonc` from `config/` or the project root
   const configCustom = process.env.MM_CLI === '1' ?
     undefined :
     process.argv.find((arg) => !arg.includes('/') && arg !== 'clear_db' && !arg.startsWith('-'));
@@ -319,7 +338,13 @@ try {
     // Set by `mm on` (PM2) or `mm` CLI when config lives outside legacy paths
     configFile = path.relative(path.join(__dirname, '..'), path.resolve(process.env.MM_CONFIG_PATH));
   } else if (configCustom) {
-    configFile = `../config.${configCustom}.jsonc`;
+    const configCustomPath = findNamedConfigPath(configCustom);
+
+    if (!configCustomPath) {
+      throw new Error(`'config.${configCustom}.jsonc' is not found in 'config/' or the project root`);
+    }
+
+    configFile = path.relative(__dirname, configCustomPath);
   } else {
     const configExists = fs.existsSync(path.join(__dirname, configFileMain));
 
@@ -416,7 +441,8 @@ try {
   config.exchange = config.exchangeName.toLowerCase();
 
   config.file = 'tradeParams_' + config.exchange + '.js';
-  config.fileWithPath = './trade/settings/' + config.file;
+  // Absolute, because `mm on` starts the bot in the work dir, which is not the package root
+  config.fileWithPath = path.join(__dirname, '../trade/settings', config.file);
 
   config.email_notify_enabled =
       (config.email_notify?.length || config.email_priority?.length) &&
@@ -505,15 +531,47 @@ try {
     coin.sources = coin.sources?.map((source) => source?.toUpperCase()) || [];
   });
 
+  const fallbackKeys = Object.keys(fields.coin_price_fallback.default);
+  const unknownFallbackKeys = Object.keys(config.coin_price_fallback).filter((key) => !fallbackKeys.includes(key));
+  if (unknownFallbackKeys.length) {
+    console.warn(`Config reader: Unknown coin_price_fallback keys are ignored: ${unknownFallbackKeys.join(', ')}.`);
+  }
+
+  config.coin_price_fallback = {
+    ...fields.coin_price_fallback.default,
+    ...Object.fromEntries(Object.entries(config.coin_price_fallback).filter(([key]) => fallbackKeys.includes(key))),
+  };
+
+  const fallback = config.coin_price_fallback;
+  if (typeof fallback.enabled !== 'boolean' ||
+      typeof fallback.priceSource !== 'string' ||
+      !['last', 'mid', 'bid', 'ask'].includes(fallback.priceSource.toLowerCase()) ||
+      typeof fallback.cacheMs !== 'number' || !Number.isFinite(fallback.cacheMs) || fallback.cacheMs < 0) {
+    exit(`Configuration for ${configOwnerLabel} is invalid: coin_price_fallback requires boolean enabled, priceSource last/mid/bid/ask, and finite non-negative cacheMs. Cannot start the bot.`);
+  }
+  fallback.priceSource = /** @type {typeof fallback.priceSource} */ (fallback.priceSource.toLowerCase());
+
+  try {
+    config.log_rotate = require('../helpers/logRotation').normalizeLogRotateConfig(config.log_rotate);
+  } catch (error) {
+    exit(`Configuration for ${configOwnerLabel} is invalid: ${error instanceof Error ? error.message : error}. Cannot start the bot.`);
+  }
+
   if (require('../api/lib/webuiConfig').isPrivateWebUiApiEnabled(config.private_webui)) {
     try {
-      require('../api/lib/webuiSecurity').assertPrivateWebUiSecretKey(config.private_webui_secret_key);
+      const webuiSecurity = require('../api/lib/webuiSecurity');
+      webuiSecurity.assertPrivateWebUiSecretKey(config.private_webui_secret_key);
+      webuiSecurity.assertPrivateWebUiJwtMaxTtl(config.private_webui_jwt_max_ttl);
     } catch (error) {
       exit(error instanceof Error ? error.message : String(error));
     }
   }
 
   if (config.com_server) {
+    const comServerSecurityPath = path.join(__dirname, '../helpers/comServerSecurity.js');
+    if (!fs.existsSync(comServerSecurityPath)) {
+      exit('ComServer is not supported in this build of ADAMANT TradeBot. Disable com_server in config.');
+    }
     try {
       /** Optional helper path — kept in a variable so the IDE does not require the file in trimmed builds. */
       const comServerSecurityModule = '../helpers/comServerSecurity';
@@ -528,7 +586,7 @@ try {
   }
 
   // Create tradeParams for exchange (sync — utils/context require the file during module load)
-  const exchangeTradeParams = path.join(__dirname, '../trade/settings', config.file);
+  const exchangeTradeParams = config.fileWithPath;
   const defaultTradeParams = path.join(__dirname, '../trade/settings/tradeParams_Default.js');
 
   if (fs.existsSync(exchangeTradeParams)) {

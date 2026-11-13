@@ -1,21 +1,14 @@
-const fs = require('fs');
 const path = require('path');
+const { resolveJestConfigName } = require('../../scripts/jest-resolve-config');
 
-const configRootDir = path.join(__dirname, '../..');
+// Order-book unit tests only need precision metadata; do not initialize exchange APIs or MongoDB.
+jest.mock('../../trade/orderUtils', () => ({
+  parseMarket: () => ({ coin1Decimals: 5, coin2Decimals: 2, coin2DecimalsForStable: 2 }),
+}));
+
 const originalArgv = process.argv.slice();
 
-function resolveSafeConfigName() {
-  const configNames = fs.readdirSync(configRootDir)
-      .map((fileName) => fileName.match(/^config\.(.+)\.jsonc$/i)?.[1])
-      .filter(Boolean)
-      .sort();
-
-  const preferred = configNames.filter((name) => !name.startsWith('-') && !['default', 'test', 'dev'].includes(name));
-
-  return preferred[0] || configNames[0];
-}
-
-process.argv = [process.argv[0], process.argv[1], resolveSafeConfigName()];
+process.argv = [process.argv[0], process.argv[1], resolveJestConfigName()];
 
 afterAll(() => {
   process.argv = originalArgv;
@@ -227,11 +220,12 @@ describe('softRequire', () => {
   });
 
   test('resolves relative paths from an explicit fromFile base', () => {
-    const base = path.join(__dirname, '../../modules/commands/account.js');
-    const mod = utils.softRequire('../../trade/mm_balance_watcher', base);
+    // A dependency-free target tests resolution without starting exchange APIs or MongoDB.
+    const base = path.join(__dirname, '../../helpers/cryptos/exchanger.js');
+    const mod = utils.softRequire('../const', base);
 
     expect(mod).toBeDefined();
-    expect(typeof mod.guardBalances).toBe('function');
+    expect(mod).toBe(require('../../helpers/const'));
   });
 
   test('returns undefined for a missing relative module', () => {
@@ -244,4 +238,12 @@ beforeAll(() => {
 });
 
 afterAll(() => {
+});
+
+describe('formatNumber', () => {
+  test('keeps significant digits for a sub-unit implied price when configured precision is zero', () => {
+    const impliedPrice = 141.59464003 / 4762.25;
+
+    expect(utils.formatNumber(impliedPrice, false, 0)).toBe('0.02973');
+  });
 });

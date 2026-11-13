@@ -26,7 +26,7 @@
  * @prop {string} msgSendBack Reply to user
  * @prop {'error'|'warn'|'info'|'log'} notifyType error < warn < info < log
  * @prop {boolean} [isError] If some command parameter isn't correct. Used in WebUI.
- * @prop {'source'|'currency'} [errorField] Command parameter which isn't correct. Used in WebUI.
+ * @prop {string} [errorField] Command parameter path which isn't correct (e.g. `source`, `amount`, `priceWatching.currency`). Used in WebUI.
  */
 
 module.exports = {};

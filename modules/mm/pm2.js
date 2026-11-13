@@ -65,6 +65,9 @@ async function getProcess(name) {
 /**
  * Starts the bot under PM2 with autorestart enabled.
  *
+ * `MM_CLI=1` marks `mm` commands, not the bot. PM2 merges the caller's environment into the app's env,
+ * and a stopped app keeps its stored env, so only an explicit empty value clears it in both cases.
+ *
  * @param {string} name PM2 process name
  * @param {string} appPath Absolute path to app.js
  * @param {{ cwd: string, env?: NodeJS.ProcessEnv }} options Working directory and extra env
@@ -78,7 +81,10 @@ async function startProcess(name, appPath, options) {
       name,
       script: appPath,
       cwd: options.cwd,
-      env: options.env,
+      env: {
+        ...options.env,
+        MM_CLI: '',
+      },
       autorestart: true,
       max_restarts: 10,
     }, (error) => {

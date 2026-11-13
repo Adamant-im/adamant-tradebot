@@ -30,7 +30,7 @@ async function promptNewValue(key, current) {
     return prompts.askArray(`${key} entry`);
   }
 
-  const display = configUtil.SECRET_KEYS.has(key) ? configUtil.maskSecret(current) : String(current ?? '');
+  const display = String(configUtil.maskConfigValue(key, current) ?? '');
   console.log('\nCurrent value:');
   console.log(display);
   const next = await prompts.ask('\nNew value [leave empty to keep current]: ');

@@ -17,10 +17,11 @@
  * @typedef {import('types/transfer.d').Result} TransferResult
  */
 
-const P2PB2B = require('./api/p2pb2b_api');
-const utils = require('../helpers/utils');
-const constants = require('../helpers/const');
-const config = require('./../modules/configReader');
+const P2PB2B = require('../api/p2pb2b_api');
+const utils = require('../../helpers/utils');
+const constants = require('../../helpers/const');
+const config = require('./../../modules/configReader');
+const { collectOffsetPages } = require('../../helpers/offsetPages');
 
 const moduleId = /** @type {NodeJS.Module} */ (module).id;
 const moduleName = utils.getModuleName(moduleId);
@@ -281,25 +282,21 @@ module.exports = (
 
     /**
      * Returns the full list of all open orders for an account.
+     * P2PB2B pages by offset, 100 orders per page. Adjacent requests overlap
+     * by 10 orders to detect and recover shifted page boundaries.
      *
      * @param {string} pair Trading pair in classic format, e.g. `BTC/USDT`
      * @returns {Promise<OrdersResult["result"] | undefined>} A full list of open orders or undefined on failure
      */
     async getOpenOrders(pair) {
-      let allOrders = [];
-      let ordersInfo;
-      let offset = 0;
       const limit = 100;
 
-      do {
-        ordersInfo = await this.getOpenOrdersPage(pair, offset, limit);
-        if (!ordersInfo) return undefined;
-
-        allOrders = allOrders.concat(ordersInfo);
-        offset += limit;
-      } while (ordersInfo.length === limit);
-
-      return allOrders;
+      return collectOffsetPages((offset) => this.getOpenOrdersPage(pair, offset, limit), {
+        limit,
+        idOf: (order) => order.orderId,
+        logger: log,
+        label: `${exchangeName} ${pair}`,
+      });
     },
 
     /**
@@ -593,8 +590,7 @@ module.exports = (
      * @param {number|string} coin1Amount Amount in base currency
      * @param {number} [limit=1] If truthy → limit order; falsy → market (not supported)
      * @param {number|string} [coin2Amount] Amount in quote currency
-     * @returns {Promise<OrderPlaceResult>}
-     *   Order placement result or undefined on request/processing error
+     * @returns {Promise<OrderPlaceResult>} Placement result; `orderId` on success, `false` on failure
      */
     async placeOrder(orderSide, pair, price, coin1Amount, limit = 1, coin2Amount) {
       const paramString = `orderSide: ${orderSide}, pair: ${pair}, price: ${price}, coin1Amount: ${coin1Amount}, limit: ${limit}, coin2Amount: ${coin2Amount}`;
@@ -606,6 +602,7 @@ module.exports = (
         message = `Unable to place an order on ${exchangeName} exchange. I don't have info about market ${pair}.`;
         log.warn(message);
         return {
+          orderId: false,
           message,
         };
       }
@@ -630,6 +627,7 @@ module.exports = (
           message = `Unable to place an order on ${exchangeName} exchange. After rounding to ${marketInfo.coin1Decimals} decimal places, the order amount is wrong: ${coin1Amount}.`;
           log.warn(message);
           return {
+            orderId: false,
             message,
           };
         }
@@ -641,6 +639,7 @@ module.exports = (
           message = `Unable to place an order on ${exchangeName} exchange. After rounding to ${marketInfo.coin2Decimals} decimal places, the order volume is wrong: ${coin2Amount}.`;
           log.warn(message);
           return {
+            orderId: false,
             message,
           };
         }
@@ -652,6 +651,7 @@ module.exports = (
           message = `Unable to place an order on ${exchangeName} exchange. After rounding to ${marketInfo.coin2Decimals} decimal places, the order price is wrong: ${price}.`;
           log.warn(message);
           return {
+            orderId: false,
             message,
           };
         }
@@ -661,6 +661,7 @@ module.exports = (
         message = `Unable to place an order on ${exchangeName} exchange. Order amount ${coin1Amount} ${marketInfo.coin1} is less minimum ${marketInfo.coin1MinAmount} ${marketInfo.coin1} on ${marketInfo.pairReadable} pair.`;
         log.warn(message);
         return {
+          orderId: false,
           message,
         };
       }
@@ -669,6 +670,7 @@ module.exports = (
         message = `Unable to place an order on ${exchangeName} exchange. Order volume ${coin2Amount} ${marketInfo.coin2} is less minimum ${marketInfo.coin2MinAmount} ${marketInfo.coin2} on ${pair} pair.`;
         log.warn(message);
         return {
+          orderId: false,
           message,
         };
       }

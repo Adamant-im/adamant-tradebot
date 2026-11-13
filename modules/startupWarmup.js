@@ -40,7 +40,7 @@ function getWarmupConnectorApi() {
     return perpetualApiFactory ? perpetualApiFactory() : undefined;
   }
 
-  return require(`../trade/trader_${config.exchange}`)(
+  return require(`../trade/trader/trader_${config.exchange}`)(
       config.apikey,
       config.apisecret,
       config.apipassword,

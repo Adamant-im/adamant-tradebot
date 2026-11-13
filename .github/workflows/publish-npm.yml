@@ -1,26 +1,33 @@
 name: Publish npm package
 
-# Runs when a GitHub Release is published (not on every push).
-# The job is skipped unless the release tag points to a commit on master.
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Release tag to publish'
+        required: false
+        default: 'v10.0.0'
 
 permissions:
-  id-token: write
   contents: read
+  id-token: write
 
 jobs:
   publish:
+    name: Publish to npm
     runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' || !github.event.release.prerelease
     steps:
-      - name: Checkout release tag
+      - name: Checkout
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.release.tag_name }}
+          ref: ${{ github.event.release.tag_name || inputs.release_tag || github.ref }}
           fetch-depth: 0
 
       - name: Verify release tag is on master
+        if: github.event_name == 'release'
         run: |
           git fetch origin master
           git merge-base --is-ancestor HEAD origin/master
@@ -28,13 +35,23 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 22
-          registry-url: https://registry.npmjs.org
+          node-version: 24
+
+      - name: Update npm
+        run: npm install -g npm@latest
 
       - name: Install dependencies
         run: npm ci
 
-      - name: Publish to npm with provenance
-        run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Verify package version matches the release tag
+        if: github.event_name == 'release' || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
+        run: |
+          PKG_VERSION="v$(node -p "require('./package.json').version")"
+          TAG="${{ github.event.release.tag_name || inputs.release_tag }}"
+          if [ -n "$TAG" ] && [ "$PKG_VERSION" != "$TAG" ]; then
+            echo "::error::package.json version ($PKG_VERSION) does not match release tag ($TAG)"
+            exit 1
+          fi
+
+      - name: Publish to npm
+        run: npm publish --provenance

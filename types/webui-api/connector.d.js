@@ -11,7 +11,7 @@
 
 /**
  * Minimal exchange connector surface used by the WebUI API layer.
- * Matches the object returned by `trade/trader_*.js` factories and perpetual API.
+ * Matches the object returned by `trade/trader/trader_*.js` factories and perpetual API.
  *
  * @typedef {Object} TraderConnector
  * @property {(pair?: string) => Record<string, unknown>} [features] Exchange capability flags per pair
@@ -27,6 +27,16 @@
  * ) => Promise<CandlesResult | undefined>} [getCandlesHistory] OHLCV candles
  * @property {(nonzero?: boolean) => Promise<AssetsResult | undefined>} [getBalances] Account balances
  * @property {(pair: string) => Promise<OpenOrdersResult | undefined>} [getOpenOrders] Open orders
+ * @property {(coin1: string, coin2: string, coin1Amount: number | string) => Promise<unknown>} [convert]
+ * @property {(coin: string, from: string, to: string, amount: number | string) => Promise<unknown>} [transfer]
+ * @property {(
+ *   address: string,
+ *   amount: number | string,
+ *   coin: string,
+ *   withdrawalFee?: unknown,
+ *   network?: string,
+ *   whitelistLabel?: string
+ * ) => Promise<unknown>} [withdraw]
  */
 
 module.exports = {};

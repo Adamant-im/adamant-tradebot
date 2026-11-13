@@ -11,7 +11,7 @@ const constants = require('../helpers/const');
 const db = require('../modules/DB');
 const config = require('../modules/configReader');
 const log = require('../helpers/log');
-const traderapi = require('./trader_' + config.exchange)(
+const traderapi = require('./trader/trader_' + config.exchange)(
     config.apikey,
     config.apisecret,
     config.apipassword,
@@ -28,7 +28,28 @@ const utils = require('../helpers/utils');
 const moduleId = /** @type {NodeJS.Module} */ (module).id;
 const moduleName = utils.getModuleName(moduleId);
 
+/**
+ * Finds an order in the local database using the same market and account scope as cancellation.
+ *
+ * @param {string|number} orderId Exchange order ID
+ * @param {string} [pair=config.defaultPair] Trading pair or perpetual contract
+ * @param {Object} [api=traderapi] Exchange API instance that identifies the trading account
+ * @returns {Promise<import('../types/bot/ordersDb.d.js').BotOrderDbRecord|null>} Matching local order
+ */
+async function findOrderByIdInDb(orderId, pair = config.defaultPair, api = traderapi) {
+  const { ordersDb } = db;
+
+  return ordersDb.findOne({
+    _id: orderId,
+    exchange: config.exchange,
+    pair,
+    isSecondAccountOrder: api.isSecondAccount ? true : { $ne: true },
+  });
+}
+
 module.exports = {
+  findOrderByIdInDb,
+
   orderPurposes: {
     ld: 'Ladder',
     t: 'Trader',
@@ -250,8 +271,6 @@ module.exports = {
       const onWhichAccount = api.isSecondAccount ? ' on second account' : '';
       const callerString = callerName ? ` (run by ${callerName})` : '';
 
-      const { ordersDb } = db;
-
       let order;
       let isOrderFoundById;
 
@@ -259,16 +278,8 @@ module.exports = {
         order = orderId;
         orderId = order._id;
       } else {
-        order = await ordersDb.findOne({
-          _id: orderId,
-          exchange: config.exchange,
-          pair,
-          isSecondAccountOrder: api.isSecondAccount ? true : { $ne: true },
-        });
-
-        if (order) {
-          isOrderFoundById = true;
-        }
+        order = await findOrderByIdInDb(orderId, pair, api);
+        isOrderFoundById = Boolean(order);
       }
 
       let note = '';
@@ -661,7 +672,7 @@ module.exports = {
           for (const order of openOrders) {
             if (!clearedOrders.includes(order.orderId) && !dbOrderIds.includes(order.orderId)) {
               const cancellation = await this.clearOrderById(
-                  order.orderId, pair, orderSide, 'clearUnknownOrders()', `Batch cancellation for exchange ${pair} orders`, undefined, api);
+                  order.orderId, pair, order.side || orderSide, 'clearUnknownOrders()', `Batch cancellation for exchange ${pair} orders`, undefined, api);
 
               if (cancellation.isCancelRequestProcessed) {
                 clearedOrders.push(order.orderId);

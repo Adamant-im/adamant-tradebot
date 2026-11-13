@@ -1,7 +1,7 @@
 /**
  * types/bot/trader.d.js
  *
- * Type definitions specific to trade/mm_trader.js runtime orchestration.
+ * Type definitions specific to trade/features/mm_trader.js runtime orchestration.
  */
 
 /**
@@ -34,7 +34,7 @@
  * @typedef {Object} TraderRuntimeState
  * @property {number} lastNotifyBalancesTimestamp Timestamp of the last insufficient-balance notification
  * @property {number} lastNotifyPriceTimestamp Timestamp of the last price-related notification
- * @property {boolean} isPreviousIterationFinished Prevents overlapping iteration runs
+ * @property {import('../../helpers/moduleIteration').IterationLock} iterationLock Prevents overlapping iteration runs and recovers a stuck tick
  * @property {TraderSide} lastOrderSide Last successfully attempted MM side
  * @property {number | undefined} [lastClosingTradeBucketTs] Last candle bucket where Trader already executed an explicit Nice Chart closing trade
  * @property {number} niceChartConsecutiveFailures Consecutive Nice Chart failures used to decide skip vs local fallback
@@ -147,6 +147,7 @@
  * @property {object} config Loaded immutable config
  * @property {object} log Logger module
  * @property {NotifyFunction} notify Notification helper
+ * @property {(code: number) => void} [exit] Optional process-exit override. Production uses `process.exit`.
  * @property {object} tradeParams Mutable runtime trade params
  * @property {object} db DB module with model constructors
  * @property {object} orderCollector Order cancellation helper

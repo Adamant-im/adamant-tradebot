@@ -9,130 +9,25 @@
  */
 
 const {
-  constants, utils, config, log, tradeParams, moduleName, exchangerUtils, orderUtils, traderapi,
+  constants, utils, config, log, tradeParams, moduleName, exchangerUtils, orderUtils,
 } = require('./context');
 const {
   formSendBackMessage, formSendBackAndNotify, setPendingConfirmation,
   getCoinRatesInfo, getExchangeRatesInfo, validateTraderMinAmount,
 } = require('./helpers');
 const { balances } = require('./account');
-
-// Broader than orderCollector.orderPurposes because not all features have their own order purpose.
-/** @type {BotFeaturesRegistry} */
-const botFeatures = {
-  t: {
-    description: 'making trading volume',
-    module: '../../trade/mm_trader',
-    tradeParamActiveName: 'mm_isTraderActive',
-    perpetual: true,
-  },
-  ob: {
-    description: 'dynamic order book building',
-    module: '../../trade/mm_orderbook_builder',
-    tradeParamActiveName: 'mm_isOrderBookActive',
-    perpetual: true,
-  },
-  liq: {
-    description: 'liquidity and spread maintenance',
-    module: '../../trade/mm_liquidity_provider',
-    tradeParamActiveName: 'mm_isLiquidityActive',
-    perpetual: false,
-  },
-  pw: {
-    description: 'price watching',
-    module: '../../trade/mm_price_watcher',
-    tradeParamActiveName: 'mm_isPriceWatcherActive',
-    perpetual: false,
-  },
-  bw: {
-    description: 'balance watching',
-    module: '../../trade/mm_balance_watcher',
-    tradeParamActiveName: 'mm_isBalanceWatcherActive',
-    perpetual: false,
-  },
-  ld: {
-    description: 'ladder/grid trading',
-    module: '../../trade/mm_ladder',
-    tradeParamActiveName: 'mm_isLadderActive',
-    perpetual: false,
-  },
-  ag: {
-    description: 'order book anti-gap',
-    module: '../../trade/mm_antigap',
-    tradeParamActiveName: 'mm_isAntigapActive',
-    perpetual: false,
-  },
-  cl: {
-    description: 'order book cleaner',
-    module: '../../trade/mm_cleaner',
-    tradeParamActiveName: 'mm_isCleanerActive',
-    perpetual: false,
-  },
-  sp: {
-    description: 'support price',
-    module: '../../trade/mm_price_watcher',
-    tradeParamActiveName: 'mm_priceSupportLowPrice',
-    perpetual: false,
-  },
-  qh: {
-    description: 'quote hunter',
-    module: '../../trade/mm_quote_hunter',
-    tradeParamActiveName: 'mm_isQuoteHunterActive',
-    perpetual: false,
-  },
-  vc: {
-    description: 'volatility chart',
-    module: '../../trade/mm_volatility_chart',
-    tradeParamActiveName: 'mm_isVolatilityActive',
-    perpetual: false,
-    requires: 'mm_isTraderActive',
-  },
-  vv: {
-    description: 'volume volatility',
-    module: '../../trade/mm_volume_volatility',
-    tradeParamActiveName: 'mm_isVolumeVolatilityActive',
-    perpetual: false,
-    requires: 'mm_isTraderActive',
-  },
-  pmv: {
-    description: 'creating additional volume by Price maker and Price watcher',
-    module: '../../trade/mm_price_maker',
-    tradeParamActiveName: 'mm_isPriceChangeVolumeActive',
-    perpetual: false,
-  },
-  fb: {
-    description: '2-key trading fund balancer',
-    module: '../../trade/mm_fund_balancer',
-    tradeParamActiveName: 'mm_isFundBalancerActive',
-    perpetual: false,
-    requires: 'mm_isTraderActive',
-  },
-  be: {
-    description: 'balance equalizer when third-party bots are active',
-    module: '../../trade/mm_balance_equalizer',
-    tradeParamActiveName: 'mm_isBalanceEqualizerActive',
-    perpetual: false,
-  },
-  sm: {
-    description: 'spread maintainer',
-    module: '../../trade/mm_spread_maintainer',
-    tradeParamActiveName: 'mm_isSpreadMaintainerActive',
-    perpetual: false,
-  },
-  on: {
-    description: 'order notifier',
-    module: '../../trade/mm_order_notifier',
-    tradeParamActiveName: 'mm_isOrderNotifierActive',
-    perpetual: true,
-  },
-};
+const { botFeatures } = require('./botFeaturesRegistry');
+const { isPriceSupportActive, getPriceSupportLowPrice } = require('../../helpers/priceSupport');
 
 
 /**
  * Loads a feature's trade module when `botFeatures[featureKey].module` is set.
  *
+ * Uses `utils.softRequire()` so trimmed builds without a `trade/features/mm_*.js` file return
+ * `undefined` instead of crashing — same rule as `moduleAvailable` in WebUI capabilities.
+ *
  * @param {string} featureKey Feature code, e.g. `pw` or `ld`
- * @returns {any | undefined}
+ * @returns {any | undefined} Module exports, or `undefined` when the file is omitted
  */
 function getFeatureModule(featureKey) {
   const modulePath = botFeatures[featureKey]?.module;
@@ -144,7 +39,7 @@ function getFeatureModule(featureKey) {
   return utils.softRequire(modulePath, __filename);
 }
 
-/** No-op Price Watcher when `trade/mm_price_watcher.js` is omitted — PM/PW coordination from other features */
+/** No-op Price Watcher when `trade/features/mm_price_watcher.js` is omitted — PM/PW coordination from other features */
 const noopPriceWatcher = {
   restorePw() {},
   savePw() {},
@@ -164,6 +59,9 @@ function getPriceWatcherModule() {
 
 /**
  * Validates whether a feature code exists and is allowed on the current exchange mode.
+ *
+ * `moduleAvailable` is `false` when the feature maps to a `trade/features/mm_*.js` path that is
+ * missing in this build (checked via {@link getFeatureModule} / `softRequire`).
  *
  * @param {string} feature Feature/purpose code to enable or disable
  * @param {'enable' | 'disable'} [action='enable'] Used to compose an example command in `msgSendBack`
@@ -212,7 +110,7 @@ function validateFeature(feature, action = 'enable') {
  * @returns {string} Warning text or an empty string
  */
 function getNiceChartIntervalWarning() {
-  const niceChart = utils.softRequire('../../trade/mm_nice_chart');
+  const niceChart = utils.softRequire('../../trade/features/mm_nice_chart');
   const niceChartEnabled = config.nice_chart?.enabled !== false;
   const minInterval = Number(tradeParams.mm_minInterval);
   const thresholdMs = (constants.NICE_CHART_BASE_TIMEFRAME_MS / 2) - constants.NICE_CHART_CLOSE_TRADE_WINDOW_MAX_MS;
@@ -248,6 +146,13 @@ function composeFeatureList(includeDisabled = false) {
       const moduleNo = mIndex === 1 ? '' : mIndex;
 
       let activeValue = tradeParams[`${value.tradeParamActiveName}${moduleNo}`];
+      if (key === 'sp') {
+        if (moduleNo) {
+          continue;
+        }
+
+        activeValue = isPriceSupportActive(tradeParams) ? tradeParams.mm_priceSupportLowPrice : false;
+      }
       const requiredActiveValue = tradeParams[`${value.requires}${moduleNo}`];
       const featureString = `_${key}${moduleNo}_ (${value.description})`;
 
@@ -369,6 +274,37 @@ async function enable(params, tx, isWebApi = false) {
 
     if (purpose === 't') {
       const commandExample = `Try: */enable t optimal 1-10 ${coin1} 3-60 secs*`;
+
+      const isConfirmed = parsedParams.isConfirmed;
+
+      // Reset sub-command: restart the current trader epoch (mm_traderInitTs / /o t full)
+
+      if (parsedParams.is('reset')) {
+        if (!tradeParams.mm_isTraderActive) {
+          return formSendBackMessage(`Volume trader is not active, nothing to reset.`);
+        }
+
+        if (isConfirmed) {
+          tradeParams.mm_traderInitTs = Date.now();
+
+          msgNotify = `${config.notifyName} reset Volume trader stats for ${pair}.`;
+          msgSendBack = `Volume trader stats are reset for ${pair}. Volume trader continues with the same parameters.`;
+
+          if (!tradeParams.mm_isActive) {
+            msgNotify += ` Note: Market-making is disabled.`;
+            msgSendBack += ` Note: Market-making is disabled. To start market-making, type */start*.`;
+          }
+
+          return formSendBackAndNotify(msgSendBack, msgNotify);
+        }
+
+        setPendingConfirmation(`/enable ${params.join(' ')}`, tx);
+
+        msgSendBack = `Are you sure to reset Volume trader epoch stats for ${config.defaultPair} pair?`;
+        msgSendBack += ` **This will restart the VWAP epoch for t-orders.** To view current trader stats, send the _/orders t full_ command. Confirm with **/y** command or ignore.`;
+
+        return formSendBackMessage(msgSendBack);
+      }
 
       const timeIntervalParam = parsedParams.getTimeInterval();
       const amountIntervalParam = parsedParams.getOtherInterval();
@@ -563,6 +499,10 @@ async function enable(params, tx, isWebApi = false) {
       featureString = 'Order book cleaner';
 
     } else if (purpose === 'fb') { // end of purpose === "cl"
+
+      if (!config.apikey2) {
+        return formSendBackMessage('2-keys fund balancer requires a second API key (apikey2).');
+      }
 
       tradeParams.mm_isFundBalancerActive = true;
       infoString = '';
@@ -804,8 +744,8 @@ async function enable(params, tx, isWebApi = false) {
 
       const maxDepth = 80;
 
-      const hasLiquiditySafe = !!utils.softRequire('../../trade/mm_liquidity_safe');
-      const hasLiquiditySs = !!utils.softRequire('../../trade/mm_liquidity_ss');
+      const hasLiquiditySafe = !!utils.softRequire('../../trade/features/mm_liquidity_safe');
+      const hasLiquiditySs = !!utils.softRequire('../../trade/features/mm_liquidity_ss');
 
       const sampleDepth = hasLiquiditySafe ? '1-2%' : '2%';
       const sampleSs = hasLiquiditySs ? ' ss' : '';
@@ -839,7 +779,7 @@ async function enable(params, tx, isWebApi = false) {
 
           return formSendBackAndNotify(msgSendBack, msgNotify);
         } else {
-          setPendingConfirmation(`/enable ${params.join(' ')}`);
+          setPendingConfirmation(`/enable ${params.join(' ')}`, tx);
 
           msgSendBack = `Are you sure to reset Liquidity stats and VWAP for ${config.defaultPair} pair`;
           msgSendBack += ` (_${tradeParams.mm_liquiditySellAmount} ${coin1}_ asks and _${tradeParams.mm_liquidityBuyQuoteAmount} ${coin2}_ bids, depth _${depthResetString}_, trend _${tradeParams.mm_liquidityTrend}_${ssResetInfo})?`;
@@ -942,7 +882,7 @@ async function enable(params, tx, isWebApi = false) {
 
         await getFeatureModule('liq').resetLiqLimits('both sides', 'CommandTxs/NewLiquiditySet');
       } else {
-        setPendingConfirmation(`/enable ${params.join(' ')}`);
+        setPendingConfirmation(`/enable ${params.join(' ')}`, tx);
 
         msgNotify = '';
         msgSendBack = `Are you sure to enable ${featureString} for ${config.defaultPair} pair${infoString}? Confirm with **/y** command or ignore.`;
@@ -995,13 +935,14 @@ async function enable(params, tx, isWebApi = false) {
 
       if (isConfirmed) {
         pw.setIsPriceActual(false, '/enable sp');
+        tradeParams.mm_isPriceSupportActive = true;
         tradeParams.mm_priceSupportLowPrice = targetPrice;
       } else {
         let priceInfoString = getCoinRatesInfo(coin1).ratesString;
         const exchangeRatesInfo = await getExchangeRatesInfo(pair);
         priceInfoString += '\n\n' + exchangeRatesInfo.ratesString;
 
-        setPendingConfirmation(`/enable ${params.join(' ')}`);
+        setPendingConfirmation(`/enable ${params.join(' ')}`, tx);
 
         msgSendBack = `Are you sure to enable ${spChangeString}?${pwNoteString} Confirm with **/y** command or ignore.\n\n${priceInfoString}`;
 
@@ -1309,10 +1250,12 @@ async function enable(params, tx, isWebApi = false) {
           };
         }
 
-        if (tradeParams.mm_priceSupportLowPrice > pwLowPriceInCoin2) {
+        if (getPriceSupportLowPrice(tradeParams) > pwLowPriceInCoin2) {
           return {
             msgNotify: '',
-            msgSendBack: `Support price ${tradeParams.mm_priceSupportLowPrice.toFixed(coin2Decimals)} ${config.coin2} is greater, than Price watcher's lower bound of ${pwLowPriceInCoin2.toFixed(coin2Decimals)} ${coin}${convertedString}. Update support price with */enable sp* command, or set suitable Price watcher's range.`,
+            isError: true,
+            errorField: 'priceWatching',
+            msgSendBack: `Support price ${getPriceSupportLowPrice(tradeParams).toFixed(coin2Decimals)} ${config.coin2} is greater, than Price watcher's lower bound of ${pwLowPriceInCoin2.toFixed(coin2Decimals)} ${coin}${convertedString}. Update support price with */enable sp* command, or set suitable Price watcher's range.`,
             notifyType: 'log',
           };
         }
@@ -1324,7 +1267,9 @@ async function enable(params, tx, isWebApi = false) {
 
       const isConfirmed = parsedParams.isConfirmed;
 
-      const spNoteString = tradeParams.mm_priceSupportLowPrice ? `. *Note*: Support price is set to ${tradeParams.mm_priceSupportLowPrice.toFixed(coin2Decimals)} ${config.coin2}` : '';
+      const spNoteString = getPriceSupportLowPrice(tradeParams) ?
+        `. *Note*: Support price is set to ${getPriceSupportLowPrice(tradeParams).toFixed(coin2Decimals)} ${config.coin2}` :
+        '';
 
       if (isConfirmed) {
         /**
@@ -1362,7 +1307,7 @@ async function enable(params, tx, isWebApi = false) {
         const exchangeRatesInfo = await getExchangeRatesInfo(formattedPair.pair);
         priceInfoString += '\n\n' + exchangeRatesInfo.ratesString;
 
-        setPendingConfirmation(`/enable ${params.join(' ')}`);
+        setPendingConfirmation(`/enable ${params.join(' ')}`, tx);
 
         msgNotify = '';
         const spNoteStringDots = spNoteString ? utils.trimAny(spNoteString, '.') + '.' : '';
@@ -1376,7 +1321,8 @@ async function enable(params, tx, isWebApi = false) {
       }
 
     } else if (purpose === 'ld') { // end of purpose === "pw"
-      // enable ld2 {AMOUNT} {COIN} {COUNT} {step=STEP%} [mid {MIDPRICE} COIN2] [recheck=2min] [gain=5] [sa=10%] [ba=5%] [aa] [spa=15% [stopLd2At=60%]
+      // enable ld2 {AMOUNT} {COIN} {COUNT} step=STEP% [mid=MIDPRICE COIN2] [recheck=2min] [gain=5]
+      // [sa=10%] [ba=5%] [aa] [spa=15%] [bpa=15%] [stopLd2At=60%]
 
       const ldNo = parsedParams.moduleIndexString;
       const ldInstance = getFeatureModule('ld')(ldNo);
@@ -1385,7 +1331,7 @@ async function enable(params, tx, isWebApi = false) {
 
       let ratesInfo;
 
-      const exchangeRates = await traderapi.getRates(pair);
+      const exchangeRates = await orderUtils.getRatesCached(pair, moduleName);
       if (exchangeRates?.ask) {
         const delta = exchangeRates.ask-exchangeRates.bid;
         midPriceCalculated = (exchangeRates.ask+exchangeRates.bid)/2;
@@ -1414,7 +1360,7 @@ async function enable(params, tx, isWebApi = false) {
         if (isConfirmed) {
           ldInstance.resumeLadder('User command');
         } else {
-          setPendingConfirmation(`/enable ${params.join(' ')}`);
+          setPendingConfirmation(`/enable ${params.join(' ')}`, tx);
 
           msgNotify = '';
           msgSendBack = `Are you sure to resume ladder${ldNo} for ${config.defaultPair} pair,`;
@@ -1438,10 +1384,36 @@ async function enable(params, tx, isWebApi = false) {
 
       // Parse basic ladder params
 
-      const sampleCommand = `Example: */enable ld${ldNo} 100 ${coin2} 10 step=2%*.${ratesInfo}`;
+      const sampleCommandExample = `Example: */enable ld${ldNo} 100 ${coin2} 10 step=2%*`;
+      let sampleCommandFullExample = `Full example: */enable ld${ldNo} 100 ${coin2} 10 step=2%`;
+      sampleCommandFullExample += ` mid=${midPriceCalculated.toFixed(coin2Decimals)} ${coin2}`;
+      sampleCommandFullExample += ` recheck=2min gain=5 sa=10% ba=5% aa spa=10% bpa=10%`;
+      sampleCommandFullExample += ldNo ? '*' : ` stopLd2At=60%*`;
+
+      const additionalParams = [
+        `_mid=PRICE ${coin2}_ — set the middle price manually; otherwise, the current market midpoint is used`,
+        `_recheck=TIME_ — set the ladder recheck interval`,
+        `_gain=AMOUNT_ — increase the order amount or volume at each next ladder level`,
+        `_sa=PERCENT_ / _ba=PERCENT_ — increase sell-side / buy-side order amounts or volumes`,
+        `_aa_ — adjust order amounts or volumes automatically according to available balances`,
+        `_spa=PERCENT_ / _bpa=PERCENT_ — shift sell prices up / buy prices down`,
+      ];
+
+      if (!ldNo) {
+        additionalParams.push(`_stopLd2At=COUNT|PERCENT_ — stop Ladder2 when the threshold of filled Ladder1 orders is reached`);
+      }
+
+      const additionalParamsInfo = `Additional parameters:\n${additionalParams.join(';\n')}.`;
+      const sampleCommand = `${sampleCommandExample}.${ratesInfo}`;
+      const sampleCommandFull = `${sampleCommandFullExample}.${ratesInfo}`;
 
       if (parsedParams.paramCount < 5) {
-        return formSendBackMessage(`Not enough parameters to enable ladder${ldNo}. ${sampleCommand}.`);
+        let message = `Not enough parameters to enable ladder${ldNo}. ${sampleCommandExample}.`;
+        message += `\n\n${sampleCommandFullExample}.`;
+        message += `\n\n${additionalParamsInfo}`;
+        message += ratesInfo;
+
+        return formSendBackMessage(message);
       }
 
       const amountCoin = parsedParams.more[2].paramUc;
@@ -1469,11 +1441,6 @@ async function enable(params, tx, isWebApi = false) {
 
       // Parse additional ladder params
 
-      let sampleCommandFull = `Example: */enable ld${ldNo} 100 ${coin2} 10 step=2%`;
-      sampleCommandFull += ` mid=${midPriceCalculated.toFixed(coin2Decimals)} ${coin2}`;
-      sampleCommandFull += ` recheck=2min gain=5 sa=10% aa spa=10% stopLd2At=60%*`;
-      sampleCommandFull += `.${ratesInfo}`;
-
       let midPrice;
       const customMidPrice = parsedParams['mid'];
 
@@ -1482,7 +1449,7 @@ async function enable(params, tx, isWebApi = false) {
           return formSendBackMessage(`Incorrect middle ladder${ldNo} price: ${customMidPrice}. ${sampleCommandFull}.`);
         }
 
-        midPrice = +customMidPrice;
+        midPrice = +(+customMidPrice).toFixed(coin2Decimals);
 
         const midPriceCoin = parsedParams.nextTo('mid')?.paramUc;
         if (midPriceCoin !== config.coin2) {
@@ -1648,7 +1615,7 @@ async function enable(params, tx, isWebApi = false) {
         tradeParams[`mm_ladderAmountCoin${ldNo}`] = amountCoin;
         tradeParams[`mm_ladderCount${ldNo}`] = orderCount;
         tradeParams[`mm_ladderPriceStepPercent${ldNo}`] = stepPercent;
-        tradeParams[`mm_ladderMidPrice${ldNo}`] = midPrice;
+        tradeParams[`mm_ladderMidPrice${ldNo}`] = +(+midPrice).toFixed(coin2Decimals);
         tradeParams[`mm_ladderMidPriceType${ldNo}`] = customMidPrice ? 'Manual' : 'Calculated';
 
         tradeParams[`mm_ladderRecheckIntervalMs${ldNo}`] = recheckIntervalMs;
@@ -1663,11 +1630,14 @@ async function enable(params, tx, isWebApi = false) {
         tradeParams[`mm_ladderAmountGain${ldNo}`] = amountGain;
         tradeParams[`mm_ladderAutoAmountAdj${ldNo}`] = autoAmountAdj;
 
-        tradeParams[`mm_ladderStopLd2At`] = stopLd2At;
-        tradeParams[`mm_ladderStopLd2AtOrderCount`] = stopLd2AtOrderCount;
-        tradeParams[`mm_ladderStopLd2AtFilledPercent`] = stopLd2AtFilledPercent;
+        // stopLd2At is a Ladder1 setting. `/enable ld2` must not reset it.
+        if (!ldNo) {
+          tradeParams.mm_ladderStopLd2At = stopLd2At;
+          tradeParams.mm_ladderStopLd2AtOrderCount = stopLd2AtOrderCount;
+          tradeParams.mm_ladderStopLd2AtFilledPercent = stopLd2AtFilledPercent;
+        }
       } else {
-        setPendingConfirmation(`/enable ${params.join(' ')}`);
+        setPendingConfirmation(`/enable ${params.join(' ')}`, tx);
 
         const reInitWarn = tradeParams.mm_isLadderActive ? ` Current ladder${ldNo} will be re-initialized.` : '';
 
@@ -1742,8 +1712,9 @@ async function enable(params, tx, isWebApi = false) {
       // Save Order notifier parameters
 
       tradeParams.mm_isOrderNotifierActive = true;
-      tradeParams.mm_orderNotifierAmount = coin1Amount;
-      tradeParams.mm_orderNotifierAmountPriority = coin1PriorityAmount;
+      tradeParams.mm_orderNotifierAmount = amount;
+      tradeParams.mm_orderNotifierAmountPriority = priorityAmount;
+      tradeParams.mm_orderNotifierAmountCoin = coin;
 
       getFeatureModule('on').resetOrderNotifier();
 
@@ -1820,7 +1791,11 @@ function disable(params) {
     typeValidation.tradeParamActiveName = `${typeValidation.tradeParamActiveName}${instanceNo}`;
     const purposeIndexed = `${purpose}${instanceNo}`;
 
-    if (!tradeParams[typeValidation.tradeParamActiveName]) {
+    const isFeatureActive = purpose === 'sp' ?
+      isPriceSupportActive(tradeParams) :
+      Boolean(tradeParams[typeValidation.tradeParamActiveName]);
+
+    if (!isFeatureActive) {
       return formSendBackMessage(`The feature _${purposeIndexed}_ (${typeValidation.description}) is _already disabled_.`);
     }
 
@@ -1832,7 +1807,7 @@ function disable(params) {
     const pw = getPriceWatcherModule();
 
     if (purpose === 'sp') {
-      tradeParams[typeValidation.tradeParamActiveName] = 0;
+      tradeParams.mm_isPriceSupportActive = false;
       featureString = 'Support price';
     } else if (purpose === 'pw') {
       tradeParams[typeValidation.tradeParamActiveName] = false;

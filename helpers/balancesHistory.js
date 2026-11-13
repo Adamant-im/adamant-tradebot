@@ -166,6 +166,11 @@ function addBalanceTotals(balances, scope = 'allcoins') {
       output += `Note: I did not count unknown cryptos _${[...new Set(unknownCryptos)].join(', ')}_\n`;
     }
 
+    const fallback = exchangerUtils.getFallbackRateInfo(coin1);
+    if (fallback?.source === 'exchange' && balances.some(({ code, total }) => code === coin1 && total > 0)) {
+      output += `Note: ${coin1} is valued at the ${fallback.exchange} ${fallback.pair} spot price (Infoservice has no USD rate for ${coin1}).\n`;
+    }
+
     balanceTotalsFull.forEach((key) => {
       balances.push({ code: key, total: totals[key] });
     });
@@ -427,6 +432,8 @@ async function getSnapshotByTimestamp(params) {
  *
  * Focuses on absolute and relative changes for `config.coin1`, `config.coin2`, and synthetic totals.
  * Uses total balances rather than available balances.
+ * Normalized trading value reprices both raw snapshots at one current rate,
+ * avoiding stale stored totals after price-source changes or missing historical valuations.
  *
  * @param {BalanceSnapshotQuery & { timestamp: number }} params Comparison parameters
  * @returns {Promise<BalanceComparisonInfo | undefined>}
@@ -525,13 +532,15 @@ async function compareLastWithTimestamp(params) {
     // This is the primary metric that shows how the reference balance has increased or decreased, normalized by the token price
 
     const exchangerUtils = require('../helpers/cryptos/exchanger');
-    const coin1From = findTotal(from.balances, coin1);
-    const coin2From = findTotal(from.balances, coin2);
-    const coin1FromValueCOIN2AtCurrentPrice = exchangerUtils.convertCryptos(coin1, coin2, coin1From)?.outAmount;
-    const expectedTradingValueCOIN2 = coin1FromValueCOIN2AtCurrentPrice + coin2From;
-    const currentTradingValueCOIN2 = findTotal(to.balances, 'totalTradingCOIN2');
+    const currentRate = exchangerUtils.getRate(coin1, coin2);
+    if (utils.isPositiveNumber(currentRate)) {
+      const expectedTradingValueCOIN2 = findTotal(from.balances, coin1) * currentRate + findTotal(from.balances, coin2);
+      const currentTradingValueCOIN2 = findTotal(to.balances, coin1) * currentRate + findTotal(to.balances, coin2);
 
-    result.expectedTradingValueCOIN2 = buildComparison('expectedTradingValueCOIN2', expectedTradingValueCOIN2, currentTradingValueCOIN2);
+      if (utils.isPositiveOrZeroNumber(expectedTradingValueCOIN2) && utils.isPositiveOrZeroNumber(currentTradingValueCOIN2)) {
+        result.expectedTradingValueCOIN2 = buildComparison('expectedTradingValueCOIN2', expectedTradingValueCOIN2, currentTradingValueCOIN2);
+      }
+    }
 
     return result;
   } catch (e) {

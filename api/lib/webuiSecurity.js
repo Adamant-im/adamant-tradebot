@@ -5,6 +5,8 @@
  * Startup and transport hardening for the private WebUI API (scenario A).
  */
 
+const constants = require('../../helpers/const');
+
 /** Known placeholder secrets that must not be used in production */
 const WEAK_SECRET_KEYS = new Set([
   'some-random-string',
@@ -19,6 +21,12 @@ const MIN_SECRET_KEY_LENGTH = 32;
 
 /** Default bind address for the private WebUI HTTP and Socket.IO server */
 const DEFAULT_PRIVATE_WEBUI_BIND_HOST = '127.0.0.1';
+
+/** Default cap for the remaining lifetime of a WebUI JWT (`exp` minus now) */
+const DEFAULT_PRIVATE_WEBUI_JWT_MAX_TTL = '24h';
+
+/** Duration string such as `12h`, `90 min`, or `1d` */
+const DURATION_REGEXP = new RegExp(`^\\s*(\\d+)\\s*${constants.REGEXP_TIME.source}\\s*$`, 'i');
 
 /** Bind hosts treated as loopback-only (strict CORS) */
 const LOOPBACK_BIND_HOSTS = new Set([
@@ -58,6 +66,43 @@ function assertPrivateWebUiSecretKey(secretKey) {
     throw new Error(
         'private_webui is enabled but private_webui_secret_key is missing, default, or too weak. ' +
         'Set a unique random secret of at least 32 characters.',
+    );
+  }
+}
+
+/**
+ * Parses `config.private_webui_jwt_max_ttl` into milliseconds.
+ *
+ * @param {unknown} value Duration such as `12h` or `1d`; empty or missing means `24h`
+ * @returns {number} Positive duration in milliseconds, or `NaN` when the value is not a positive duration
+ */
+function parsePrivateWebUiJwtMaxTtlMs(value) {
+  const text = value === undefined || value === null || value === '' ?
+    DEFAULT_PRIVATE_WEBUI_JWT_MAX_TTL :
+    String(value);
+
+  const match = DURATION_REGEXP.exec(text);
+  if (!match) {
+    return NaN;
+  }
+
+  const unit = constants.TIME_UNITS[match[2].toLowerCase()];
+  const ms = Number(match[1]) * constants.TIME_DIVISORS[unit];
+
+  return ms > 0 ? ms : NaN;
+}
+
+/**
+ * Throws when `config.private_webui_jwt_max_ttl` is not a positive duration.
+ *
+ * @param {unknown} value Value of `config.private_webui_jwt_max_ttl`
+ * @returns {void}
+ */
+function assertPrivateWebUiJwtMaxTtl(value) {
+  if (Number.isNaN(parsePrivateWebUiJwtMaxTtlMs(value))) {
+    throw new Error(
+        `private_webui_jwt_max_ttl is invalid: '${value}'. ` +
+        `Set a positive duration such as 12h or 1d (default ${DEFAULT_PRIVATE_WEBUI_JWT_MAX_TTL}).`,
     );
   }
 }
@@ -147,18 +192,22 @@ function isAllowedWebUiClientIp(clientIp, allowedIps) {
  * Fastify `onRequest` hook that rejects clients outside `private_webui_allowed_ips`.
  *
  * @param {unknown} allowedIps Config array
- * @returns {(request: import('fastify').FastifyRequest, reply: import('fastify').FastifyReply) => Promise<void>}
+ * @returns {(request: *, reply: *) => Promise<void>}
  */
 function createWebuiAllowedIpsHook(allowedIps) {
   const allowlist = resolvePrivateWebUiAllowedIps(allowedIps);
+  const webuiLog = require('./webuiLog');
 
   return async function webuiAllowedIpsHook(request, reply) {
     if (allowlist.size === 0) {
       return;
     }
 
-    if (!allowlist.has(normalizeClientIp(request.ip))) {
-      return reply.code(403).send({ error: 'Forbidden' });
+    const ip = normalizeClientIp(/** @type {{ ip?: string }} */ (request).ip);
+    if (!allowlist.has(ip)) {
+      const req = /** @type {{ method?: string, url?: string, raw?: { url?: string } }} */ (request);
+      webuiLog.warn(`IP denied ${req.method} ${req.raw?.url || req.url} ip=${ip}`);
+      reply.code(403).send({ error: 'Forbidden' });
     }
   };
 }
@@ -192,7 +241,12 @@ function resolvePrivateWebUiBindHost(bindHost) {
 }
 
 /** CORS options for loopback-only WebUI API binds */
+const webuiCorsCommon = {
+  methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
+};
+
 const loopbackWebuiCorsOptions = {
+  ...webuiCorsCommon,
   origin: (origin, callback) => {
     if (!origin || isLocalhostOrigin(origin)) {
       callback(null, true);
@@ -222,21 +276,21 @@ const loopbackWebuiSocketCorsOptions = {
  * remote private WebUI fleet can reach bots without a per-bot reverse proxy.
  *
  * @param {unknown} bindHost Value of `config.private_webui_bind_host`
- * @returns {import('@fastify/cors').FastifyCorsOptionsDelegate | { origin: boolean }}
+ * @returns {*}
  */
 function getWebuiCorsOptions(bindHost) {
   if (isLoopbackBindHost(bindHost)) {
     return loopbackWebuiCorsOptions;
   }
 
-  return { origin: true };
+  return { origin: true, ...webuiCorsCommon };
 }
 
 /**
  * Returns Socket.IO CORS options for the configured WebUI bind host.
  *
  * @param {unknown} bindHost Value of `config.private_webui_bind_host`
- * @returns {import('socket.io').CorsOptions | { origin: boolean }}
+ * @returns {*}
  */
 function getWebuiSocketCorsOptions(bindHost) {
   if (isLoopbackBindHost(bindHost)) {
@@ -248,8 +302,10 @@ function getWebuiSocketCorsOptions(bindHost) {
 
 module.exports = {
   DEFAULT_PRIVATE_WEBUI_BIND_HOST,
+  DEFAULT_PRIVATE_WEBUI_JWT_MAX_TTL,
   MIN_SECRET_KEY_LENGTH,
   WEAK_SECRET_KEYS,
+  assertPrivateWebUiJwtMaxTtl,
   assertPrivateWebUiSecretKey,
   createWebuiAllowedIpsHook,
   getWebuiCorsOptions,
@@ -259,6 +315,7 @@ module.exports = {
   isLoopbackBindHost,
   isWeakPrivateWebUiSecretKey,
   normalizeClientIp,
+  parsePrivateWebUiJwtMaxTtlMs,
   resolvePrivateWebUiAllowedIps,
   resolvePrivateWebUiBindHost,
 };

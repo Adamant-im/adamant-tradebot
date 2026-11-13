@@ -56,6 +56,16 @@ module.exports = [
     },
   },
   {
-    ignores: ['trade/settings/', 'tests/', '*.spec.js', '.ai-tasks/'],
+    ignores: [
+      'trade/settings/',
+      'tests/',
+      '*.spec.js',
+      '.ai-tasks/',
+      // Local `./mm init` data (see docker/.gitignore) — not project source
+      'docker/config/',
+      'docker/trade-config/',
+      'docker/logs/',
+      'logs/',
+    ],
   },
 ];

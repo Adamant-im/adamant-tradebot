@@ -18,7 +18,7 @@ declare module 'fastify' {
     query: Record<string, string | undefined>;
     method: string;
     url: string;
-    user?: { login?: string };
+    user?: { login?: string; role?: 'admin' | 'manager' | 'read-only'; enabled?: boolean };
     jwtVerify(): Promise<void>;
   }
 
@@ -26,7 +26,11 @@ declare module 'fastify' {
 
   interface RouteShorthandMethod {
     (path: string, handler: RouteHandler): void;
-    (path: string, opts: { preHandler?: unknown[] }, handler: RouteHandler): void;
+    (
+      path: string,
+      opts: { preHandler?: unknown[]; config?: { minRole?: 'admin' | 'manager' | 'read-only' } },
+      handler: RouteHandler,
+    ): void;
   }
 
   export interface FastifyInstance {
@@ -47,7 +51,10 @@ declare module 'fastify' {
     io?: import('socket.io').Server;
     inject(opts: { method: string; url: string; headers?: Record<string, string>; payload?: unknown }): Promise<{
       statusCode: number;
-      json(): unknown;
+      headers: Record<string, string | string[] | undefined>;
+      payload: string;
+      rawPayload: Buffer;
+      json(): Record<string, any>;
     }>;
     ready(): Promise<void>;
     close(): Promise<void>;

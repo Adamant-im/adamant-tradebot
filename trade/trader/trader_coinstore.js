@@ -1,6 +1,6 @@
-const CoinstoreApi = require('./api/coinstore_api');
-const config = require('./../modules/configReader');
-const utils = require('../helpers/utils');
+const CoinstoreApi = require('../api/coinstore_api');
+const config = require('./../../modules/configReader');
+const utils = require('../../helpers/utils');
 
 /**
  * API endpoints:

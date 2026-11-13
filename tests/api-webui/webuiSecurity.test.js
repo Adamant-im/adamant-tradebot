@@ -3,6 +3,7 @@
 /* global describe, test, expect, jest */
 
 const {
+  assertPrivateWebUiJwtMaxTtl,
   assertPrivateWebUiSecretKey,
   createWebuiAllowedIpsHook,
   DEFAULT_PRIVATE_WEBUI_BIND_HOST,
@@ -13,8 +14,12 @@ const {
   isWeakPrivateWebUiSecretKey,
   MIN_SECRET_KEY_LENGTH,
   normalizeClientIp,
+  parsePrivateWebUiJwtMaxTtlMs,
   resolvePrivateWebUiBindHost,
 } = require('../../api/lib/webuiSecurity');
+
+// @fastify/cors allows only GET, HEAD, and POST by default; browser WebUI clients also send PUT /params
+const WEBUI_CORS_METHODS = ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'];
 
 describe('WebUI security helpers', () => {
   test('isWeakPrivateWebUiSecretKey rejects placeholders and short secrets', () => {
@@ -51,8 +56,14 @@ describe('WebUI security helpers', () => {
   });
 
   test('getWebuiCorsOptions relaxes CORS for remote fleet binds', () => {
-    expect(getWebuiCorsOptions('127.0.0.1')).toEqual(expect.objectContaining({ origin: expect.any(Function) }));
-    expect(getWebuiCorsOptions('0.0.0.0')).toEqual({ origin: true });
+    expect(getWebuiCorsOptions('127.0.0.1')).toEqual({
+      origin: expect.any(Function),
+      methods: WEBUI_CORS_METHODS,
+    });
+    expect(getWebuiCorsOptions('0.0.0.0')).toEqual({
+      origin: true,
+      methods: WEBUI_CORS_METHODS,
+    });
   });
 
   test('normalizeClientIp handles IPv4-mapped IPv6 and port suffixes', () => {
@@ -81,5 +92,26 @@ describe('WebUI security helpers', () => {
     reply.send.mockClear();
     await hook({ ip: '1.2.3.4' }, reply);
     expect(reply.code).not.toHaveBeenCalled();
+  });
+
+  test('parsePrivateWebUiJwtMaxTtlMs parses durations and defaults to 24h', () => {
+    expect(parsePrivateWebUiJwtMaxTtlMs('12h')).toBe(12 * 60 * 60 * 1000);
+    expect(parsePrivateWebUiJwtMaxTtlMs('90 min')).toBe(90 * 60 * 1000);
+    expect(parsePrivateWebUiJwtMaxTtlMs('1d')).toBe(24 * 60 * 60 * 1000);
+    expect(parsePrivateWebUiJwtMaxTtlMs(undefined)).toBe(24 * 60 * 60 * 1000);
+    expect(parsePrivateWebUiJwtMaxTtlMs('')).toBe(24 * 60 * 60 * 1000);
+  });
+
+  test('parsePrivateWebUiJwtMaxTtlMs rejects zero and malformed durations', () => {
+    expect(parsePrivateWebUiJwtMaxTtlMs('0h')).toBeNaN();
+    expect(parsePrivateWebUiJwtMaxTtlMs('-1h')).toBeNaN();
+    expect(parsePrivateWebUiJwtMaxTtlMs('12')).toBeNaN();
+    expect(parsePrivateWebUiJwtMaxTtlMs('forever')).toBeNaN();
+  });
+
+  test('assertPrivateWebUiJwtMaxTtl throws for invalid values only', () => {
+    expect(() => assertPrivateWebUiJwtMaxTtl('24h')).not.toThrow();
+    expect(() => assertPrivateWebUiJwtMaxTtl(undefined)).not.toThrow();
+    expect(() => assertPrivateWebUiJwtMaxTtl('never')).toThrow(/private_webui_jwt_max_ttl/);
   });
 });

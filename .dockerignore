@@ -8,6 +8,7 @@ logs
 config.jsonc
 config.*.jsonc
 !config.default.jsonc
+config
 trade/settings/*
 !trade/settings/tradeParams_Default.js
 tests

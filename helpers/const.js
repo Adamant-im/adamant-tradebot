@@ -61,7 +61,7 @@ module.exports = {
   DEFAULT_MIN_ORDER_AMOUNT_UPPER_BOUND_USD: 2,
   OVER_LIQUIDITY_SPREAD_PERCENT: 0.7,
   PEM_REGEXP: /-----BEGIN (PUBLIC|PRIVATE) KEY-----[\s\S]+?-----END (PUBLIC|PRIVATE) KEY-----/,
-  REST_DATA_CACHE_MS: 1000, // Cache duration (ms) for REST data: open orders, order book, and balances
+  REST_DATA_CACHE_MS: 1000, // Cache duration (ms) for REST data: open orders, order book, balances, and rates
   REGEXP_ADM_ADDRESS: /^U([0-9]{6,21})$/,
   REGEXP_TIME: /(ms|msec|msecs|milliseconds?|s|sec|secs|seconds?|m|min|mins|minutes?|h|hr|hrs|hour|hours?|d|day|days?|w|week|weeks?|mon|month|months?|y|yr|yrs|year|years?)/i,
   COINS_BY_PRIORITY: ['BTC', 'USDT', 'ETH', 'XRP', 'BNB', 'SOL', 'USDC', 'TRX', 'DOGE', 'ADA', 'LINK', 'SUI', 'LTC', 'ZEC', 'DAI', 'UNI', 'POL', 'HUI'],

@@ -10,4 +10,12 @@
  * @typedef {'directHttp' | 'relayWs'} WebUiTransportMode
  */
 
+/**
+ * `GET /api/v1/config` response: whitelisted `config.jsonc` snapshot with
+ * credential-looking keys removed recursively (see `api/services/config.js`).
+ *
+ * @typedef {Object} WebUiBotConfigResponse
+ * @property {Record<string, unknown>} config Sanitized config snapshot
+ */
+
 module.exports = {};
