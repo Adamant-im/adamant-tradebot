@@ -785,15 +785,20 @@ function createTraderRuntime(overrides = {}) {
                     reasonToClose, undefined, takerApi,
                 );
               }
-            } else { // if order2-taker was not placed
-              runtimeLogLocal.warn(`Trader: Unable to execute taker cross-order${deps.useSecondAccount ? ' (using second account)' : ''} for t-order with params: id=${order1.orderId}, ${orderParamsString}. Action: executeInSpread.`);
+            } else {
+              const takerOutcome = order2?.isSubmissionUncertain ?
+                'Taker placement is uncertain' :
+                'Taker placement returned no order ID';
+              const account = deps.useSecondAccount ? ' (using second account)' : '';
+              const details = order2?.message ? ` Details: ${order2.message}` : '';
+              runtimeLogLocal.warn(`Trader: ${takerOutcome}${account} for executeInSpread t-order with maker ID ${order1.orderId}, ${orderParamsString}.${details}`);
 
               await order.save();
 
-              const reasonToClose = 'Cancelling order1 (maker) because order2 (maker) was not placed while doing executeInSpread t-order';
+              const reasonToClose = 'Cancelling maker t-order after taker placement returned no order ID';
               await deps.orderCollector.clearOrderById(
                   order, order.pair, makerOrderSide, readableModuleName,
-                  reasonToClose, undefined, deps.traderapi,
+                  reasonToClose, undefined, makerApi,
               );
             }
           } else { // if order1-maker was not placed

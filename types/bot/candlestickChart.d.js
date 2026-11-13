@@ -555,6 +555,7 @@
  * @typedef {Object} NiceChartConnectorFeatures
  * @property {string | undefined} [marketDataSource] Connector-declared preferred market data source (`candles`, `trades`, etc.)
  * @property {boolean | undefined} [marketDataSourceDegraded] Whether the connector-declared source has known limitations
+ * @property {string[]} [candleTimeframes] Native candle intervals when the connector declares them
  * @property {boolean | undefined} [candlesHistoryNoSince] Whether `getCandlesHistory()` rejects/ignores the `since` parameter
  */
 
