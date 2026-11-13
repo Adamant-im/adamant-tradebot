@@ -1,0 +1,16 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "checkJs": false
+  },
+  "include": [
+    "trade/trader/trader_qutrade.js",
+    "trade/api/qutrade_api.js",
+    "types/qutrade/*.d.js",
+    "tests/trader/trader_qutrade.test.js",
+    "tests/trader/trader_qutrade.mock.js",
+    "tests/trader_live/qutrade_live_support.js",
+    "tests/trader_live/qutrade_live_test.js",
+    "tests/trader_live/qutrade_live_tester.js"
+  ]
+}

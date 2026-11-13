@@ -28,6 +28,7 @@
     "lint:fix": "npx eslint -f visualstudio --fix",
     "lint:fixrule": "npx eslint -f visualstudio --no-eslintrc --fix --env node,es2021,commonjs --parser-options=ecmaVersion:12 --rule",
     "typecheck:webui-api": "tsc -p tsconfig.webui-api.json --pretty false",
+    "typecheck:qutrade": "tsc -p tsconfig.qutrade.json --pretty false",
     "start": "node app.js",
     "start:config": "node app.js",
     "start:dev": "node app.js dev",
